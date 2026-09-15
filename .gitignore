@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.env
+.env.*
+
+# FastAPI / Backend
+*.log
+*.sqlite
+*.db
+
+# AI / Models
+models/
+*.bin
+*.onnx
+*.pt
+
+# Storage
+storage/
+uploads/
+minio_data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Node / Frontend
+node_modules/
+dist/
+build/
