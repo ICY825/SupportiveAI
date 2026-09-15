@@ -33,3 +33,11 @@ minio_data/
 node_modules/
 dist/
 build/
+
+# PDF related files
+*.pdf
+
+# Reference raw files
+docs/references/number.png
+docs/references/Copy of 260814*
+*.xlsx
