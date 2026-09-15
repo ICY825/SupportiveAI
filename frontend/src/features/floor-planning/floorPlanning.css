@@ -717,6 +717,176 @@
   font-size: 7px;
 }
 
+/* ---------------------------------------------------------------- workspace view: desks */
+
+.fp-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.fp-view-mode button {
+  padding: 4px 10px;
+}
+
+.fp-scope.is-demo .fp-scope-dot {
+  background: transparent;
+  border: 1.5px dashed var(--muted);
+}
+
+.fp-workspace.is-workspace {
+  grid-template-columns: clamp(244px, 13vw, 272px) minmax(0, 1fr) clamp(360px, 21vw, 400px);
+}
+
+.fp-svg:focus-visible {
+  box-shadow: inset 0 0 0 2px rgba(210, 24, 31, 0.55);
+}
+
+/* physical workstation outlines give way to desk status fills */
+.has-desk-status .fp-ws {
+  fill: transparent;
+  stroke: transparent;
+}
+
+.has-desk-status .fp-ws:hover {
+  fill: rgba(28, 27, 26, 0.12);
+  stroke: var(--ink);
+  stroke-width: 0.35;
+}
+
+.fp-desk-status,
+.fp-desk-selected {
+  pointer-events: none;
+}
+
+.fp-desk-status {
+  transition: opacity 180ms ease-out;
+}
+
+.has-desk-selection .fp-desk-status {
+  opacity: 0.5;
+}
+
+.fp-desk-shape {
+  stroke-width: 0.3;
+  stroke-linejoin: round;
+}
+
+[data-desk-status='occupied'] > .fp-desk-shape {
+  fill: var(--desk-occupied-fill);
+  stroke: var(--desk-occupied);
+}
+
+[data-desk-status='available'] > .fp-desk-shape {
+  fill: #fff;
+  stroke: var(--desk-available-fill);
+  stroke-width: 0.45;
+}
+
+[data-desk-status='reserved'] > .fp-desk-shape {
+  fill: url(#fp-desk-reserved);
+  stroke: var(--desk-reserved-fill);
+  stroke-width: 0.4;
+}
+
+[data-desk-status='conflict'] > .fp-desk-shape {
+  fill: var(--desk-conflict-fill);
+  stroke: var(--desk-conflict);
+  stroke-width: 0.5;
+}
+
+[data-desk-status='unavailable'] > .fp-desk-shape {
+  fill: url(#fp-desk-unavailable);
+  stroke: var(--desk-unavailable-fill);
+  stroke-dasharray: 0.6 0.4;
+}
+
+.fp-desk-glyph {
+  font: 700 4px var(--font);
+  fill: #fff;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+/* legend swatches are 1:1 px, not floor points */
+.fp-desk-legend .fp-desk-shape {
+  stroke-width: 1.2;
+}
+
+.fp-legend-demo {
+  padding: 1px 6px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: help;
+}
+
+/* selected desk: crisp outline + restrained halo, linked to the inspector's accent */
+.has-desk-status .fp-selection-workstation polygon {
+  fill: none;
+  stroke: var(--fp-select);
+  stroke-width: 0.55;
+  filter: drop-shadow(0 0 1.2px rgba(210, 24, 31, 0.55));
+  animation: fp-select-in 180ms ease-out;
+}
+
+@keyframes fp-select-in {
+  from {
+    stroke-opacity: 0;
+  }
+}
+
+.fp-desk-callout {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, calc(-100% - 8px));
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: var(--ink);
+  color: #fff;
+  font: 600 11px/1.2 var(--mono);
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgba(28, 27, 26, 0.2);
+}
+
+.fp-desk-callout::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -4px;
+  width: 8px;
+  height: 8px;
+  background: var(--ink);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+@media (max-width: 1100px) {
+  .fp-workspace.is-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(420px, 60vh) auto auto;
+  }
+  /* map first, so it stays above the desk bottom sheet */
+  .fp-workspace.is-workspace .fp-main {
+    order: -1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fp-desk-status,
+  .has-desk-status .fp-selection-workstation polygon {
+    transition: none;
+    animation: none;
+  }
+}
+
 /* ---------------------------------------------------------------- debug */
 
 .fp-debug {

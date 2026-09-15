@@ -6,6 +6,8 @@
  * are translated here only for display.
  */
 import type { BaseLayerId, Classification, VerificationState } from './domain/spatial'
+import type { AssignmentType, DeviceType, Presence, SeatType } from './domain/allocation'
+import type { DeskStatus } from './domain/desk'
 import type { SourceMode } from './map/mapSettings'
 
 /** Extraction verification state. This is NOT an occupancy/operational state. */
@@ -108,3 +110,49 @@ export const generated = (text: string | undefined | null) => (text ? (GENERATED
 export const NO_OPERATIONAL_DATA = 'Chưa có dữ liệu chỗ ngồi hoặc nhân sự'
 export const NO_OPERATIONAL_DATA_HINT = 'Dữ liệu nhân sự sẽ được hiển thị sau khi được Admin/HR xác minh.'
 export const NOT_AVAILABLE = 'Chưa có dữ liệu'
+
+/* ------------------------------------------------------------------ workspace / desks */
+
+export const VIEW_MODES = [
+  { id: 'verification', label: 'Xác minh mặt bằng' },
+  { id: 'workspace', label: 'Bố trí chỗ ngồi' },
+] as const
+
+export const DEMO_DATA_LABEL = 'Dữ liệu minh họa'
+export const DEMO_DATA_HINT = 'Nhân sự, chỗ ngồi và thiết bị là dữ liệu giả lập để thiết kế giao diện; chưa kết nối HR/Admin.'
+
+export const DESK_STATUS: Record<DeskStatus, { label: string; hint: string }> = {
+  occupied: { label: 'Đang sử dụng', hint: 'Có một nhân sự đang được gán vào chỗ ngồi này' },
+  available: { label: 'Còn trống', hint: 'Chưa có nhân sự được gán; có thể gán ngay' },
+  reserved: { label: 'Đã đặt trước', hint: 'Đã có lịch đặt chỗ cho nhân sự' },
+  conflict: { label: 'Xung đột phân công', hint: 'Nhiều hơn một phân công đang hiệu lực trên cùng một bàn' },
+  unavailable: { label: 'Không khả dụng', hint: 'Chỗ ngồi đang tạm ngưng sử dụng' },
+}
+
+export const SEAT_TYPE: Record<SeatType, string> = {
+  FIXED: 'Cố định',
+  HOT_DESK: 'Linh hoạt (hot desk)',
+  SHARED: 'Dùng chung',
+  MANAGER: 'Quản lý',
+  OTHER: 'Khác',
+}
+
+export const PRESENCE: Record<Presence, string> = {
+  in_office: 'Đang ở văn phòng',
+  remote: 'Làm việc từ xa',
+  away: 'Vắng mặt',
+  unknown: 'Chưa rõ trạng thái',
+}
+
+export const ASSIGNMENT_TYPE: Record<AssignmentType, string> = {
+  permanent: 'Cố định',
+  temporary: 'Tạm thời',
+  reservation: 'Đặt trước',
+}
+
+export const DEVICE_TYPE: Record<DeviceType, string> = {
+  laptop: 'Laptop',
+  monitor: 'Màn hình',
+  dock: 'Dock sạc',
+  other: 'Thiết bị khác',
+}

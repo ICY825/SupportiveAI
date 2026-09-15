@@ -1,17 +1,23 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { createDemoAllocation } from '../allocation/demoAllocation'
 import { FloorDetailsPanel } from '../components/FloorDetailsPanel'
 import { FloorMap } from '../components/FloorMap'
 import { FloorMapControls, ViewControls } from '../components/FloorMapControls'
 import { FloorSelector } from '../components/FloorSelector'
 import { MapLegend } from '../components/MapLegend'
+import { DeskInspector } from '../components/desk-inspector/DeskInspector'
+import { DeskStatusIcon } from '../components/desk-inspector/DeskStatusBadge'
+import { DeskStatusLegend } from '../components/desk-inspector/DeskStatusLegend'
 import { FLOORS, findFloor } from '../data/registry'
 import { validateFloorDataset } from '../data/validateFloorDataset'
+import { buildDeskIndex, DESK_STATUSES, type DeskStatus } from '../domain/desk'
 import type { BBox, EntityRef, FloorDataset } from '../domain/spatial'
-import { UNLABELED_ZONE, objectName } from '../labels'
+import { DESK_STATUS, UNLABELED_ZONE, VIEW_MODES, objectName } from '../labels'
+import { ARROW_DIRECTION, nearestInDirection } from '../map/deskNavigation'
 import { gridBounds } from '../map/grid'
 import { DEFAULT_SETTINGS, type MapSettings } from '../map/mapSettings'
 import { useViewport } from '../map/useViewport'
-import { buildHash, parseHash } from './urlState'
+import { buildHash, parseHash, type ViewMode } from './urlState'
 import '../floorPlanning.css'
 
 /** Smallest area (floor points) "focus" frames, so a single desk keeps its surroundings in view. */
@@ -21,6 +27,7 @@ export function FloorPlanningPage() {
   const initial = useMemo(() => parseHash(window.location.hash), [])
   const [floorId, setFloorId] = useState(findFloor(initial.floorId)?.id ?? FLOORS[0].id)
   const [selected, setSelected] = useState<EntityRef | null>(initial.selected)
+  const [view, setView] = useState<ViewMode>(initial.view)
   const [state, setState] = useState<{ id: string; dataset?: FloorDataset; error?: string } | null>(null)
 
   useEffect(() => {
@@ -37,9 +44,9 @@ export function FloorPlanningPage() {
   }, [floorId])
 
   useEffect(() => {
-    const next = buildHash({ floorId, selected })
+    const next = buildHash({ floorId, selected, view })
     if (window.location.hash !== next) window.history.replaceState(null, '', next)
-  }, [floorId, selected])
+  }, [floorId, selected, view])
 
   // A pasted or edited link in the same tab only changes the hash.
   useEffect(() => {
@@ -48,6 +55,7 @@ export function FloorPlanningPage() {
       const floor = findFloor(next.floorId)
       if (floor) setFloorId(floor.id)
       setSelected(next.selected)
+      setView(next.view)
     }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
@@ -66,10 +74,31 @@ export function FloorPlanningPage() {
       <header className="fp-topbar">
         <h1>Mặt bằng văn phòng</h1>
         <FloorSelector floors={FLOORS} value={floorId} onChange={changeFloor} />
-        <p className="fp-scope" title="Dữ liệu trích xuất từ bản vẽ nguồn. Chưa bao gồm chỗ ngồi, nhân sự hay tình trạng sử dụng.">
-          <span className="fp-scope-dot" aria-hidden="true" />
-          Dữ liệu mặt bằng vật lý
-        </p>
+        <div className="fp-segmented fp-view-mode" role="radiogroup" aria-label="Chế độ xem">
+          {VIEW_MODES.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              role="radio"
+              aria-checked={view === m.id}
+              className={view === m.id ? 'is-active' : ''}
+              onClick={() => setView(m.id)}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        {view === 'verification' ? (
+          <p className="fp-scope" title="Dữ liệu trích xuất từ bản vẽ nguồn. Chưa bao gồm chỗ ngồi, nhân sự hay tình trạng sử dụng.">
+            <span className="fp-scope-dot" aria-hidden="true" />
+            Dữ liệu mặt bằng vật lý
+          </p>
+        ) : (
+          <p className="fp-scope is-demo" title="Nhân sự, chỗ ngồi và thiết bị là dữ liệu giả lập; chưa kết nối HR/Admin.">
+            <span className="fp-scope-dot" aria-hidden="true" />
+            Dữ liệu bố trí minh họa
+          </p>
+        )}
       </header>
       {!current && (
         <div className="fp-state" role="status">
@@ -83,7 +112,14 @@ export function FloorPlanningPage() {
         </div>
       )}
       {current?.dataset && (
-        <FloorWorkspace key={floorId} dataset={current.dataset} selected={selected} onSelect={setSelected} />
+        <FloorWorkspace
+          key={floorId}
+          dataset={current.dataset}
+          selected={selected}
+          onSelect={setSelected}
+          view={view}
+          onViewChange={setView}
+        />
       )}
     </div>
   )
@@ -93,19 +129,41 @@ function FloorWorkspace({
   dataset,
   selected,
   onSelect,
+  view,
+  onViewChange,
 }: {
   dataset: FloorDataset
   selected: EntityRef | null
   onSelect: (ref: EntityRef | null) => void
+  view: ViewMode
+  onViewChange: (view: ViewMode) => void
 }) {
   const [settings, setSettings] = useState<MapSettings>(DEFAULT_SETTINGS)
   const [hovered, setHovered] = useState<EntityRef | null>(null)
+  const [now] = useState(() => new Date())
   const { floor } = dataset.layout
   const content = useMemo(() => ({ width: floor.width, height: floor.height }), [floor])
   // extra padding keeps source zone labels near the plate edge inside the fitted view
   const home = useMemo(() => gridBounds(dataset.layout, 60), [dataset])
   const vp = useViewport(content, home)
   const issues = useMemo(() => validateFloorDataset(dataset), [dataset])
+  const mainRef = useRef<HTMLElement>(null)
+
+  // Allocation is attached, never merged: demo fixtures until the HR/Admin API exists.
+  const workspace = view === 'workspace'
+  const allocation = useMemo(() => (workspace ? createDemoAllocation(dataset, now) : undefined), [workspace, dataset, now])
+  const desks = useMemo(() => buildDeskIndex(dataset, allocation, now), [dataset, allocation, now])
+  const deskStatuses = useMemo(
+    () => (workspace ? new Map([...desks].map(([id, d]) => [id, d.status] as const)) : undefined),
+    [workspace, desks],
+  )
+  const deskCounts = useMemo(() => {
+    const counts = Object.fromEntries(DESK_STATUSES.map((s) => [s, 0])) as Record<DeskStatus, number>
+    for (const d of desks.values()) counts[d.status]++
+    return counts
+  }, [desks])
+
+  const selectedDesk = workspace && selected?.kind === 'workstation' ? desks.get(selected.id) : undefined
 
   const bboxOf = useCallback(
     (ref: EntityRef) => {
@@ -121,6 +179,14 @@ function FloorWorkspace({
     [dataset],
   )
 
+  const deskLabel = useCallback(
+    (wsId: string) => {
+      const desk = workspace ? desks.get(wsId) : undefined
+      return desk ? `Bàn ${desk.seat.code} · ${DESK_STATUS[desk.status].label}` : `Vị trí làm việc ${wsId}`
+    },
+    [workspace, desks],
+  )
+
   const hoverLabel = useMemo(() => {
     if (!hovered) return null
     if (hovered.kind === 'zone') return dataset.zones.find((z) => z.id === hovered.id)?.name ?? UNLABELED_ZONE
@@ -129,14 +195,18 @@ function FloorWorkspace({
       const o = dataset.objects.find((k) => k.id === hovered.id)
       return o && objectName(o)
     }
-    return `Vị trí làm việc ${hovered.id}`
-  }, [hovered, dataset])
+    return deskLabel(hovered.id)
+  }, [hovered, dataset, deskLabel])
+
+  const focusMap = () => mainRef.current?.querySelector<SVGSVGElement>('.fp-svg')?.focus()
+
+  const clearSelection = useCallback(() => onSelect(null), [onSelect])
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || !selected) return
-      const t = e.target as HTMLElement | null
-      if (t?.closest('input, textarea, select, [contenteditable]')) return
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape' || !selected || e.defaultPrevented) return
+      const t = e.target
+      if (t instanceof Element && t.closest('input, textarea, select, [contenteditable]')) return
       onSelect(null)
     }
     window.addEventListener('keydown', onKey)
@@ -153,12 +223,46 @@ function FloorWorkspace({
     vp.focus([cx - hw, cy - hh, cx + hw, cy + hh])
   }
 
+  /** Arrow keys walk between desks; the view pans only when the next desk is off screen. */
+  const onMapKeyDown = (e: KeyboardEvent<SVGSVGElement>) => {
+    const direction = ARROW_DIRECTION[e.key]
+    if (!direction) return
+    e.preventDefault()
+    const candidates = workspace
+      ? dataset.workstations.filter((w) => desks.has(w.id))
+      : dataset.workstations
+    const from = selected?.kind === 'workstation' ? candidates.find((w) => w.id === selected.id) : undefined
+    const next = from ? nearestInDirection(from.center, direction, candidates, from.id) : candidates[0]
+    if (!next) return
+    onSelect({ kind: 'workstation', id: next.id })
+    const { scale, x, y } = vp.viewport
+    const sx = next.center[0] * scale + x
+    const sy = next.center[1] * scale + y
+    const margin = 60
+    if (sx < margin || sy < margin || sx > vp.size.width - margin || sy > vp.size.height - margin) {
+      setViewport((v) => ({ ...v, x: vp.size.width / 2 - next.center[0] * v.scale, y: vp.size.height / 2 - next.center[1] * v.scale }))
+    }
+  }
+
+  const callout = useMemo(() => {
+    if (!selectedDesk) return null
+    const { scale, x, y } = vp.viewport
+    const [x0, y0, x1] = selectedDesk.workstation.bbox
+    const left = ((x0 + x1) / 2) * scale + x
+    const top = y0 * scale + y
+    if (left < 0 || top < 0 || left > vp.size.width || top > vp.size.height) return null
+    return { left, top }
+  }, [selectedDesk, vp.viewport, vp.size])
+
+  const selectionAnnouncement =
+    selected?.kind === 'workstation' ? `Đã chọn ${deskLabel(selected.id).toLowerCase()}` : ''
+
   return (
-    <div className="fp-workspace">
+    <div className={`fp-workspace${workspace ? ' is-workspace' : ''}`}>
       <aside className="fp-sidebar" aria-label="Điều khiển bản đồ">
         <FloorMapControls settings={settings} layers={dataset.layout.layers} onChange={setSettings} />
       </aside>
-      <main className="fp-main">
+      <main className="fp-main" ref={mainRef}>
         <FloorMap
           dataset={dataset}
           settings={settings}
@@ -170,10 +274,23 @@ function FloorWorkspace({
           onSelect={onSelect}
           onHover={setHovered}
           assetBase={import.meta.env.BASE_URL}
+          deskStatuses={deskStatuses}
+          onKeyDown={onMapKeyDown}
         />
+        {callout && selectedDesk && (
+          <div className="fp-desk-callout" style={{ left: callout.left, top: callout.top }} data-desk-status={selectedDesk.status} aria-hidden="true">
+            <DeskStatusIcon status={selectedDesk.status} size={10} />
+            {selectedDesk.seat.code}
+          </div>
+        )}
         <div className="fp-hover" aria-live="polite">
-          {hoverLabel ?? <span className="fp-hover-hint">Kéo để di chuyển · Cuộn để thu phóng · Nhấp để chọn</span>}
+          {hoverLabel ?? (
+            <span className="fp-hover-hint">Kéo để di chuyển · Cuộn để thu phóng · Nhấp để chọn · Phím mũi tên để chuyển bàn</span>
+          )}
         </div>
+        <p className="fp-sr-only" aria-live="polite">
+          {selectionAnnouncement}
+        </p>
         <ViewControls
           onZoomIn={() => vp.zoomBy(1.4)}
           onZoomOut={() => vp.zoomBy(1 / 1.4)}
@@ -189,16 +306,31 @@ function FloorWorkspace({
               <span className="fp-source-note-extra">· ảnh raster, gồm chú thích của người rà soát</span>
             </p>
           )}
-          <MapLegend />
+          {workspace ? <DeskStatusLegend counts={deskCounts} demo={allocation?.source.kind === 'demo'} /> : <MapLegend />}
         </div>
       </main>
-      <FloorDetailsPanel
-        dataset={dataset}
-        selected={selected}
-        onSelect={onSelect}
-        debug={settings.debug.enabled}
-        issues={issues}
-      />
+      {selectedDesk && allocation ? (
+        <DeskInspector
+          desk={selectedDesk}
+          source={allocation.source}
+          now={now}
+          onClose={() => {
+            clearSelection()
+            focusMap()
+          }}
+          onShowWorkstation={() => onViewChange('verification')}
+        />
+      ) : (
+        <FloorDetailsPanel
+          dataset={dataset}
+          selected={selected}
+          onSelect={onSelect}
+          debug={settings.debug.enabled}
+          issues={issues}
+          desks={workspace ? desks : undefined}
+          allocationSource={allocation?.source}
+        />
+      )}
     </div>
   )
 }

@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react'
-import type { FloorAllocationData } from '../domain/allocation'
+import type { AllocationSource } from '../domain/allocation'
+import { DESK_STATUSES, type DeskRecord } from '../domain/desk'
 import type { EntityRef, FloorDataset, Point, VerificationState } from '../domain/spatial'
 import type { ValidationIssue } from '../data/validateFloorDataset'
 import {
   CLASSIFICATION,
+  DEMO_DATA_LABEL,
   NO_OPERATIONAL_DATA,
   NO_OPERATIONAL_DATA_HINT,
   NOT_AVAILABLE,
@@ -12,6 +14,7 @@ import {
   generated,
   objectName,
 } from '../labels'
+import { DeskStatusBadge } from './desk-inspector/DeskStatusBadge'
 import { VerificationStatus } from './VerificationStatus'
 
 interface FloorDetailsPanelProps {
@@ -20,8 +23,9 @@ interface FloorDetailsPanelProps {
   onSelect: (ref: EntityRef | null) => void
   debug: boolean
   issues: ValidationIssue[]
-  /** Phase 2. Undefined today: every allocation field renders "—". */
-  allocation?: FloorAllocationData
+  /** workspace view: desks derived from attached allocation data (demo or API) */
+  desks?: ReadonlyMap<string, DeskRecord>
+  allocationSource?: AllocationSource
 }
 
 const DASH = '—'
@@ -98,9 +102,43 @@ function SourceFileRow({ dataset }: { dataset: FloorDataset }) {
   )
 }
 
-/** Operational data does not exist yet. Always "—"; never computed from geometry. */
-function OperationalData({ allocation, fields }: { allocation?: FloorAllocationData; fields: string[] }) {
-  const value = allocation ? 'Chưa kết nối' : DASH
+/**
+ * Seat/people data. Without attached allocation data every field is "—" (never
+ * computed from geometry). With desks, shows status counts for the given scope.
+ */
+function OperationalData({
+  fields,
+  desks,
+  source,
+  scope,
+}: {
+  fields: string[]
+  desks?: ReadonlyMap<string, DeskRecord>
+  source?: AllocationSource
+  /** workstation ids the counts cover */
+  scope?: string[]
+}) {
+  if (desks && scope) {
+    const inScope = scope.map((id) => desks.get(id)).filter((d): d is DeskRecord => d !== undefined)
+    return (
+      <Section title="Chỗ ngồi" className="fp-operational">
+        {source?.kind === 'demo' && <p className="fp-sub">{DEMO_DATA_LABEL} · chưa kết nối HR/Admin</p>}
+        {inScope.length === 0 ? (
+          <p className="fp-empty">Không có chỗ ngồi trong phạm vi này</p>
+        ) : (
+          <ul className="fp-list">
+            {DESK_STATUSES.map((st) => (
+              <li key={st}>
+                <DeskStatusBadge status={st} size="sm" />
+                <span className="fp-count">{inScope.filter((d) => d.status === st).length}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+    )
+  }
+  const value = desks ? 'Chọn bàn trên bản đồ' : DASH
   return (
     <Section title="Dữ liệu vận hành" className="fp-operational">
       <p className="fp-empty">
@@ -129,7 +167,7 @@ function Technical({ children }: { children: ReactNode }) {
   )
 }
 
-export function FloorDetailsPanel({ dataset, selected, onSelect, debug, issues, allocation }: FloorDetailsPanelProps) {
+export function FloorDetailsPanel({ dataset, selected, onSelect, debug, issues, desks, allocationSource }: FloorDetailsPanelProps) {
   const { layout } = dataset
   const floor = layout.floor
   const zoneName = (id: string | null) => {
@@ -222,7 +260,12 @@ export function FloorDetailsPanel({ dataset, selected, onSelect, debug, issues, 
           </ul>
         </Section>
 
-        <OperationalData allocation={allocation} fields={['Chỗ ngồi đã xác minh', 'Nhân sự đã bố trí', 'Tỷ lệ sử dụng']} />
+        <OperationalData
+          fields={['Chỗ ngồi đã xác minh', 'Nhân sự đã bố trí', 'Tỷ lệ sử dụng']}
+          desks={desks}
+          source={allocationSource}
+          scope={dataset.workstations.map((w) => w.id)}
+        />
 
         <Section title="Nguồn dữ liệu">
           <dl>
@@ -288,7 +331,12 @@ export function FloorDetailsPanel({ dataset, selected, onSelect, debug, issues, 
             </Section>
           )}
 
-          <OperationalData allocation={allocation} fields={['Chỗ ngồi đã xác minh', 'Nhân sự đã bố trí', 'Tỷ lệ sử dụng']} />
+          <OperationalData
+            fields={['Chỗ ngồi đã xác minh', 'Nhân sự đã bố trí', 'Tỷ lệ sử dụng']}
+            desks={desks}
+            source={allocationSource}
+            scope={dataset.workstations.filter((w) => w.zoneId === z.id).map((w) => w.id)}
+          />
 
           <Section title="Nguồn & xác minh">
             <dl>
@@ -338,7 +386,7 @@ export function FloorDetailsPanel({ dataset, selected, onSelect, debug, issues, 
           </dl>
           <Notes notes={w.notes} />
 
-          <OperationalData allocation={allocation} fields={['Chỗ ngồi', 'Nhân sự đã bố trí']} />
+          <OperationalData fields={['Chỗ ngồi', 'Nhân sự đã bố trí']} desks={desks} />
 
           <Section title="Nguồn & xác minh">
             <dl>
@@ -388,7 +436,12 @@ export function FloorDetailsPanel({ dataset, selected, onSelect, debug, issues, 
             </ul>
           </Section>
 
-          <OperationalData allocation={allocation} fields={['Chỗ ngồi đã xác minh', 'Nhân sự đã bố trí']} />
+          <OperationalData
+            fields={['Chỗ ngồi đã xác minh', 'Nhân sự đã bố trí']}
+            desks={desks}
+            source={allocationSource}
+            scope={c.workstationIds}
+          />
 
           <Section title="Nguồn & xác minh">
             <dl>
@@ -420,7 +473,7 @@ export function FloorDetailsPanel({ dataset, selected, onSelect, debug, issues, 
           </dl>
           <Notes notes={r.notes} />
 
-          <OperationalData allocation={allocation} fields={['Người sử dụng']} />
+          <OperationalData fields={['Người sử dụng']} desks={desks} />
 
           <Section title="Nguồn & xác minh">
             <dl>

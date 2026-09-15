@@ -2,12 +2,16 @@ import type { EntityKind, EntityRef } from '../domain/spatial'
 
 const KINDS: EntityKind[] = ['zone', 'room', 'cluster', 'workstation', 'object']
 
+/** verification = physical layout check; workspace = seats, people and devices on desks */
+export type ViewMode = 'verification' | 'workspace'
+
 export interface FloorUrlState {
   floorId: string | null
   selected: EntityRef | null
+  view: ViewMode
 }
 
-/** `#/floor-planning?floor=floor-16&select=workstation:ws-16-001` — shareable while validating. */
+/** `#/floor-planning?floor=floor-16&view=workspace&select=workstation:ws-16-001` — shareable while validating. */
 export function parseHash(hash: string): FloorUrlState {
   const q = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : ''
   const params = new URLSearchParams(q)
@@ -17,12 +21,13 @@ export function parseHash(hash: string): FloorUrlState {
     const [kind, id] = [sel.slice(0, sel.indexOf(':')), sel.slice(sel.indexOf(':') + 1)]
     if ((KINDS as string[]).includes(kind) && id) selected = { kind: kind as EntityKind, id }
   }
-  return { floorId: params.get('floor'), selected }
+  return { floorId: params.get('floor'), selected, view: params.get('view') === 'workspace' ? 'workspace' : 'verification' }
 }
 
 export function buildHash(state: FloorUrlState): string {
   const params = new URLSearchParams()
   if (state.floorId) params.set('floor', state.floorId)
+  if (state.view === 'workspace') params.set('view', 'workspace')
   if (state.selected) params.set('select', `${state.selected.kind}:${state.selected.id}`)
   const q = params.toString()
   return `#/floor-planning${q ? `?${q}` : ''}`

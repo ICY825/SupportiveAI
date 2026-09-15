@@ -1,4 +1,5 @@
-import { memo, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import type { DeskStatus } from '../domain/desk'
 import type { BaseLayer, EntityKind, EntityRef, FloorDataset, Point } from '../domain/spatial'
 import { gridRefAt } from '../map/grid'
 import { UNLABELED_ZONE, objectName } from '../labels'
@@ -16,6 +17,10 @@ interface FloorMapProps {
   onSelect: (ref: EntityRef | null) => void
   onHover: (ref: EntityRef | null) => void
   assetBase: string
+  /** workspace mode: derived desk status per workstation id */
+  deskStatuses?: ReadonlyMap<string, DeskStatus>
+  /** makes the map focusable and receives keyboard navigation */
+  onKeyDown?: (e: ReactKeyboardEvent<SVGSVGElement>) => void
 }
 
 const DRAG_THRESHOLD_PX = 4
@@ -40,6 +45,8 @@ export function FloorMap({
   onSelect,
   onHover,
   assetBase,
+  deskStatuses,
+  onKeyDown,
 }: FloorMapProps) {
   const svgRef = useRef<SVGSVGElement | null>(null)
   const drag = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null)
@@ -112,14 +119,18 @@ export function FloorMap({
   const showDigital = settings.sourceMode !== 'source'
   const showSource = settings.sourceMode !== 'digital'
   const debug = settings.debug.enabled
+  const deskSelected = deskStatuses && selected?.kind === 'workstation' ? selected.id : null
 
   return (
     <div ref={containerRef} className="fp-map">
       <svg
         ref={svgRef}
-        className={`fp-svg${panning ? ' is-panning' : ''}${debug ? ' is-debug' : ''}`}
+        className={`fp-svg${panning ? ' is-panning' : ''}${debug ? ' is-debug' : ''}${deskStatuses ? ' has-desk-status' : ''}${deskSelected ? ' has-desk-selection' : ''}`}
         role="application"
         aria-label={`Bản đồ mặt bằng ${layout.floor.name}`}
+        aria-roledescription="bản đồ tương tác"
+        tabIndex={onKeyDown ? 0 : undefined}
+        onKeyDown={onKeyDown}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -138,6 +149,14 @@ export function FloorMap({
             <rect width="2" height="2" fill="var(--fp-unknown-bg)" />
             <line x1="0" y1="0" x2="0" y2="2" stroke="var(--fp-unknown)" strokeWidth="0.5" />
           </pattern>
+          <pattern id="fp-desk-reserved" width="1.6" height="1.6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <rect width="1.6" height="1.6" fill="#fff" />
+            <rect width="0.7" height="1.6" fill="var(--desk-reserved-fill)" />
+          </pattern>
+          <pattern id="fp-desk-unavailable" width="1.6" height="1.6" patternUnits="userSpaceOnUse">
+            <rect width="1.6" height="1.6" fill="#f1efec" />
+            <path d="M0 0L1.6 1.6M1.6 0L0 1.6" stroke="var(--desk-unavailable-fill)" strokeWidth="0.25" />
+          </pattern>
         </defs>
         <g transform={`translate(${viewport.x} ${viewport.y}) scale(${viewport.scale})`}>
           <rect className="fp-sheet" x={0} y={0} width={width} height={height} />
@@ -152,6 +171,11 @@ export function FloorMap({
 
           {showSource && settings.sourceMode === 'overlay' && (
             <SourceImage dataset={dataset} assetBase={assetBase} opacity={settings.sourceOpacity} />
+          )}
+
+          {deskStatuses && <DeskStatusLayer dataset={dataset} statuses={deskStatuses} />}
+          {deskStatuses && deskSelected && (
+            <SelectedDesk dataset={dataset} id={deskSelected} status={deskStatuses.get(deskSelected)} />
           )}
 
           <EntityLayer dataset={dataset} />
@@ -299,6 +323,48 @@ const EntityLayer = memo(function EntityLayer({ dataset }: { dataset: FloorDatas
     </g>
   )
 })
+
+function DeskShape({ w, status }: { w: FloorDataset['workstations'][number]; status: DeskStatus }) {
+  return (
+    <g data-desk-status={status}>
+      <polygon className="fp-desk-shape" points={points(w.polygon)} />
+      {status === 'conflict' && (
+        <text className="fp-desk-glyph" x={w.center[0]} y={w.center[1]}>
+          !
+        </text>
+      )}
+    </g>
+  )
+}
+
+/** Desk status fills (workspace mode). Pointer events go to the entity layer above. */
+const DeskStatusLayer = memo(function DeskStatusLayer({
+  dataset,
+  statuses,
+}: {
+  dataset: FloorDataset
+  statuses: ReadonlyMap<string, DeskStatus>
+}) {
+  return (
+    <g className="fp-desk-status" aria-hidden="true">
+      {dataset.workstations.map((w) => {
+        const status = statuses.get(w.id)
+        return status ? <DeskShape key={w.id} w={w} status={status} /> : null
+      })}
+    </g>
+  )
+})
+
+/** Undimmed copy of the selected desk drawn above the dimmed status layer. */
+function SelectedDesk({ dataset, id, status }: { dataset: FloorDataset; id: string; status?: DeskStatus }) {
+  const w = useMemo(() => dataset.workstations.find((k) => k.id === id), [dataset, id])
+  if (!w || !status) return null
+  return (
+    <g className="fp-desk-selected" aria-hidden="true">
+      <DeskShape w={w} status={status} />
+    </g>
+  )
+}
 
 const Labels = memo(function Labels({ dataset }: { dataset: FloorDataset }) {
   const { layout, zones } = dataset
