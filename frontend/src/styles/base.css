@@ -29,46 +29,209 @@ input {
 }
 
 .app-nav {
-  width: 64px;
+  --nav-pad: 12px;
+  width: 232px;
   flex: none;
-  background: var(--sidebar);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 0;
+  background: var(--sidebar);
+  overflow: hidden;
 }
 
-.app-logo {
-  width: 48px;
-  height: 48px;
-  border-radius: 8px;
-  background: #fff;
+.app-nav.is-compact {
+  --nav-pad: 4px;
+  width: 84px;
+}
+
+/* ---------------------------------------------------------------- brand */
+
+.app-brand {
+  flex: none;
   display: grid;
   place-items: center;
-  overflow: hidden;
-  margin-bottom: 12px;
+  margin: 0 var(--nav-pad);
+  padding: 22px 0 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px 8px 0 0;
 }
 
-.app-logo img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+.app-brand-logo {
+  display: block;
+  width: 132px;
+  height: auto;
+}
+
+.app-nav.is-compact .app-brand {
+  margin: 0;
+  padding: 0;
+  height: 48px;
+  border-radius: 0;
+}
+
+.app-brand-mark {
+  display: block;
+  width: 40px;
+  height: 40px;
+}
+
+/* ---------------------------------------------------------------- items */
+
+.app-nav-heading {
+  margin: 20px 0 6px;
+  padding: 0 calc(var(--nav-pad) + 12px);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.app-nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--nav-pad);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.app-nav.is-compact .app-nav-list {
+  padding-top: 8px;
 }
 
 .app-nav-item {
-  width: 36px;
-  height: 36px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 40px;
+  padding: 0 12px;
   border-radius: 8px;
-  display: grid;
-  place-items: center;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.68);
   text-decoration: none;
 }
 
-.app-nav-item.is-active {
-  background: rgba(255, 255, 255, 0.14);
+.app-nav-item svg {
+  flex: none;
+}
+
+.app-nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.app-nav.is-compact .app-nav-item {
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 9px 0 8px;
+  text-align: center;
+}
+
+.app-nav.is-compact .app-nav-label {
+  font-size: 11px;
+  line-height: 1.15;
+  overflow: visible;
+}
+
+a.app-nav-item:hover {
+  background: rgba(255, 255, 255, 0.06);
   color: #fff;
+}
+
+.app-nav-item.is-active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.app-nav-item.is-active .app-nav-label {
+  font-weight: 600;
+}
+
+.app-nav-item.is-active::before {
+  content: '';
+  position: absolute;
+  left: calc(-1 * var(--nav-pad));
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--vsf-red);
+}
+
+.app-nav-item.is-disabled {
+  color: rgba(255, 255, 255, 0.34);
+  cursor: not-allowed;
+}
+
+.app-nav-divider {
+  height: 1px;
+  margin: 8px 14px 0;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.app-nav-item:focus-visible,
+.app-brand:focus-visible,
+.app-nav-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--sidebar), 0 0 0 4px rgba(230, 16, 47, 0.85);
+}
+
+/* ---------------------------------------------------------------- footer */
+
+.app-nav-foot {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px calc(var(--nav-pad) + 8px) 14px calc(var(--nav-pad) + 12px);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.app-nav.is-compact .app-nav-foot {
+  flex-direction: column;
+  padding: 10px 0 12px;
+}
+
+.app-nav-stage {
+  padding: 2px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: help;
+}
+
+.app-nav-toggle {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+}
+
+.app-nav-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.app-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 .app-content {
