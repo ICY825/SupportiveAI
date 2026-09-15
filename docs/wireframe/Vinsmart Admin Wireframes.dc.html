@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Caveat:wght@500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#eceae5;font-family:'Inter',system-ui,sans-serif;color:#1c1b1a}
+a{color:#b3161d;text-decoration:none}a:hover{color:#8e1116}
+.dv-turn{padding:44px 48px 36px;border-bottom:1px solid rgba(0,0,0,.09);scroll-margin-top:16px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 22px}
+.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1c1b1a;color:#fff;border-radius:4px;text-decoration:none}
+.dv-tname{font:600 13px/1.2 'Inter',sans-serif;color:#1c1b1a}
+.dv-opts{display:flex;flex-wrap:wrap;gap:30px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:9px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1c1b1a;border-radius:5px;text-decoration:none}
+.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 11.5px/1.3 'Inter',sans-serif;color:rgba(0,0,0,.55)}
+.dv-card{max-width:100%;background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.07);overflow:hidden}
+.dv-opt:target .dv-oid{background:#b3161d;color:#fff}
+.dv-next{margin:24px 0 0;font:12px/1.6 'Inter',sans-serif;color:rgba(0,0,0,.5)}
+.note{font-family:'Caveat',cursive;font-size:15px;color:#8a6f20;line-height:1.25}
+
+
+/* ===== SupportiveAI V2 refinement layer ===== */
+:root{
+  --vsf-red:#d2181f;
+  --vsf-red-deep:#b3161d;
+  --ink:#1c1b1a;
+  --occupied:#4f4b46;
+  --muted:#6f6a63;
+  --line:#e2ded7;
+  --paper:#ffffff;
+  --canvas:#f6f4f1;
+  --warn:#8a6f20;
+}
+.dv-card{font-size:13px}
+.dv-card [style*="font-size:9px"]{font-size:11px!important}
+.dv-card [style*="font-size:10px"]{font-size:11.5px!important}
+.dv-card [style*="font-size:10.5px"]{font-size:12px!important}
+.dv-card [style*="font-size:11px"]{font-size:12px!important}
+.dv-card [style*="font-size:11.5px"]{font-size:12.5px!important}
+.dv-card [style*="font:600 12px"]{font-size:13px!important}
+.dv-card [style*="font:600 12.5px"]{font-size:13.5px!important}
+.dv-card [style*="font:600 14px"]{font-size:16px!important}
+.dv-card [style*="font:600 15px"]{font-size:17px!important}
+.dv-card [style*="font:600 17px"]{font-size:20px!important}
+.dv-card button{font:500 12px 'Inter',sans-serif;color:#57524b;border:0;background:transparent;cursor:pointer}
+.view-toggle{display:flex;gap:2px;background:#f1eee9;border-radius:6px;padding:3px;flex:none}
+.view-toggle button{padding:5px 10px;border-radius:4px}
+.view-toggle button.active{background:#fff;color:#1c1b1a;font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.view-panel.hidden{display:none!important}
+.simple-table{background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex:1;min-height:0}
+.simple-row{display:grid;align-items:center;padding:10px 12px;border-top:1px solid #f1eee9;font-size:12.5px;gap:10px}
+.simple-row.header{border-top:0;background:#faf9f7;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+.status-chip{display:inline-flex;align-items:center;width:max-content;padding:3px 8px;border-radius:999px;border:1px solid #d9d4cd;color:#6f6a63;font-size:11.5px}
+.status-chip.warn{border-color:#cdb479;background:#fdf9ef;color:#8a6f20}
+.status-chip.danger{border-color:#e3a9ab;background:#fcf1f1;color:#b3161d}
+.context-sub{font-size:11.5px;color:#6f6a63;margin-top:-5px}
+.provisional-banner{padding:7px 10px;border:1px solid #d9d4cd;background:#faf9f7;border-radius:6px;font-size:11.5px;color:#6f6a63;line-height:1.4}
+/* Normal occupancy is neutral. Red remains reserved for urgency/action/selection. */
+#1b [style*="grid-template-columns"] > div[style*="background:#d2181f"]{background:var(--occupied)!important;border:1px solid var(--occupied)!important}
+#1c [style*="grid-template-columns:repeat(4,1fr)"] > div[style*="background:#d2181f"]{background:var(--occupied)!important;border:1px solid var(--occupied)!important}
+@media (max-width: 1080px){
+  .dv-turn{padding:28px 20px}
+  .dv-card{transform-origin:top left}
+}
+
+</style></helmet>
+
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Vinsmart Future — Trung tâm Hành chính · wireframe V1 (tầng 19)</span></div>
+
+<div class="dv-opts">
+
+<div class="dv-opt" id="1a"><div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Shell + Dashboard 4 đề bài</div>
+<div class="dv-card" style="width:1000px">
+  <div style="display:flex;height:640px">
+    <div style="width:60px;background:#1c1b1a;display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:8px;flex:none">
+      <div style="width:32px;height:32px;background:#d2181f;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font:700 14px 'Inter',sans-serif;margin-bottom:12px">V</div>
+      <div style="width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px">◧</div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.45);font-size:10px">▣</div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.45);font-size:10px">▤</div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.45);font-size:10px">✉</div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.45);font-size:10px">▦</div>
+      <div style="margin-top:auto;width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.2)"></div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;background:#f6f4f1;min-width:0">
+      <div style="height:58px;flex:none;background:#fff;border-bottom:1px solid #e2ded7;display:flex;align-items:center;gap:16px;padding:0 22px">
+        <div style="font:600 15px 'Inter',sans-serif">Trung tâm Hành chính</div>
+                <div style="flex:1;max-width:280px;height:30px;border:1px solid #e2ded7;border-radius:15px;background:#faf9f7;display:flex;align-items:center;padding:0 12px;font-size:11px;color:#6f6a63;margin-left:auto">Tìm chỗ ngồi, tủ, công văn…</div>
+        <div style="width:26px;height:26px;border:1px solid #e2ded7;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#7b756c">⌗</div>
+        <div style="display:flex;align-items:center;gap:8px"><div style="width:26px;height:26px;border-radius:50%;background:#e6e2db"></div><div style="font-size:11px;color:#57524b">Thu Hương</div></div>
+      </div>
+      <div style="flex:1;padding:20px 22px;display:flex;flex-direction:column;gap:16px;overflow:hidden">
+        <div style="display:flex;align-items:baseline;gap:10px">
+          <div style="font:600 17px 'Inter',sans-serif">Vận hành hôm nay</div>
+          <div style="margin-left:auto;display:flex;gap:8px">
+            <div style="height:28px;padding:0 12px;border:1px solid #d9d4cd;border-radius:6px;display:flex;align-items:center;font-size:11px;color:#57524b">Xuất báo cáo</div>
+            <div style="height:28px;padding:0 12px;background:#d2181f;border-radius:6px;display:flex;align-items:center;font-size:11px;color:#fff">+ Yêu cầu mới</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+          <div style="background:#fff;border:1px solid #e2ded7;border-radius:8px;padding:14px">
+            <div style="font-size:10px;letter-spacing:.06em;color:#6f6a63;text-transform:uppercase">Đề bài 1 · Quy hoạch VP</div>
+            <div style="display:flex;align-items:baseline;gap:6px;margin:10px 0 4px"><div style="font:600 26px 'Inter',sans-serif">182</div><div style="font-size:11px;color:#6f6a63">/ 210 chỗ</div></div>
+            <div style="height:6px;border-radius:3px;background:#efece7;overflow:hidden;margin:8px 0 10px"><div style="width:86%;height:100%;background:#d2181f"></div></div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#8a6f20"><span style="width:6px;height:6px;border-radius:50%;background:#8a6f20"></span>3 đề xuất điều chuyển</div>
+          </div>
+          <div style="background:#fff;border:1px solid #e2ded7;border-radius:8px;padding:14px">
+            <div style="font-size:10px;letter-spacing:.06em;color:#6f6a63;text-transform:uppercase">Đề bài 2 · Tủ locker</div>
+            <div style="display:flex;align-items:baseline;gap:6px;margin:10px 0 4px"><div style="font:600 26px 'Inter',sans-serif">24</div><div style="font-size:11px;color:#6f6a63">tủ trống / 160</div></div>
+            <div style="height:6px;border-radius:3px;background:#efece7;overflow:hidden;margin:8px 0 10px"><div style="width:85%;height:100%;background:#d2181f"></div></div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#8a6f20"><span style="width:6px;height:6px;border-radius:50%;background:#8a6f20"></span>5 tủ cần thu hồi</div>
+          </div>
+          <div style="background:#fff;border:1px solid #e2ded7;border-radius:8px;padding:14px">
+            <div style="font-size:10px;letter-spacing:.06em;color:#6f6a63;text-transform:uppercase">Đề bài 3 · Chuyển phát</div>
+            <div style="display:flex;align-items:baseline;gap:6px;margin:10px 0 4px"><div style="font:600 26px 'Inter',sans-serif">37</div><div style="font-size:11px;color:#6f6a63">thư chưa nhận</div></div>
+            <div style="height:6px;border-radius:3px;background:#efece7;overflow:hidden;margin:8px 0 10px"><div style="width:32%;height:100%;background:#d2181f"></div></div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#8a6f20"><span style="width:6px;height:6px;border-radius:50%;background:#8a6f20"></span>9 thư quá 3 ngày</div>
+          </div>
+          <div style="background:#fff;border:1px solid #e2ded7;border-radius:8px;padding:14px">
+            <div style="font-size:10px;letter-spacing:.06em;color:#6f6a63;text-transform:uppercase">Đề bài 4 · Công văn</div>
+            <div style="display:flex;align-items:baseline;gap:6px;margin:10px 0 4px"><div style="font:600 26px 'Inter',sans-serif">12</div><div style="font-size:11px;color:#6f6a63">chờ xử lý</div></div>
+            <div style="height:6px;border-radius:3px;background:#efece7;overflow:hidden;margin:8px 0 10px"><div style="width:60%;height:100%;background:#d2181f"></div></div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#8a6f20"><span style="width:6px;height:6px;border-radius:50%;background:#8a6f20"></span>2 sắp tới deadline</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.45fr 1fr;gap:14px;flex:1;min-height:0">
+          <div style="background:#fff;border:1px solid #e2ded7;border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center"><div style="font:600 12.5px 'Inter',sans-serif">Việc cần làm hôm nay</div><div style="margin-left:auto;font-size:10.5px;color:#b3161d">Xem tất cả</div></div>
+            <div style="display:flex;flex-direction:column;gap:1px;background:#eeebe6;border:1px solid #eeebe6;border-radius:6px;overflow:hidden">
+              <div style="display:flex;gap:10px;align-items:center;background:#fff;padding:9px 11px;font-size:11.5px"><span style="width:3px;height:22px;background:#d2181f;border-radius:2px"></span><span style="flex:1">Xác nhận phương án điều chuyển Khối Kỹ thuật (Zone C)</span><span style="color:#6f6a63">AI · 2 giờ trước</span></div>
+              <div style="display:flex;gap:10px;align-items:center;background:#fff;padding:9px 11px;font-size:11.5px"><span style="width:3px;height:22px;background:#8a6f20;border-radius:2px"></span><span style="flex:1">Thu hồi 5 tủ locker của nhân sự đã nghỉ việc</span><span style="color:#6f6a63">Hạn hôm nay</span></div>
+              <div style="display:flex;gap:10px;align-items:center;background:#fff;padding:9px 11px;font-size:11.5px"><span style="width:3px;height:22px;background:#d9d4cd;border-radius:2px"></span><span style="flex:1">Nhắc 9 nhân sự chưa nhận thư tại quầy lễ tân</span><span style="color:#6f6a63">Tự động 16:00</span></div>
+              <div style="display:flex;gap:10px;align-items:center;background:#fff;padding:9px 11px;font-size:11.5px"><span style="width:3px;height:22px;background:#d9d4cd;border-radius:2px"></span><span style="flex:1">Phân loại 4 công văn đến mới (AI đã đọc file scan)</span><span style="color:#6f6a63">09:12</span></div>
+            </div>
+            <div class="note">Mỗi dòng = 1 hành động, mở panel xử lý ngay bên phải</div>
+          </div>
+          <div style="background:#fff;border:1px solid #e2ded7;border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px">
+            <div style="font:600 12.5px 'Inter',sans-serif">Phân tích quản lý · Pilot 30 ngày</div>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div><div style="display:flex;font-size:11px;margin-bottom:4px"><span>Thời gian lập phương án</span><span style="margin-left:auto;color:#57524b">6h → 1.5h</span></div><div style="height:5px;background:#efece7;border-radius:3px"><div style="width:25%;height:100%;background:#1c1b1a;border-radius:3px"></div></div></div>
+              <div><div style="display:flex;font-size:11px;margin-bottom:4px"><span>Thao tác thủ công / ngày</span><span style="margin-left:auto;color:#57524b">48 → 17</span></div><div style="height:5px;background:#efece7;border-radius:3px"><div style="width:35%;height:100%;background:#1c1b1a;border-radius:3px"></div></div></div>
+              <div><div style="display:flex;font-size:11px;margin-bottom:4px"><span>Tỷ lệ tự động hoá</span><span style="margin-left:auto;color:#57524b">62%</span></div><div style="height:5px;background:#efece7;border-radius:3px"><div style="width:62%;height:100%;background:#d2181f;border-radius:3px"></div></div></div>
+              <div><div style="display:flex;font-size:11px;margin-bottom:4px"><span>Độ chính xác nhận diện</span><span style="margin-left:auto;color:#57524b">91%</span></div><div style="height:5px;background:#efece7;border-radius:3px"><div style="width:91%;height:100%;background:#d2181f;border-radius:3px"></div></div></div>
+            </div>
+            <div class="note">Xu hướng trước/sau phục vụ đánh giá pilot — tách khỏi hàng đợi vận hành hằng ngày</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></div>
+
+<div class="dv-opt" id="1b"><div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>Đề bài 1 — Quy hoạch VP, sơ đồ tầng 19</div>
+<div class="dv-card" style="width:1000px">
+  <div style="display:flex;height:640px">
+    <div style="width:60px;background:#1c1b1a;display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:8px;flex:none">
+      <div style="width:32px;height:32px;background:#d2181f;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font:700 14px 'Inter',sans-serif;margin-bottom:12px">V</div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.45);font-size:10px">◧</div>
+      <div style="width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px">▣</div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.45);font-size:10px">▤</div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.45);font-size:10px">✉</div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.45);font-size:10px">▦</div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;background:#f6f4f1;min-width:0">
+      <div style="height:52px;flex:none;background:#fff;border-bottom:1px solid #e2ded7;display:flex;align-items:center;gap:14px;padding:0 20px">
+        <div style="font:600 14px 'Inter',sans-serif">Quy hoạch văn phòng</div>
+        <div style="display:flex;gap:2px;background:#f1eee9;border-radius:6px;padding:3px">
+          <div style="padding:4px 10px;background:#fff;border-radius:4px;font-size:11px;font-weight:500">Tầng 19</div>
+          <div style="padding:4px 10px;font-size:11px;color:#6f6a63">Tầng 20</div>
+          <div style="padding:4px 10px;font-size:11px;color:#6f6a63">Tầng 21</div>
+        </div>
+        <div class="view-toggle" aria-label="Chế độ xem quy hoạch">
+          <button class="active" data-view-button="seat-map" onclick="switchView('seat','map',this)">Sơ đồ</button>
+          <button data-view-button="seat-list" onclick="switchView('seat','list',this)">Danh sách</button>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+          <div style="height:28px;padding:0 11px;border:1px solid #d9d4cd;border-radius:6px;display:flex;align-items:center;font-size:11px;color:#57524b">Khối / bộ phận ▾</div>
+          <div style="height:28px;padding:0 11px;border:1px solid #d9d4cd;border-radius:6px;display:flex;align-items:center;font-size:11px;color:#57524b">Mô phỏng layout</div>
+          <div style="height:28px;padding:0 12px;background:#d2181f;border-radius:6px;display:flex;align-items:center;font-size:11px;color:#fff">Cập nhật SL chỗ ngồi</div>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;min-height:0">
+        <div style="flex:1;padding:18px 20px;display:flex;flex-direction:column;gap:12px;min-width:0">
+          <div style="display:flex;gap:16px;align-items:center;font-size:11px;color:#57524b">
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;background:#4f4b46;border-radius:2px"></span>Đang sử dụng</span>
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;background:#fff;border:1px solid #c9c3ba;border-radius:2px"></span>Còn trống</span>
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;background:#f3d8d9;border:1px solid #e3a9ab;border-radius:2px"></span>Xung đột / quá tải</span>
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;background:#f0e3c2;border:1px solid #cdb479;border-radius:2px"></span>Đề xuất / chờ duyệt</span>
+            <span style="margin-left:auto;color:#6f6a63">210 chỗ · 182 đang dùng</span>
+          </div>
+          <div id="seat-map-view" class="view-panel" style="flex:1;background:#fff;border:1px solid #e2ded7;border-radius:8px;position:relative;padding:16px;min-height:0">
+            <div style="position:absolute;top:10px;right:14px;font-size:10px;color:#6f6a63">SƠ ĐỒ TẠM · TẦNG 19 · CHỜ ĐỐI SOÁT THỰC ĐỊA</div>
+            <div style="display:flex;gap:10px;height:100%">
+              <div style="flex:1.25;display:flex;flex-direction:column;gap:8px">
+                <div style="border:1px dashed #cfc9c0;border-radius:4px;padding:8px;flex:1;display:flex;flex-direction:column;gap:6px">
+                  <div style="font-size:10px;color:#6f6a63;letter-spacing:.05em">KHU A · 48/48 CHỖ · PHÂN BỔ HIỆN TẠI</div>
+                  <div style="display:grid;grid-template-columns:repeat(8,1fr);gap:4px;flex:1">
+                    <div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div>
+                    <div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div>
+                    <div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div>
+                  </div>
+                </div>
+                <div style="border:1px dashed #cfc9c0;border-radius:4px;padding:8px;flex:1;display:flex;flex-direction:column;gap:6px">
+                  <div style="font-size:10px;color:#6f6a63;letter-spacing:.05em">KHU B · 52/64 CHỖ · PHÂN BỔ HIỆN TẠI</div>
+                  <div style="display:grid;grid-template-columns:repeat(8,1fr);gap:4px;flex:1">
+                    <div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#f3d8d9;border:1px solid #e3a9ab;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#fff;border:1px solid #c9c3ba;border-radius:2px"></div><div style="background:#fff;border:1px solid #c9c3ba;border-radius:2px"></div>
+                    <div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#f3d8d9;border:1px solid #e3a9ab;border-radius:2px"></div><div style="background:#fff;border:1px solid #c9c3ba;border-radius:2px"></div><div style="background:#fff;border:1px solid #c9c3ba;border-radius:2px"></div>
+                  </div>
+                </div>
+              </div>
+              <div style="width:66px;border:1px solid #e2ded7;border-radius:4px;background:#faf9f7;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-size:9px;color:#6f6a63;flex:none">
+                <div style="width:40px;height:26px;border:1px solid #d9d4cd;background:#fff"></div>LIFT<div style="width:40px;height:20px;border:1px solid #d9d4cd;background:#fff"></div>WC<div style="width:40px;height:20px;border:1px solid #d9d4cd;background:#fff"></div>KT
+              </div>
+              <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+                <div style="border:1px dashed #cfc9c0;border-radius:4px;padding:8px;flex:1.3;display:flex;flex-direction:column;gap:6px;background:#fdf9ef">
+                  <div style="font-size:10px;color:#8a6f20;letter-spacing:.05em">KHU C · 62/56 CHỖ ⚠ VƯỢT SỨC CHỨA</div>
+                  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;flex:1">
+                    <div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div>
+                    <div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div>
+                    <div style="background:#f0e3c2;border:1px solid #cdb479;border-radius:2px"></div><div style="background:#f0e3c2;border:1px solid #cdb479;border-radius:2px"></div><div style="background:#f0e3c2;border:1px solid #cdb479;border-radius:2px"></div><div style="background:#f0e3c2;border:1px solid #cdb479;border-radius:2px"></div><div style="background:#f0e3c2;border:1px solid #cdb479;border-radius:2px"></div><div style="background:#f0e3c2;border:1px solid #cdb479;border-radius:2px"></div><div style="background:#f0e3c2;border:1px solid #cdb479;border-radius:2px"></div>
+                  </div>
+                </div>
+                <div style="border:1px dashed #cfc9c0;border-radius:4px;padding:8px;flex:1;display:flex;flex-direction:column;gap:6px">
+                  <div style="font-size:10px;color:#6f6a63;letter-spacing:.05em">KHU D · 20/42 CHỖ · PHÂN BỔ HIỆN TẠI</div>
+                  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;flex:1">
+                    <div style="background:#d2181f;border-radius:2px"></div><div style="background:#d2181f;border-radius:2px"></div><div style="background:#fff;border:1px solid #c9c3ba;border-radius:2px"></div><div style="background:#fff;border:1px solid #c9c3ba;border-radius:2px"></div><div style="background:#fff;border:1px solid #c9c3ba;border-radius:2px"></div><div style="background:#fff;border:1px solid #c9c3ba;border-radius:2px"></div><div style="background:#fff;border:1px solid #c9c3ba;border-radius:2px"></div>
+                    <div style="background:#fff;border:1px solid #c9c3ba;border-radius:2px"></div><div style="background:#fff;border:1px solid #c9c3ba;border-radius:2px"></div><div style="background:#fff;border:1px solid #c9c3ba;border-radius:2px"></div><div style="background:#fff;border:1px solid #c9c3ba;border-radius:2px"></div><div style="background:#fff;border:1px solid #c9c3ba;border-radius:2px"></div><div style="background:#fff;border:1px solid #c9c3ba;border-radius:2px"></div><div style="background:#fff;border:1px solid #c9c3ba;border-radius:2px"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div id="seat-list-view" class="view-panel hidden simple-table">
+            <div class="simple-row header" style="grid-template-columns:1fr .8fr .8fr 1.2fr 1fr"><div>Khu vật lý</div><div>Sức chứa</div><div>Đang dùng</div><div>Tình trạng</div><div>Phân bổ</div></div>
+            <div class="simple-row" style="grid-template-columns:1fr .8fr .8fr 1.2fr 1fr"><div><b>Khu A</b></div><div>48</div><div>48</div><div><span class="status-chip">Đủ chỗ</span></div><div>Dữ liệu HR hiện tại</div></div>
+            <div class="simple-row" style="grid-template-columns:1fr .8fr .8fr 1.2fr 1fr"><div><b>Khu B</b></div><div>64</div><div>52</div><div><span class="status-chip">12 chỗ trống</span></div><div>Dữ liệu HR hiện tại</div></div>
+            <div class="simple-row" style="grid-template-columns:1fr .8fr .8fr 1.2fr 1fr"><div><b>Khu C</b></div><div>56</div><div>62</div><div><span class="status-chip danger">Vượt 6 chỗ</span></div><div>Cần điều chỉnh</div></div>
+            <div class="simple-row" style="grid-template-columns:1fr .8fr .8fr 1.2fr 1fr"><div><b>Khu D</b></div><div>42</div><div>20</div><div><span class="status-chip warn">22 chỗ trống</span></div><div>Ứng viên tái phân bổ</div></div>
+            <div style="padding:12px 14px;border-top:1px solid #f1eee9;font-size:12px;color:#6f6a63;line-height:1.5">Khu A–D là <b>không gian vật lý</b>; phòng ban và nhân sự là lớp phân bổ có thể thay đổi theo thời gian.</div>
+          </div>
+          <div class="provisional-banner">Sơ đồ hiện tại chỉ là mô hình V1 để kiểm thử workflow. Hình học phòng, lối đi, cụm bàn và vị trí lõi sẽ được thay bằng dữ liệu thực địa sau khi đối soát video tầng 19.</div>
+        </div>
+        <div style="width:288px;flex:none;border-left:1px solid #e2ded7;background:#fff;display:flex;flex-direction:column">
+          <div style="padding:14px 16px;border-bottom:1px solid #eeebe6;display:flex;align-items:center;gap:8px">
+            <span style="width:18px;height:18px;border-radius:4px;background:#1c1b1a;color:#fff;font-size:9px;display:flex;align-items:center;justify-content:center">AI</span>
+            <div><div style="font:600 12.5px 'Inter',sans-serif">Đề xuất</div><div class="context-sub">SupportiveAI · cần người dùng duyệt</div></div>
+            <div style="margin-left:auto;font-size:10px;color:#6f6a63">3</div>
+          </div>
+          <div style="padding:14px 16px;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+            <div style="border:1px solid #e2ded7;border-left:3px solid #d2181f;border-radius:6px;padding:11px">
+              <div style="font-size:11.5px;font-weight:600;margin-bottom:5px">Khu C vượt sức chứa tạm thời 6 chỗ</div>
+              <div style="font-size:11px;color:#6f6a63;line-height:1.5">Điều chuyển 6 nhân sự nhóm Vận hành sang Khu D (còn 22 chỗ trống, cùng trục thang máy).</div>
+              <div style="display:flex;gap:6px;margin-top:9px"><div style="padding:5px 10px;background:#1c1b1a;color:#fff;border-radius:5px;font-size:10.5px">Xem mô phỏng</div><div style="padding:5px 10px;border:1px solid #d9d4cd;border-radius:5px;font-size:10.5px;color:#57524b">Bỏ qua</div></div>
+            </div>
+            <div style="border:1px solid #e2ded7;border-left:3px solid #8a6f20;border-radius:6px;padding:11px">
+              <div style="font-size:11.5px;font-weight:600;margin-bottom:5px">Nhân sự mới · 4 người (01/10)</div>
+              <div style="font-size:11px;color:#6f6a63;line-height:1.5">Gợi ý chỗ B-07, B-08, B-15, B-16 — gần bộ phận trực tiếp, không tách nhóm.</div>
+              <div style="display:flex;gap:6px;margin-top:9px"><div style="padding:5px 10px;background:#1c1b1a;color:#fff;border-radius:5px;font-size:10.5px">Xếp chỗ</div><div style="padding:5px 10px;border:1px solid #d9d4cd;border-radius:5px;font-size:10.5px;color:#57524b">Chỉnh tay</div></div>
+            </div>
+            <div style="border:1px solid #e2ded7;border-radius:6px;padding:11px">
+              <div style="font-size:11.5px;font-weight:600;margin-bottom:5px">Khu D đang được sử dụng thấp</div>
+              <div style="font-size:11px;color:#6f6a63;line-height:1.5">Tỷ lệ sử dụng 48% trong 30 ngày. Cân nhắc gộp về Zone B, thu hồi 1 dãy bàn.</div>
+            </div>
+            <div style="border-top:1px solid #eeebe6;padding-top:12px;font-size:11px;color:#6f6a63;line-height:1.6">
+              <div style="font-weight:600;color:#1c1b1a;margin-bottom:5px;font-size:11.5px">So sánh phương án</div>
+              <div style="display:flex;justify-content:space-between"><span>Hiện tại</span><span>182/210 · 4 điểm quá tải</span></div>
+              <div style="display:flex;justify-content:space-between"><span>Phương án AI</span><span style="color:#b3161d">182/210 · 0 điểm</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></div>
+
+<div class="dv-opt" id="1c"><div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>Đề bài 2 — Quản lý tủ locker (sơ đồ 3 khu tủ tầng 19)</div>
+<div class="dv-card" style="width:1000px">
+  <div style="display:flex;height:640px">
+    <div style="width:60px;background:#1c1b1a;flex:none;display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:8px">
+      <div style="width:32px;height:32px;background:#d2181f;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font:700 14px 'Inter',sans-serif;margin-bottom:12px">V</div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.45);font-size:10px">◧</div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.45);font-size:10px">▣</div>
+      <div style="width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px">▤</div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.45);font-size:10px">✉</div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.45);font-size:10px">▦</div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;background:#f6f4f1;min-width:0">
+      <div style="height:52px;flex:none;background:#fff;border-bottom:1px solid #e2ded7;display:flex;align-items:center;gap:14px;padding:0 20px">
+        <div style="font:600 14px 'Inter',sans-serif">Quản lý tủ locker</div>
+        <div style="display:flex;gap:2px;background:#f1eee9;border-radius:6px;padding:3px">
+          <div style="padding:4px 10px;background:#fff;border-radius:4px;font-size:11px;font-weight:500">Tầng 19</div>
+          <div style="padding:4px 10px;font-size:11px;color:#6f6a63">Tầng 20</div>
+          <div style="padding:4px 10px;font-size:11px;color:#6f6a63">Tầng 21</div>
+        </div>
+        <div class="view-toggle" aria-label="Chế độ xem locker">
+          <button class="active" data-view-button="locker-map" onclick="switchView('locker','map',this)">Sơ đồ</button>
+          <button data-view-button="locker-list" onclick="switchView('locker','list',this)">Danh sách</button>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+          <div style="height:28px;padding:0 11px;border:1px solid #d9d4cd;border-radius:6px;display:flex;align-items:center;font-size:11px;color:#57524b">Bộ phận ▾</div>
+          <div style="height:28px;padding:0 11px;border:1px solid #d9d4cd;border-radius:6px;display:flex;align-items:center;font-size:11px;color:#57524b">Nhật ký cấp phát</div>
+          <div style="height:28px;padding:0 12px;background:#d2181f;border-radius:6px;display:flex;align-items:center;font-size:11px;color:#fff">Cấp phát tủ</div>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;min-height:0">
+        <div style="flex:1;padding:18px 20px;display:flex;flex-direction:column;gap:12px;min-width:0">
+          <div style="display:flex;gap:16px;align-items:center;font-size:11px;color:#57524b">
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:14px;background:#4f4b46;border-radius:2px"></span>Đang sử dụng</span>
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:14px;background:#fff;border:1px solid #c9c3ba;border-radius:2px"></span>Còn trống</span>
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:14px;background:#f0e3c2;border:1px solid #cdb479;border-radius:2px"></span>Cần thu hồi</span>
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:14px;background:#efece7;border:1px dashed #6f6a63;border-radius:2px"></span>Hỏng</span>
+            <span style="margin-left:auto;color:#6f6a63">60 tủ · 48 đang dùng</span>
+          </div>
+          <div id="locker-map-view" class="view-panel" style="flex:1;background:#fff;border:1px solid #e2ded7;border-radius:8px;position:relative;padding:16px;min-height:0">
+            <div style="position:absolute;top:10px;right:14px;font-size:10px;color:#6f6a63">SƠ ĐỒ TỦ LOCKER · TẦNG 19</div>
+            <div style="display:flex;gap:12px;height:100%;padding-top:14px">
+              <div style="border:1px dashed #cfc9c0;border-radius:5px;padding:10px;flex:1;display:flex;flex-direction:column;gap:8px;min-width:0">
+                <div style="font-size:10px;color:#6f6a63;letter-spacing:.05em">KHU L1 · SẢNH THANG MÁY</div>
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px"><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#fff;border:1px solid #c9c3ba"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#f0e3c2;border:1px solid #cdb479"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#fff;border:1px solid #c9c3ba"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#efece7;border:1px dashed #6f6a63"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div></div>
+                <div style="font-size:10.5px;color:#57524b;margin-top:auto">20 tủ · 3 trống</div>
+              </div>
+              <div style="border:1px dashed #cfc9c0;border-radius:5px;padding:10px;flex:1;display:flex;flex-direction:column;gap:8px;min-width:0">
+                <div style="font-size:10px;color:#6f6a63;letter-spacing:.05em">KHU L2 · HÀNH LANG ĐÔNG</div>
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px"><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#f0e3c2;border:1px solid #cdb479"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#fff;border:1px solid #c9c3ba"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#efece7;border:1px dashed #6f6a63"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#fff;border:1px solid #c9c3ba"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#fff;border:1px solid #c9c3ba"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div></div>
+                <div style="font-size:10.5px;color:#57524b;margin-top:auto">20 tủ · 4 trống</div>
+              </div>
+              <div style="border:1px dashed #cfc9c0;border-radius:5px;padding:10px;flex:1;display:flex;flex-direction:column;gap:8px;min-width:0">
+                <div style="font-size:10px;color:#6f6a63;letter-spacing:.05em">KHU L3 · PANTRY</div>
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px"><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#fff;border:1px solid #c9c3ba"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#f0e3c2;border:1px solid #cdb479"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#fff;border:1px solid #c9c3ba"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#fff;border:1px solid #c9c3ba"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#efece7;border:1px dashed #6f6a63"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#d2181f;border:1px solid #d2181f"></div><div style="aspect-ratio:2/3.2;border-radius:2px;background:#fff;border:1px solid #c9c3ba"></div></div>
+                <div style="font-size:10.5px;color:#57524b;margin-top:auto">20 tủ · 5 trống</div>
+              </div>
+            </div>
+          </div>
+          
+          <div id="locker-list-view" class="view-panel hidden simple-table">
+            <div class="simple-row header" style="grid-template-columns:.7fr 1.2fr 1fr 1.1fr .9fr"><div>Tủ</div><div>Nhân sự</div><div>Bộ phận</div><div>Trạng thái</div><div>Ngày cấp</div></div>
+            <div class="simple-row" style="grid-template-columns:.7fr 1.2fr 1fr 1.1fr .9fr"><div><b>L1-04</b></div><div>Trần Minh Quân</div><div>Kỹ thuật</div><div><span class="status-chip warn">Cần thu hồi</span></div><div>12/03/2025</div></div>
+            <div class="simple-row" style="grid-template-columns:.7fr 1.2fr 1fr 1.1fr .9fr"><div><b>L1-11</b></div><div>—</div><div>—</div><div><span class="status-chip">Trống</span></div><div>—</div></div>
+            <div class="simple-row" style="grid-template-columns:.7fr 1.2fr 1fr 1.1fr .9fr"><div><b>L2-06</b></div><div>Nguyễn Minh Anh</div><div>Pháp chế</div><div><span class="status-chip">Đang dùng</span></div><div>08/01/2026</div></div>
+            <div class="simple-row" style="grid-template-columns:.7fr 1.2fr 1fr 1.1fr .9fr"><div><b>L2-11</b></div><div>—</div><div>—</div><div><span class="status-chip danger">Hỏng</span></div><div>—</div></div>
+            <div class="simple-row" style="grid-template-columns:.7fr 1.2fr 1fr 1.1fr .9fr"><div><b>L3-20</b></div><div>—</div><div>—</div><div><span class="status-chip">Trống</span></div><div>—</div></div>
+          </div>
+          <div class="note">Sơ đồ = nhận biết vị trí nhanh · Danh sách = thao tác hành chính, tìm kiếm và thu hồi/cấp phát hàng loạt</div>
+        </div>
+        <div style="width:288px;flex:none;border-left:1px solid #e2ded7;background:#fff;display:flex;flex-direction:column">
+          <div style="padding:14px 16px;border-bottom:1px solid #eeebe6;display:flex;align-items:center;gap:8px">
+            <div style="font:600 12.5px 'Inter',sans-serif">Tủ L1-04</div>
+            <div style="margin-left:auto;font-size:10px;color:#6f6a63">Khu L1 · dãy 1</div>
+          </div>
+          <div style="padding:14px 16px;display:flex;flex-direction:column;gap:11px">
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div><div style="font-size:10px;color:#6f6a63;margin-bottom:3px">Mã tủ</div><div style="border:1px solid #e2ded7;border-radius:6px;padding:7px 10px;font-size:11.5px;font-weight:600">L1-04</div></div>
+              <div><div style="font-size:10px;color:#6f6a63;margin-bottom:3px">Nhân sự</div><div style="border:1px solid #e2ded7;border-radius:6px;padding:7px 10px;font-size:11.5px">Trần Minh Quân</div></div>
+              <div><div style="font-size:10px;color:#6f6a63;margin-bottom:3px">Bộ phận</div><div style="border:1px solid #e2ded7;border-radius:6px;padding:7px 10px;font-size:11.5px">Khối Kỹ thuật</div></div>
+              <div><div style="font-size:10px;color:#6f6a63;margin-bottom:3px">Trạng thái</div><div style="border:1px solid #cdb479;background:#fdf9ef;border-radius:6px;padding:7px 10px;font-size:11.5px;color:#8a6f20">Đã nghỉ việc · cần thu hồi</div></div>
+              <div><div style="font-size:10px;color:#6f6a63;margin-bottom:3px">Ngày cấp</div><div style="border:1px solid #e2ded7;border-radius:6px;padding:7px 10px;font-size:11.5px">12/03/2025</div></div>
+            </div>
+            <div style="border-top:1px solid #eeebe6;padding-top:12px;display:flex;flex-direction:column;gap:9px">
+              <div><div style="font:600 12px 'Inter',sans-serif">Đề xuất</div><div class="context-sub">SupportiveAI · dựa trên trạng thái nhân sự và công suất tủ</div></div>
+              <div style="border:1px solid #e2ded7;border-left:3px solid #d2181f;border-radius:6px;padding:11px">
+                <div style="font-size:11px;color:#6f6a63;line-height:1.5">Nằm trong nhóm 5 tủ cần thu hồi. Sau khi thu hồi, ưu tiên cấp cho nhân sự mới ở khu phù hợp.</div>
+              </div>
+              <div style="border:1px solid #e2ded7;border-radius:6px;padding:11px">
+                <div style="font-size:11px;color:#6f6a63;line-height:1.5">Khu L1 còn 3 tủ trống — ưu tiên cấp ở L2/L3 trong 2 tuần tới.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></div>
+
+<div class="dv-opt" id="1d"><div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a>Đề bài 3 — Chuyển phát nhanh / thư đến</div>
+<div class="dv-card" style="width:1000px">
+  <div style="display:flex;height:600px">
+    <div style="width:60px;background:#1c1b1a;flex:none;display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:8px">
+      <div style="width:32px;height:32px;background:#d2181f;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font:700 14px 'Inter',sans-serif;margin-bottom:12px">V</div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.45);font-size:10px">◧</div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.45);font-size:10px">▣</div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.45);font-size:10px">▤</div>
+      <div style="width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px">✉</div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;background:#f6f4f1;min-width:0">
+      <div style="height:52px;flex:none;background:#fff;border-bottom:1px solid #e2ded7;display:flex;align-items:center;gap:14px;padding:0 20px">
+        <div style="font:600 14px 'Inter',sans-serif">Chuyển phát nhanh</div>
+        <div style="display:flex;gap:2px;background:#f1eee9;border-radius:6px;padding:3px">
+          <div style="padding:4px 10px;background:#fff;border-radius:4px;font-size:11px;font-weight:500">Chưa nhận 37</div>
+          <div style="padding:4px 10px;font-size:11px;color:#6f6a63">Đã nhận 128</div>
+          <div style="padding:4px 10px;font-size:11px;color:#6f6a63">Gửi đi 42</div>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <div style="height:28px;padding:0 11px;border:1px solid #d9d4cd;border-radius:6px;display:flex;align-items:center;font-size:11px;color:#57524b">Báo cáo tổng hợp</div>
+          <div style="height:28px;padding:0 12px;background:#d2181f;border-radius:6px;display:flex;align-items:center;font-size:11px;color:#fff">+ Ghi nhận thư mới</div>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;min-height:0">
+        <div style="flex:1;padding:18px 20px;display:flex;flex-direction:column;gap:12px;min-width:0">
+          <div style="display:flex;gap:10px">
+            <div style="flex:1;background:#fff;border:1px solid #e2ded7;border-radius:8px;padding:12px 14px"><div style="font-size:10px;color:#6f6a63;text-transform:uppercase;letter-spacing:.05em">Thư về hôm nay</div><div style="font:600 22px 'Inter',sans-serif;margin-top:6px">18</div></div>
+            <div style="flex:1;background:#fff;border:1px solid #e2ded7;border-radius:8px;padding:12px 14px"><div style="font-size:10px;color:#6f6a63;text-transform:uppercase;letter-spacing:.05em">Đã thông báo tự động</div><div style="font:600 22px 'Inter',sans-serif;margin-top:6px">18</div></div>
+            <div style="flex:1;background:#fff;border:1px solid #e2ded7;border-radius:8px;padding:12px 14px"><div style="font-size:10px;color:#6f6a63;text-transform:uppercase;letter-spacing:.05em">Quá 3 ngày chưa nhận</div><div style="font:600 22px 'Inter',sans-serif;margin-top:6px;color:#b3161d">9</div></div>
+            <div style="flex:1;background:#fff;border:1px solid #e2ded7;border-radius:8px;padding:12px 14px"><div style="font-size:10px;color:#6f6a63;text-transform:uppercase;letter-spacing:.05em">TG xử lý TB / thư</div><div style="font:600 22px 'Inter',sans-serif;margin-top:6px">40 giây</div></div>
+          </div>
+          <div style="background:#fff;border:1px solid #e2ded7;border-radius:8px;flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden">
+            <div style="display:flex;align-items:center;padding:11px 14px;border-bottom:1px solid #eeebe6">
+              <div style="font:600 12.5px 'Inter',sans-serif">Danh sách thư / vận đơn</div>
+              <div style="margin-left:auto;display:flex;gap:6px">
+                <div style="padding:4px 9px;border:1px solid #d9d4cd;border-radius:5px;font-size:10.5px;color:#57524b">Đơn vị ▾</div>
+                <div style="padding:4px 9px;border:1px solid #d9d4cd;border-radius:5px;font-size:10.5px;color:#57524b">Nhắc lại tất cả</div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:24px 1.1fr 1.2fr .9fr .9fr 1.1fr 86px;padding:8px 14px;background:#faf9f7;font-size:10px;color:#6f6a63;text-transform:uppercase;letter-spacing:.04em">
+              <div></div><div>Mã vận đơn</div><div>Người nhận</div><div>Đơn vị</div><div>Thời gian về</div><div>Trạng thái</div><div></div>
+            </div>
+            <div style="display:grid;grid-template-columns:24px 1.1fr 1.2fr .9fr .9fr 1.1fr 86px;padding:10px 14px;border-top:1px solid #f1eee9;font-size:11.5px;align-items:center">
+              <div style="width:12px;height:12px;border:1px solid #c9c3ba;border-radius:3px"></div><div style="font-weight:600">VN2749183</div><div>Phạm Thị Duyên</div><div style="color:#6f6a63">Hành chính</div><div style="color:#6f6a63">09:12 hôm nay</div><div><span style="padding:2px 8px;border:1px solid #e3a9ab;background:#fcf1f1;border-radius:20px;font-size:10.5px;color:#b3161d">Chưa nhận</span></div><div style="color:#b3161d">Nhắc</div>
+            </div>
+            <div style="display:grid;grid-template-columns:24px 1.1fr 1.2fr .9fr .9fr 1.1fr 86px;padding:10px 14px;border-top:1px solid #f1eee9;font-size:11.5px;align-items:center">
+              <div style="width:12px;height:12px;border:1px solid #c9c3ba;border-radius:3px"></div><div style="font-weight:600">GHN88201</div><div>Vũ Phương Trà</div><div style="color:#6f6a63">Pháp chế</div><div style="color:#6f6a63">11/09 · 4 ngày</div><div><span style="padding:2px 8px;background:#d2181f;border-radius:20px;font-size:10.5px;color:#fff">Quá hạn nhận</span></div><div style="color:#b3161d">Nhắc</div>
+            </div>
+            <div style="display:grid;grid-template-columns:24px 1.1fr 1.2fr .9fr .9fr 1.1fr 86px;padding:10px 14px;border-top:1px solid #f1eee9;font-size:11.5px;align-items:center">
+              <div style="width:12px;height:12px;border:1px solid #c9c3ba;border-radius:3px"></div><div style="font-weight:600">VTP41902</div><div>Lưu Hải Nam</div><div style="color:#6f6a63">Kỹ thuật</div><div style="color:#6f6a63">14/09 · 1 ngày</div><div><span style="padding:2px 8px;border:1px solid #e3a9ab;background:#fcf1f1;border-radius:20px;font-size:10.5px;color:#b3161d">Chưa nhận</span></div><div style="color:#b3161d">Nhắc</div>
+            </div>
+            <div style="display:grid;grid-template-columns:24px 1.1fr 1.2fr .9fr .9fr 1.1fr 86px;padding:10px 14px;border-top:1px solid #f1eee9;font-size:11.5px;align-items:center">
+              <div style="width:12px;height:12px;border:1px solid #c9c3ba;border-radius:3px"></div><div style="font-weight:600">VN2749102</div><div>Nguyễn Thị Thu Hương</div><div style="color:#6f6a63">Hành chính</div><div style="color:#6f6a63">14/09 · đã nhận</div><div><span style="padding:2px 8px;border:1px solid #d9d4cd;border-radius:20px;font-size:10.5px;color:#6f6a63">Đã nhận 15:40</span></div><div style="color:#6f6a63">Chi tiết</div>
+            </div>
+            <div style="display:grid;grid-template-columns:24px 1.1fr 1.2fr .9fr .9fr 1.1fr 86px;padding:10px 14px;border-top:1px solid #f1eee9;font-size:11.5px;align-items:center">
+              <div style="width:12px;height:12px;border:1px solid #c9c3ba;border-radius:3px"></div><div style="font-weight:600">SPX77410</div><div>Trần Minh Quân</div><div style="color:#6f6a63">Kỹ thuật</div><div style="color:#6f6a63">13/09 · 2 ngày</div><div><span style="padding:2px 8px;border:1px solid #cdb479;background:#fdf9ef;border-radius:20px;font-size:10.5px;color:#8a6f20">Đã nhắc 2 lần</span></div><div style="color:#b3161d">Nhắc</div>
+            </div>
+          </div>
+          <div class="note">Tick nhiều dòng → gửi nhắc hàng loạt qua email/Teams</div>
+        </div>
+        <div style="width:270px;flex:none;border-left:1px solid #e2ded7;background:#fff;padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+          <div><div style="font:600 12.5px 'Inter',sans-serif">Quy tắc &amp; tự động hoá</div><div class="context-sub">Rule-based · chạy theo workflow đã cấu hình</div></div>
+          <div style="border:1px solid #e2ded7;border-radius:6px;padding:11px;display:flex;flex-direction:column;gap:9px">
+            <div style="display:flex;align-items:center;gap:8px;font-size:11.5px"><span style="width:28px;height:16px;background:#d2181f;border-radius:10px;position:relative;flex:none"><span style="position:absolute;right:2px;top:2px;width:12px;height:12px;background:#fff;border-radius:50%"></span></span>Thông báo ngay khi có thư</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:11.5px"><span style="width:28px;height:16px;background:#d2181f;border-radius:10px;position:relative;flex:none"><span style="position:absolute;right:2px;top:2px;width:12px;height:12px;background:#fff;border-radius:50%"></span></span>Nhắc lại sau 24h chưa nhận</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:#6f6a63"><span style="width:28px;height:16px;background:#e2ded7;border-radius:10px;position:relative;flex:none"><span style="position:absolute;left:2px;top:2px;width:12px;height:12px;background:#fff;border-radius:50%"></span></span>Báo cáo tuần cho trưởng bộ phận</div>
+          </div>
+          <div style="border:1px solid #e2ded7;border-left:3px solid #d2181f;border-radius:6px;padding:11px">
+            <div style="font-size:11.5px;font-weight:600;margin-bottom:5px">9 thư tồn quá 3 ngày</div>
+            <div style="font-size:11px;color:#6f6a63;line-height:1.5">Tập trung ở Kỹ thuật (5) và Pháp chế (3). Gửi nhắc kèm trưởng bộ phận?</div>
+            <div style="margin-top:9px;padding:5px 10px;background:#1c1b1a;color:#fff;border-radius:5px;font-size:10.5px;display:inline-block">Gửi nhắc gộp</div>
+          </div>
+          <div style="border:1px solid #e2ded7;border-radius:6px;padding:11px">
+            <div style="font-size:11.5px;font-weight:600;margin-bottom:5px">AI · Nhận diện vận đơn</div>
+            <div style="font-size:11px;color:#6f6a63;line-height:1.5">AI đọc ảnh tem vận đơn để điền mã + người nhận. Độ chính xác 7 ngày: 93%.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></div>
+
+<div class="dv-opt" id="1e"><div class="dv-olabel"><a class="dv-oid" href="#1e">1e</a>Đề bài 4 — Công văn đến/đi, AI bóc tách</div>
+<div class="dv-card" style="width:1000px">
+  <div style="display:flex;height:620px">
+    <div style="width:60px;background:#1c1b1a;flex:none;display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:8px">
+      <div style="width:32px;height:32px;background:#d2181f;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font:700 14px 'Inter',sans-serif;margin-bottom:12px">V</div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.45);font-size:10px">◧</div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.45);font-size:10px">▣</div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.45);font-size:10px">▤</div>
+      <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.45);font-size:10px">✉</div>
+      <div style="width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px">▦</div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;background:#f6f4f1;min-width:0">
+      <div style="height:52px;flex:none;background:#fff;border-bottom:1px solid #e2ded7;display:flex;align-items:center;gap:14px;padding:0 20px">
+        <div style="font:600 14px 'Inter',sans-serif">Công văn đến / đi</div>
+        <div style="display:flex;gap:2px;background:#f1eee9;border-radius:6px;padding:3px">
+          <div style="padding:4px 10px;background:#fff;border-radius:4px;font-size:11px;font-weight:500">Đến</div>
+          <div style="padding:4px 10px;font-size:11px;color:#6f6a63">Đi</div>
+          <div style="padding:4px 10px;font-size:11px;color:#6f6a63">Chờ xác minh AI 4</div>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <div style="height:28px;padding:0 11px;border:1px solid #d9d4cd;border-radius:6px;display:flex;align-items:center;font-size:11px;color:#57524b">Sổ công văn</div>
+          <div style="height:28px;padding:0 12px;background:#d2181f;border-radius:6px;display:flex;align-items:center;font-size:11px;color:#fff">Tải file scan / email</div>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;min-height:0">
+        <div style="width:300px;flex:none;border-right:1px solid #e2ded7;background:#fff;display:flex;flex-direction:column;min-height:0">
+          <div style="padding:10px 14px;border-bottom:1px solid #eeebe6;display:flex;gap:8px;align-items:center">
+            <div style="flex:1;height:28px;border:1px solid #e2ded7;border-radius:6px;background:#faf9f7;display:flex;align-items:center;padding:0 10px;font-size:11px;color:#6f6a63">Tìm số / ký hiệu, chủ đề…</div>
+          </div>
+          <div style="padding:11px 14px;border-bottom:1px solid #f1eee9;border-left:3px solid #d2181f;background:#faf9f7">
+            <div style="display:flex;font-size:10.5px;color:#6f6a63"><span>CV-2026/1184</span><span style="margin-left:auto;color:#b3161d">Hạn 16/09</span></div>
+            <div style="font-size:12px;font-weight:600;margin:5px 0 3px">Đề nghị phối hợp kiểm kê tài sản Q3</div>
+            <div style="font-size:11px;color:#6f6a63">Ban Tài chính · đến 09:12 hôm nay</div>
+          </div>
+          <div style="padding:11px 14px;border-bottom:1px solid #f1eee9">
+            <div style="display:flex;font-size:10.5px;color:#6f6a63"><span>CV-2026/1183</span><span style="margin-left:auto">Hạn 20/09</span></div>
+            <div style="font-size:12px;font-weight:600;margin:5px 0 3px">Thông báo lịch bảo trì hệ thống PCCC tầng 19</div>
+            <div style="font-size:11px;color:#6f6a63">Ban Quản lý toà nhà · 14/09</div>
+          </div>
+          <div style="padding:11px 14px;border-bottom:1px solid #f1eee9">
+            <div style="display:flex;font-size:10.5px;color:#6f6a63"><span>CV-2026/1182</span><span style="margin-left:auto;color:#8a6f20">Chờ xác minh</span></div>
+            <div style="font-size:12px;font-weight:600;margin:5px 0 3px">Công văn đề xuất bổ sung định biên</div>
+            <div style="font-size:11px;color:#6f6a63">Khối Kỹ thuật · 13/09</div>
+          </div>
+          <div style="padding:11px 14px;border-bottom:1px solid #f1eee9">
+            <div style="display:flex;font-size:10.5px;color:#6f6a63"><span>CV-2026/1181</span><span style="margin-left:auto">Đã xử lý</span></div>
+            <div style="font-size:12px;font-weight:600;margin:5px 0 3px">Kế hoạch đào tạo an toàn lao động</div>
+            <div style="font-size:11px;color:#6f6a63">Phòng Nhân sự · 12/09</div>
+          </div>
+          <div class="note" style="padding:12px 14px">Danh sách theo hạn phản hồi gần nhất</div>
+        </div>
+        <div style="flex:1;display:flex;min-width:0">
+          <div style="flex:1;padding:16px 18px;display:flex;flex-direction:column;gap:10px;min-width:0">
+            <div style="font-size:10px;color:#6f6a63;text-transform:uppercase;letter-spacing:.05em">File scan gốc</div>
+            <div style="flex:1;border:1px solid #e2ded7;background:#fff;border-radius:8px;padding:22px 26px;display:flex;flex-direction:column;gap:9px;min-height:0;overflow:hidden">
+              <div style="height:10px;width:46%;background:#efece7;border-radius:2px"></div>
+              <div style="height:14px;width:72%;background:#e6e2db;border-radius:2px;margin-bottom:6px"></div>
+              <div style="height:8px;width:100%;background:#f3f1ed;border-radius:2px"></div>
+              <div style="height:8px;width:96%;background:#f3f1ed;border-radius:2px"></div>
+              <div style="height:8px;width:88%;background:#fbe9ea;border:1px solid #f0cdcf;border-radius:2px"></div>
+              <div style="height:8px;width:100%;background:#f3f1ed;border-radius:2px"></div>
+              <div style="height:8px;width:64%;background:#f3f1ed;border-radius:2px"></div>
+              <div style="height:8px;width:92%;background:#fbe9ea;border:1px solid #f0cdcf;border-radius:2px"></div>
+              <div style="height:8px;width:80%;background:#f3f1ed;border-radius:2px"></div>
+              <div style="margin-top:auto;display:flex;gap:8px;align-items:center;font-size:10.5px;color:#6f6a63"><span style="padding:3px 8px;border:1px solid #d9d4cd;border-radius:5px">Trang 1/3</span><span>Vùng bôi đỏ = trường AI trích xuất</span></div>
+            </div>
+          </div>
+          <div style="width:292px;flex:none;border-left:1px solid #e2ded7;background:#fff;padding:14px 16px;display:flex;flex-direction:column;gap:11px">
+            <div style="display:flex;align-items:flex-start;gap:8px"><div><div style="font:600 12.5px 'Inter',sans-serif">Trường trích xuất</div><div class="context-sub">SupportiveAI · OCR + extraction</div></div><div style="margin-left:auto;font-size:10px;color:#6f6a63">91%</div></div>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div><div style="font-size:10px;color:#6f6a63;margin-bottom:3px">Loại công văn</div><div style="border:1px solid #e2ded7;border-radius:6px;padding:7px 10px;font-size:11.5px">Đến</div></div>
+              <div><div style="font-size:10px;color:#6f6a63;margin-bottom:3px">Số / ký hiệu · ngày</div><div style="border:1px solid #e2ded7;border-radius:6px;padding:7px 10px;font-size:11.5px">1184/TC-VSF · 15/09/2026</div></div>
+              <div><div style="font-size:10px;color:#6f6a63;margin-bottom:3px">Chủ đề / tên công văn</div><div style="border:1px solid #e2ded7;border-radius:6px;padding:7px 10px;font-size:11.5px;line-height:1.4">Đề nghị phối hợp kiểm kê tài sản Q3</div></div>
+              <div><div style="font-size:10px;color:#6f6a63;margin-bottom:3px">Đơn vị / cá nhân xử lý</div><div style="border:1px solid #cdb479;background:#fdf9ef;border-radius:6px;padding:7px 10px;font-size:11.5px;display:flex;align-items:center">Phòng Hành chính<span style="margin-left:auto;font-size:10px;color:#8a6f20">độ tin cậy 72%</span></div></div>
+              <div><div style="font-size:10px;color:#6f6a63;margin-bottom:3px">Deadline phản hồi</div><div style="border:1px solid #e2ded7;border-radius:6px;padding:7px 10px;font-size:11.5px">16/09/2026 · còn 1 ngày</div></div>
+              <div><div style="font-size:10px;color:#6f6a63;margin-bottom:3px">Trạng thái xử lý</div><div style="display:flex;gap:5px"><div style="padding:5px 9px;background:#d2181f;color:#fff;border-radius:5px;font-size:10.5px">Chờ xử lý</div><div style="padding:5px 9px;border:1px solid #d9d4cd;border-radius:5px;font-size:10.5px;color:#57524b">Đang xử lý</div><div style="padding:5px 9px;border:1px solid #d9d4cd;border-radius:5px;font-size:10.5px;color:#57524b">Xong</div></div></div>
+            </div>
+            <div style="margin-top:auto;display:flex;gap:8px"><div style="flex:1;padding:8px;background:#1c1b1a;color:#fff;border-radius:6px;font-size:11px;text-align:center">Xác nhận & vào sổ</div><div style="padding:8px 11px;border:1px solid #d9d4cd;border-radius:6px;font-size:11px;color:#57524b">Sửa</div></div>
+            <div class="note">Xác nhận 1 lần → tự động cập nhật sổ + nhắc deadline</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></div>
+
+</div>
+<p class="dv-next">Thử tiếp: "đi sâu vào <a class="dv-oid" href="#1b">1b</a> — flow mô phỏng layout" · "AI panel ở <a class="dv-oid" href="#1e">1e</a> đổi thành hàng đợi duyệt" · "thêm màn hình mobile cho lễ tân"</p>
+</section>
+
+<section class="dv-turn" id="t0">
+<div class="dv-thd"><a class="dv-tid" href="#t0">0</a><span class="dv-tname">Nền tảng thị giác — từ logo VIN SMART FUTURE</span></div>
+<div class="dv-opts">
+<div class="dv-opt" id="0a"><div class="dv-olabel"><a class="dv-oid" href="#0a">0a</a>Màu · chữ · trạng thái</div>
+<div class="dv-card" style="width:620px;padding:22px 24px">
+  <div style="display:flex;gap:26px">
+    <div style="flex:1">
+      <div style="font:600 12px 'Inter',sans-serif;margin-bottom:10px">Bảng màu</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:10px;color:#6f6a63">
+        <div><div style="height:46px;background:#d2181f;border-radius:5px"></div><div style="margin-top:5px">Đỏ VSF #D2181F</div></div>
+        <div><div style="height:46px;background:#b3161d;border-radius:5px"></div><div style="margin-top:5px">Đỏ đậm #B3161D</div></div>
+        <div><div style="height:46px;background:#1c1b1a;border-radius:5px"></div><div style="margin-top:5px">Than #1C1B1A</div></div>
+        <div><div style="height:46px;background:#8a6f20;border-radius:5px"></div><div style="margin-top:5px">Vàng đồng #A8892F</div></div>
+        <div><div style="height:46px;background:#f6f4f1;border:1px solid #e2ded7;border-radius:5px"></div><div style="margin-top:5px">Nền #F6F4F1</div></div>
+        <div><div style="height:46px;background:#fff;border:1px solid #e2ded7;border-radius:5px"></div><div style="margin-top:5px">Thẻ #FFFFFF</div></div>
+      </div>
+      <div class="note" style="margin-top:10px">Đỏ = hành động / khẩn cấp / selection · than = trạng thái bình thường · vàng đồng = đề xuất / chờ duyệt</div>
+    </div>
+    <div style="width:236px;flex:none">
+      <div style="font:600 12px 'Inter',sans-serif;margin-bottom:10px">Kiểu chữ</div>
+      <div style="font:600 21px 'Inter',sans-serif;line-height:1.2">Quy hoạch văn phòng</div>
+      <div style="font-size:10px;color:#6f6a63;margin:2px 0 12px">Inter · 600 · tiêu đề</div>
+      <div style="font-size:12px;line-height:1.55">Hệ thống hoá và tự động hoá việc tiếp nhận, phân loại và theo dõi công văn.</div>
+      <div style="font-size:10px;color:#6f6a63;margin:2px 0 14px">Inter · 400 · nội dung (13–14px trong sản phẩm)</div>
+      <div style="font:600 12px 'Inter',sans-serif;margin-bottom:8px">Trạng thái</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        <span style="padding:3px 9px;background:#d2181f;color:#fff;border-radius:20px;font-size:10.5px">Quá hạn</span>
+        <span style="padding:3px 9px;border:1px solid #e3a9ab;background:#fcf1f1;color:#b3161d;border-radius:20px;font-size:10.5px">Chưa xử lý</span>
+        <span style="padding:3px 9px;border:1px solid #cdb479;background:#fdf9ef;color:#8a6f20;border-radius:20px;font-size:10.5px">Cần kiểm tra</span>
+        <span style="padding:3px 9px;border:1px solid #d9d4cd;color:#6f6a63;border-radius:20px;font-size:10.5px">Hoàn tất</span>
+      </div>
+    </div>
+  </div>
+</div></div>
+</div>
+</section>
+</x-dc>
+
+<script>
+function switchView(module, view, button){
+  const map = document.getElementById(module + '-map-view');
+  const list = document.getElementById(module + '-list-view');
+  if(!map || !list) return;
+  const showMap = view === 'map';
+  map.classList.toggle('hidden', !showMap);
+  list.classList.toggle('hidden', showMap);
+  document.querySelectorAll('[data-view-button^="' + module + '-"]').forEach(function(btn){btn.classList.remove('active');});
+  if(button) button.classList.add('active');
+}
+</script>
+
+</body>
+</html>
