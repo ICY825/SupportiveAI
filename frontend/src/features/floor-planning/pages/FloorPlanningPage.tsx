@@ -6,12 +6,16 @@ import { FloorSelector } from '../components/FloorSelector'
 import { MapLegend } from '../components/MapLegend'
 import { FLOORS, findFloor } from '../data/registry'
 import { validateFloorDataset } from '../data/validateFloorDataset'
-import type { EntityRef, FloorDataset } from '../domain/spatial'
+import type { BBox, EntityRef, FloorDataset } from '../domain/spatial'
+import { UNLABELED_ZONE, objectName } from '../labels'
 import { gridBounds } from '../map/grid'
 import { DEFAULT_SETTINGS, type MapSettings } from '../map/mapSettings'
 import { useViewport } from '../map/useViewport'
 import { buildHash, parseHash } from './urlState'
 import '../floorPlanning.css'
+
+/** Smallest area (floor points) "focus" frames, so a single desk keeps its surroundings in view. */
+const FOCUS_MIN_PT = 160
 
 export function FloorPlanningPage() {
   const initial = useMemo(() => parseHash(window.location.hash), [])
@@ -37,24 +41,47 @@ export function FloorPlanningPage() {
     if (window.location.hash !== next) window.history.replaceState(null, '', next)
   }, [floorId, selected])
 
+  // A pasted or edited link in the same tab only changes the hash.
+  useEffect(() => {
+    const onHash = () => {
+      const next = parseHash(window.location.hash)
+      const floor = findFloor(next.floorId)
+      if (floor) setFloorId(floor.id)
+      setSelected(next.selected)
+    }
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+
   const changeFloor = (id: string) => {
     setSelected(null)
     setFloorId(id)
   }
 
   const current = state?.id === floorId ? state : null
+  const floorLabel = findFloor(floorId)?.label
 
   return (
     <div className="fp-page">
       <header className="fp-topbar">
-        <h1>
-          Floor Planning <span className="fp-muted">· Quy hoạch văn phòng</span>
-        </h1>
+        <h1>Mặt bằng văn phòng</h1>
         <FloorSelector floors={FLOORS} value={floorId} onChange={changeFloor} />
-        <span className="fp-poc">V1 POC · physical layout only</span>
+        <p className="fp-scope" title="Dữ liệu trích xuất từ bản vẽ nguồn. Chưa bao gồm chỗ ngồi, nhân sự hay tình trạng sử dụng.">
+          <span className="fp-scope-dot" aria-hidden="true" />
+          Dữ liệu mặt bằng vật lý
+        </p>
       </header>
-      {!current && <div className="fp-status">Loading floor data…</div>}
-      {current?.error && <div className="fp-status is-error">Could not load floor data: {current.error}</div>}
+      {!current && (
+        <div className="fp-state" role="status">
+          Đang tải dữ liệu {floorLabel?.toLowerCase()}…
+        </div>
+      )}
+      {current?.error && (
+        <div className="fp-state is-error" role="alert">
+          <strong>Không tải được dữ liệu mặt bằng.</strong>
+          <span className="fp-mono">{current.error}</span>
+        </div>
+      )}
       {current?.dataset && (
         <FloorWorkspace key={floorId} dataset={current.dataset} selected={selected} onSelect={setSelected} />
       )}
@@ -75,7 +102,8 @@ function FloorWorkspace({
   const [hovered, setHovered] = useState<EntityRef | null>(null)
   const { floor } = dataset.layout
   const content = useMemo(() => ({ width: floor.width, height: floor.height }), [floor])
-  const home = useMemo(() => gridBounds(dataset.layout), [dataset])
+  // extra padding keeps source zone labels near the plate edge inside the fitted view
+  const home = useMemo(() => gridBounds(dataset.layout, 60), [dataset])
   const vp = useViewport(content, home)
   const issues = useMemo(() => validateFloorDataset(dataset), [dataset])
 
@@ -95,52 +123,73 @@ function FloorWorkspace({
 
   const hoverLabel = useMemo(() => {
     if (!hovered) return null
-    if (hovered.kind === 'zone') return dataset.zones.find((z) => z.id === hovered.id)?.name ?? 'Unlabeled zone (UNKNOWN)'
+    if (hovered.kind === 'zone') return dataset.zones.find((z) => z.id === hovered.id)?.name ?? UNLABELED_ZONE
     if (hovered.kind === 'room') return dataset.rooms.find((r) => r.id === hovered.id)?.name
-    if (hovered.kind === 'object') return dataset.objects.find((o) => o.id === hovered.id)?.name
-    return hovered.id
+    if (hovered.kind === 'object') {
+      const o = dataset.objects.find((k) => k.id === hovered.id)
+      return o && objectName(o)
+    }
+    return `Vị trí làm việc ${hovered.id}`
   }, [hovered, dataset])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || !selected) return
+      const t = e.target as HTMLElement | null
+      if (t?.closest('input, textarea, select, [contenteditable]')) return
+      onSelect(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selected, onSelect])
 
   const selBBox = selected ? bboxOf(selected) : undefined
   const setViewport = vp.setViewport
+  const focusSelection = (b: BBox) => {
+    const cx = (b[0] + b[2]) / 2
+    const cy = (b[1] + b[3]) / 2
+    const hw = Math.max(b[2] - b[0], FOCUS_MIN_PT) / 2
+    const hh = Math.max(b[3] - b[1], FOCUS_MIN_PT) / 2
+    vp.focus([cx - hw, cy - hh, cx + hw, cy + hh])
+  }
 
   return (
     <div className="fp-workspace">
-      <aside className="fp-sidebar">
+      <aside className="fp-sidebar" aria-label="Điều khiển bản đồ">
         <FloorMapControls settings={settings} layers={dataset.layout.layers} onChange={setSettings} />
       </aside>
       <main className="fp-main">
-        <div className="fp-map-toolbar">
-          <MapLegend />
-          <ViewControls
-            onZoomIn={() => vp.zoomBy(1.4)}
-            onZoomOut={() => vp.zoomBy(1 / 1.4)}
-            onFit={vp.fit}
-            onReset={vp.reset}
-            onFocusSelection={selBBox ? () => vp.focus(selBBox) : undefined}
-          />
+        <FloorMap
+          dataset={dataset}
+          settings={settings}
+          viewport={vp.viewport}
+          minFitScale={vp.minFitScale}
+          onViewportChange={setViewport}
+          containerRef={vp.containerRef}
+          selected={selected}
+          onSelect={onSelect}
+          onHover={setHovered}
+          assetBase={import.meta.env.BASE_URL}
+        />
+        <div className="fp-hover" aria-live="polite">
+          {hoverLabel ?? <span className="fp-hover-hint">Kéo để di chuyển · Cuộn để thu phóng · Nhấp để chọn</span>}
         </div>
-        <div className="fp-map-wrap">
-          <FloorMap
-            dataset={dataset}
-            settings={settings}
-            viewport={vp.viewport}
-            minFitScale={vp.minFitScale}
-            onViewportChange={setViewport}
-            containerRef={vp.containerRef}
-            selected={selected}
-            onSelect={onSelect}
-            onHover={setHovered}
-            assetBase={import.meta.env.BASE_URL}
-          />
-          <div className="fp-hover" aria-live="polite">
-            {hoverLabel ?? <span className="fp-muted">Drag to pan · scroll to zoom · click to select</span>}
-          </div>
+        <ViewControls
+          onZoomIn={() => vp.zoomBy(1.4)}
+          onZoomOut={() => vp.zoomBy(1 / 1.4)}
+          onFit={vp.fit}
+          onReset={vp.reset}
+          onFocusSelection={selBBox ? () => focusSelection(selBBox) : undefined}
+        />
+        <div className="fp-map-foot">
           {settings.sourceMode !== 'digital' && (
-            <div className="fp-source-banner">
-              Source: {dataset.sourceName} · raster reference with the reviewer's markup
-            </div>
+            <p className="fp-source-note" title={dataset.layout.floor.sourcePdf}>
+              <span className="fp-source-note-label">Bản vẽ gốc</span>
+              <span className="fp-filename">{dataset.sourceName}</span>
+              <span className="fp-source-note-extra">· ảnh raster, gồm chú thích của người rà soát</span>
+            </p>
           )}
+          <MapLegend />
         </div>
       </main>
       <FloorDetailsPanel

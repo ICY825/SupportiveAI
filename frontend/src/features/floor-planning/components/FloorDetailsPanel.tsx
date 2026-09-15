@@ -2,6 +2,17 @@ import type { ReactNode } from 'react'
 import type { FloorAllocationData } from '../domain/allocation'
 import type { EntityRef, FloorDataset, Point, VerificationState } from '../domain/spatial'
 import type { ValidationIssue } from '../data/validateFloorDataset'
+import {
+  CLASSIFICATION,
+  NO_OPERATIONAL_DATA,
+  NO_OPERATIONAL_DATA_HINT,
+  NOT_AVAILABLE,
+  UNLABELED_ZONE,
+  VERIFICATION,
+  generated,
+  objectName,
+} from '../labels'
+import { VerificationStatus } from './VerificationStatus'
 
 interface FloorDetailsPanelProps {
   dataset: FloorDataset
@@ -14,28 +25,23 @@ interface FloorDetailsPanelProps {
 }
 
 const DASH = '—'
+const nf = new Intl.NumberFormat('vi-VN')
 
-const VERIFICATION_TEXT: Record<VerificationState, string> = {
-  SOURCE_VERIFIED: 'Taken directly from the source PDF',
-  EXTRACTED: 'Derived from source vectors by rule — needs Admin confirmation',
-  UNVERIFIED: 'Partially derived — outline or identity not confirmed',
-  UNKNOWN: 'Cannot be determined from the source',
-}
-
-function Badge({ state }: { state: VerificationState }) {
+function Row({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
-    <span className="fp-badge" data-verification={state} title={VERIFICATION_TEXT[state]}>
-      {state}
-    </span>
+    <div className="fp-row">
+      <dt title={hint}>{label}</dt>
+      <dd>{children}</dd>
+    </div>
   )
 }
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
+function Section({ title, children, className }: { title: string; children: ReactNode; className?: string }) {
   return (
-    <div className="fp-row">
-      <dt>{label}</dt>
-      <dd>{children}</dd>
-    </div>
+    <section className={`fp-section${className ? ` ${className}` : ''}`}>
+      <h3>{title}</h3>
+      {children}
+    </section>
   )
 }
 
@@ -47,29 +53,79 @@ function Link({ to, onSelect, children }: { to: EntityRef; onSelect: (r: EntityR
   )
 }
 
-const fmtPt = (p: Point, mmPerPt: number) =>
-  `${p[0].toFixed(1)}, ${p[1].toFixed(1)} pt · ${Math.round(p[0] * mmPerPt)}, ${Math.round(p[1] * mmPerPt)} mm`
+function Head({ kicker, title, state }: { kicker: string; title: ReactNode; state: VerificationState }) {
+  return (
+    <header className="fp-panel-head">
+      <p className="fp-kicker">{kicker}</p>
+      <h2>{title}</h2>
+      <VerificationStatus state={state} />
+    </header>
+  )
+}
+
+const fmtPt = (p: Point) => `${p[0].toFixed(1)}, ${p[1].toFixed(1)}`
+const fmtMm = (p: Point, mmPerPt: number) => `${nf.format(Math.round(p[0] * mmPerPt))}, ${nf.format(Math.round(p[1] * mmPerPt))}`
 
 function Notes({ notes }: { notes: string[] }) {
   if (!notes.length) return null
   return (
-    <ul className="fp-notes">
+    <ul className="fp-notes" aria-label="Lưu ý từ bản vẽ">
       {notes.map((n) => (
-        <li key={n}>{n}</li>
+        <li key={n} title={generated(n) !== n ? n : undefined}>
+          {generated(n)}
+        </li>
       ))}
     </ul>
   )
 }
 
-/** Allocation rows: always "—" until Phase 2 data exists. Never computed from geometry. */
-function AllocationRows({ allocation }: { allocation?: FloorAllocationData }) {
-  const pending = allocation ? 'Not wired yet' : DASH
+function VerificationRow({ state }: { state: VerificationState }) {
   return (
-    <>
-      <Row label="Verified seats">{pending}</Row>
-      <Row label="Assigned employees">{pending}</Row>
-      <Row label="Utilization">{pending}</Row>
-    </>
+    <Row label="Trạng thái">
+      {VERIFICATION[state].label}
+      <span className="fp-sub">{VERIFICATION[state].hint}</span>
+    </Row>
+  )
+}
+
+function SourceFileRow({ dataset }: { dataset: FloorDataset }) {
+  return (
+    <Row label="Bản vẽ gốc">
+      <span className="fp-filename" title={dataset.layout.floor.sourcePdf}>
+        {dataset.sourceName}
+      </span>
+    </Row>
+  )
+}
+
+/** Operational data does not exist yet. Always "—"; never computed from geometry. */
+function OperationalData({ allocation, fields }: { allocation?: FloorAllocationData; fields: string[] }) {
+  const value = allocation ? 'Chưa kết nối' : DASH
+  return (
+    <Section title="Dữ liệu vận hành" className="fp-operational">
+      <p className="fp-empty">
+        {NO_OPERATIONAL_DATA}
+        <span className="fp-sub">{NO_OPERATIONAL_DATA_HINT}</span>
+      </p>
+      <dl>
+        {fields.map((f) => (
+          <Row key={f} label={f}>
+            <span aria-label={NOT_AVAILABLE} title={NOT_AVAILABLE} className="fp-muted">
+              {value}
+            </span>
+          </Row>
+        ))}
+      </dl>
+    </Section>
+  )
+}
+
+function Technical({ children }: { children: ReactNode }) {
+  return (
+    <details className="fp-technical">
+      <summary>Chi tiết kỹ thuật</summary>
+      <dl>{children}</dl>
+    </details>
   )
 }
 
@@ -77,14 +133,24 @@ export function FloorDetailsPanel({ dataset, selected, onSelect, debug, issues, 
   const { layout } = dataset
   const floor = layout.floor
   const zoneName = (id: string | null) => {
-    if (!id) return <span className="fp-unknown">None / UNKNOWN</span>
+    if (!id) return <span className="fp-unknown">Ngoài các khu vực</span>
     const z = dataset.zones.find((k) => k.id === id)
     return (
       <Link to={{ kind: 'zone', id }} onSelect={onSelect}>
-        {z?.name ?? `${id} (unlabeled)`}
+        {z?.name ?? UNLABELED_ZONE}
       </Link>
     )
   }
+  const position = (p: Point) => (
+    <>
+      <Row label="Tọa độ tâm (pt)" hint="Điểm PDF, gốc ở góc trên-trái tờ bản vẽ">
+        <span className="fp-mono">{fmtPt(p)}</span>
+      </Row>
+      <Row label="Tọa độ tâm (mm)" hint="Quy đổi theo tỷ lệ bản vẽ, gốc ở góc trên-trái tờ bản vẽ">
+        <span className="fp-mono">{fmtMm(p, floor.mmPerPt)}</span>
+      </Row>
+    </>
+  )
 
   let body: ReactNode
   let raw: unknown = null
@@ -95,41 +161,89 @@ export function FloorDetailsPanel({ dataset, selected, onSelect, debug, issues, 
       dataset.zones.filter((z) => z.verification === 'UNKNOWN').length +
       dataset.workstations.filter((w) => w.classification === 'UNKNOWN').length +
       dataset.objects.filter((o) => o.classification === 'UNKNOWN').length
+    const { pdf } = dataset.extraction
     body = (
       <>
         <header className="fp-panel-head">
-          <p className="fp-kicker">Floor</p>
+          <p className="fp-kicker">Tầng {floor.level}</p>
           <h2>{floor.sourceTitle}</h2>
+          <p className="fp-head-meta">
+            Tòa nhà:{' '}
+            {dataset.building.name ?? (
+              <span className="fp-unknown" title="Bản vẽ nguồn không ghi tên tòa nhà">
+                chưa xác định
+              </span>
+            )}
+          </p>
         </header>
-        <dl>
-          <Row label="Floor">{floor.level}</Row>
-          <Row label="Building">{dataset.building.name ?? <span className="fp-unknown">UNKNOWN (not stated on PDF)</span>}</Row>
-          <Row label="Source scale">{floor.sourceScale}</Row>
-          <Row label="Zones">{dataset.zones.length}</Row>
-          <Row label="Desk clusters">{dataset.clusters.length}</Row>
-          <Row label="Physical workstations">
-            {ws.length} <span className="fp-muted">extracted, unverified</span>
-          </Row>
-          <Row label="Facilities">{dataset.objects.filter((o) => o.classification === 'FACILITY').length}</Row>
-          <Row label="UNKNOWN items">{unknownCount}</Row>
-          <AllocationRows allocation={allocation} />
-          <Row label="Source">{dataset.sourceName}</Row>
+
+        <dl className="fp-stats">
+          <div>
+            <dt>Khu vực</dt>
+            <dd>{dataset.zones.length}</dd>
+          </div>
+          <div>
+            <dt>Cụm bàn</dt>
+            <dd>{dataset.clusters.length}</dd>
+          </div>
+          <div>
+            <dt title="Bàn có ký hiệu ghế, trích xuất tự động và chưa được xác minh">Vị trí làm việc vật lý</dt>
+            <dd>{ws.length}</dd>
+          </div>
+          <div>
+            <dt>Tiện ích / thiết bị</dt>
+            <dd>{dataset.objects.filter((o) => o.classification === 'FACILITY').length}</dd>
+          </div>
         </dl>
-        <h3>Zones</h3>
-        <ul className="fp-list">
-          {dataset.zones.map((z) => (
-            <li key={z.id}>
-              <Link to={{ kind: 'zone', id: z.id }} onSelect={onSelect}>
-                {z.name ?? 'Unlabeled zone'}
-              </Link>
-              <Badge state={z.verification} />
-            </li>
-          ))}
-        </ul>
-        <p className="fp-muted fp-small">
-          Click a zone or workstation on the map. Seats, employees and utilization are intentionally empty until
-          verified data is provided by Admin/HR.
-        </p>
+        {unknownCount > 0 && (
+          <p className="fp-callout" data-verification="UNKNOWN">
+            <span aria-hidden="true">?</span> {unknownCount} đối tượng chưa xác định cần Admin làm rõ
+          </p>
+        )}
+
+        <Section title="Khu vực">
+          <ul className="fp-list">
+            {dataset.zones.map((z) => {
+              const count = dataset.workstations.filter((w) => w.zoneId === z.id).length
+              return (
+                <li key={z.id}>
+                  <Link to={{ kind: 'zone', id: z.id }} onSelect={onSelect}>
+                    {z.name ?? <span className="fp-unknown">{UNLABELED_ZONE}</span>}
+                  </Link>
+                  <span className="fp-list-meta">
+                    <span className="fp-count" title="Số vị trí làm việc vật lý có tâm nằm trong khu vực">
+                      {count} vị trí
+                    </span>
+                    <VerificationStatus state={z.verification} compact />
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        </Section>
+
+        <OperationalData allocation={allocation} fields={['Chỗ ngồi đã xác minh', 'Nhân sự đã bố trí', 'Tỷ lệ sử dụng']} />
+
+        <Section title="Nguồn dữ liệu">
+          <dl>
+            <SourceFileRow dataset={dataset} />
+            <Row label="Tỷ lệ bản vẽ">{floor.sourceScale}</Row>
+            <Row label="Phần mềm xuất">{pdf.creator || DASH}</Row>
+          </dl>
+        </Section>
+
+        <Technical>
+          <Row label="Hệ tọa độ">Điểm PDF, gốc trên-trái</Row>
+          <Row label="Quy đổi">1 pt ≈ {floor.mmPerPt.toFixed(2)} mm</Row>
+          <Row label="Đối tượng vector">{nf.format(pdf.vectorPathObjects)}</Row>
+          <Row label="Dòng chữ">{nf.format(pdf.textLines)}</Row>
+          <Row label="Chú thích PDF">{pdf.annotations}</Row>
+          <Row label="SHA-256">
+            <span className="fp-mono fp-filename" title={layout.sourcePdfSha256}>
+              {layout.sourcePdfSha256.slice(0, 16)}…
+            </span>
+          </Row>
+        </Technical>
       </>
     )
     raw = { floor, extraction: dataset.extraction }
@@ -142,48 +256,65 @@ export function FloorDetailsPanel({ dataset, selected, onSelect, debug, issues, 
       raw = z
       body = (
         <>
-          <header className="fp-panel-head">
-            <p className="fp-kicker">{z.type === 'WORKSPACE_ZONE' ? 'Workspace Zone' : 'Zone · UNKNOWN'}</p>
-            <h2>{z.name ?? <span className="fp-unknown">Unlabeled zone</span>}</h2>
-            <Badge state={z.verification} />
-          </header>
+          <Head
+            kicker={z.type === 'WORKSPACE_ZONE' ? 'Khu vực làm việc' : 'Khu vực · chưa xác định loại'}
+            title={z.name ?? <span className="fp-unknown">{UNLABELED_ZONE}</span>}
+            state={z.verification}
+          />
           <dl>
-            <Row label="Type">{z.type === 'WORKSPACE_ZONE' ? 'Workspace Zone' : <span className="fp-unknown">UNKNOWN</span>}</Row>
-            <Row label="Floor">{floor.level}</Row>
-            <Row label="Physical workstations">
-              {ws.length} <span className="fp-muted">extracted from desk+chair symbols</span>
+            <Row label="Vị trí làm việc vật lý" hint="Bàn có ký hiệu ghế, tâm nằm trong đường viền khu vực">
+              {ws.length}
             </Row>
-            <Row label="Desk clusters">{clusters.length}</Row>
-            <AllocationRows allocation={allocation} />
-            <Row label="Source label">{z.sourceLabel ?? <span className="fp-unknown">none</span>}</Row>
-            {z.sourceLabelFigure !== null && (
-              <Row label="Label figure">
-                ({z.sourceLabelFigure}) <span className="fp-muted">meaning not stated on the drawing</span>
-              </Row>
-            )}
-            <Row label="Approx. area">{z.areaM2} m² <span className="fp-muted">of the markup outline</span></Row>
-            <Row label="Grid">{z.gridRef}</Row>
-            <Row label="Source">
-              {dataset.sourceName} · {z.source.annotationType} annotation
+            <Row label="Cụm bàn">{clusters.length}</Row>
+            <Row label="Diện tích ước tính">
+              {nf.format(z.areaM2)} m²<span className="fp-sub">Theo đường viền chú thích trên bản vẽ</span>
             </Row>
-            {debug && <Row label="ID">{z.id}</Row>}
+            <Row label="Lưới trục">{z.gridRef}</Row>
           </dl>
+          <Notes notes={z.notes} />
+
           {objects.length > 0 && (
-            <>
-              <h3>Facilities & objects</h3>
+            <Section title="Tiện ích & thiết bị">
               <ul className="fp-list">
                 {objects.map((o) => (
                   <li key={o.id}>
                     <Link to={{ kind: 'object', id: o.id }} onSelect={onSelect}>
-                      {o.name}
+                      {objectName(o)}
                     </Link>
-                    <Badge state={o.verification} />
+                    <VerificationStatus state={o.verification} compact />
                   </li>
                 ))}
               </ul>
-            </>
+            </Section>
           )}
-          <Notes notes={z.notes} />
+
+          <OperationalData allocation={allocation} fields={['Chỗ ngồi đã xác minh', 'Nhân sự đã bố trí', 'Tỷ lệ sử dụng']} />
+
+          <Section title="Nguồn & xác minh">
+            <dl>
+              <VerificationRow state={z.verification} />
+              <Row label="Nhãn trên bản vẽ">{z.sourceLabel ?? <span className="fp-unknown">Không có nhãn</span>}</Row>
+              {z.sourceLabelFigure !== null && (
+                <Row label="Số trên nhãn">
+                  ({z.sourceLabelFigure})<span className="fp-sub">Bản vẽ không nêu ý nghĩa; không dùng làm sức chứa</span>
+                </Row>
+              )}
+              <Row label="Loại chú thích">{generated(z.source.annotationType) ?? DASH}</Row>
+              <SourceFileRow dataset={dataset} />
+            </dl>
+          </Section>
+
+          <Technical>
+            <Row label="Mã">
+              <span className="fp-mono">{z.id}</span>
+            </Row>
+            <Row label="Hình học">{generated(z.source.geometry) ?? DASH}</Row>
+            <Row label="Mã chú thích PDF">
+              <span className="fp-mono fp-filename" title={z.source.annotationId}>
+                {z.source.annotationId ?? DASH}
+              </span>
+            </Row>
+          </Technical>
         </>
       )
     }
@@ -193,37 +324,42 @@ export function FloorDetailsPanel({ dataset, selected, onSelect, debug, issues, 
       raw = w
       body = (
         <>
-          <header className="fp-panel-head">
-            <p className="fp-kicker">Physical workstation</p>
-            <h2>{w.id}</h2>
-            <Badge state={w.verification} />
-          </header>
+          <Head kicker="Vị trí làm việc vật lý" title={w.id} state={w.verification} />
           <dl>
-            <Row label="Classification">{w.classification}</Row>
-            <Row label="Floor">{floor.level}</Row>
-            <Row label="Zone">{zoneName(w.zoneId)}</Row>
-            <Row label="Cluster">
+            <Row label="Khu vực">{zoneName(w.zoneId)}</Row>
+            <Row label="Cụm bàn">
               <Link to={{ kind: 'cluster', id: w.clusterId }} onSelect={onSelect}>
                 {w.clusterId}
               </Link>
             </Row>
-            <Row label="Desk">{w.source.nominalSizeMm?.join(' × ')} mm (source label “{w.source.deskLabel}”)</Row>
-            <Row label="Chair symbol">{w.chair ? 'Detected' : <span className="fp-unknown">Not detected</span>}</Row>
-            <Row label="Seat">
-              {DASH} <span className="fp-muted">workstation ≠ seat; needs Admin verification</span>
-            </Row>
-            <Row label="Assigned employee">{DASH}</Row>
-            <Row label="Grid">{w.gridRef}</Row>
-            <Row label="Rotation">{w.rotationDeg}°</Row>
-            <Row label="Source position">
-              {fmtPt(w.center, floor.mmPerPt)} <span className="fp-muted">from sheet top-left</span>
-            </Row>
-            <Row label="Source">{dataset.sourceName}</Row>
+            <Row label="Kích thước bàn">{w.source.nominalSizeMm ? `${w.source.nominalSizeMm.join(' × ')} mm` : DASH}</Row>
+            <Row label="Ký hiệu ghế">{w.chair ? 'Đã nhận diện' : <span className="fp-unknown">Không nhận diện được</span>}</Row>
+            <Row label="Lưới trục">{w.gridRef}</Row>
           </dl>
-          <p className="fp-rule">
-            <strong>Rule:</strong> {w.source.rule}
-          </p>
           <Notes notes={w.notes} />
+
+          <OperationalData allocation={allocation} fields={['Chỗ ngồi', 'Nhân sự đã bố trí']} />
+
+          <Section title="Nguồn & xác minh">
+            <dl>
+              <VerificationRow state={w.verification} />
+              <Row label="Phân loại">{CLASSIFICATION[w.classification]}</Row>
+              <Row label="Quy tắc trích xuất">
+                <span title={w.source.rule}>{generated(w.source.rule) ?? DASH}</span>
+              </Row>
+              <Row label="Nhãn trên bản vẽ">{w.source.deskLabel ?? DASH}</Row>
+              <SourceFileRow dataset={dataset} />
+            </dl>
+            <p className="fp-sub">Vị trí làm việc vật lý chưa phải chỗ ngồi; cần Admin xác minh trước khi bố trí.</p>
+          </Section>
+
+          <Technical>
+            <Row label="Mã">
+              <span className="fp-mono">{w.id}</span>
+            </Row>
+            <Row label="Góc xoay">{w.rotationDeg}°</Row>
+            {position(w.center)}
+          </Technical>
         </>
       )
     }
@@ -233,32 +369,40 @@ export function FloorDetailsPanel({ dataset, selected, onSelect, debug, issues, 
       raw = c
       body = (
         <>
-          <header className="fp-panel-head">
-            <p className="fp-kicker">Desk cluster</p>
-            <h2>{c.id}</h2>
-            <Badge state={c.verification} />
-          </header>
+          <Head kicker="Cụm bàn" title={c.id} state={c.verification} />
           <dl>
-            <Row label="Floor">{floor.level}</Row>
-            <Row label="Zone">{zoneName(c.zoneId)}</Row>
-            <Row label="Physical workstations">{c.workstationIds.length}</Row>
-            <AllocationRows allocation={allocation} />
-            <Row label="Grid">{c.gridRef}</Row>
-            <Row label="Source position">
-              {fmtPt(c.center, floor.mmPerPt)} <span className="fp-muted">from sheet top-left</span>
-            </Row>
+            <Row label="Khu vực">{zoneName(c.zoneId)}</Row>
+            <Row label="Vị trí làm việc vật lý">{c.workstationIds.length}</Row>
+            <Row label="Lưới trục">{c.gridRef}</Row>
           </dl>
-          <h3>Workstations</h3>
-          <ul className="fp-chips">
-            {c.workstationIds.map((id) => (
-              <li key={id}>
-                <Link to={{ kind: 'workstation', id }} onSelect={onSelect}>
-                  {id}
-                </Link>
-              </li>
-            ))}
-          </ul>
           <Notes notes={c.notes} />
+          <Section title="Vị trí trong cụm">
+            <ul className="fp-chips">
+              {c.workstationIds.map((id) => (
+                <li key={id}>
+                  <Link to={{ kind: 'workstation', id }} onSelect={onSelect}>
+                    {id}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Section>
+
+          <OperationalData allocation={allocation} fields={['Chỗ ngồi đã xác minh', 'Nhân sự đã bố trí']} />
+
+          <Section title="Nguồn & xác minh">
+            <dl>
+              <VerificationRow state={c.verification} />
+              <Row label="Cách xác định">Các bàn chạm nhau được gom thành một cụm</Row>
+            </dl>
+          </Section>
+
+          <Technical>
+            <Row label="Mã">
+              <span className="fp-mono">{c.id}</span>
+            </Row>
+            {position(c.center)}
+          </Technical>
         </>
       )
     }
@@ -268,22 +412,34 @@ export function FloorDetailsPanel({ dataset, selected, onSelect, debug, issues, 
       raw = r
       body = (
         <>
-          <header className="fp-panel-head">
-            <p className="fp-kicker">Room</p>
-            <h2>{r.name}</h2>
-            <Badge state={r.verification} />
-          </header>
+          <Head kicker="Phòng" title={r.name} state={r.verification} />
           <dl>
-            <Row label="Type">Room (CBLĐ office per source label)</Row>
-            <Row label="Floor">{floor.level}</Row>
-            <Row label="Zone">{zoneName(r.zoneId)}</Row>
-            <Row label="Approx. area">{r.areaM2} m²</Row>
-            <Row label="Occupant">{DASH}</Row>
-            <Row label="Grid">{r.gridRef}</Row>
-            <Row label="Source">{dataset.sourceName} · highlight annotation</Row>
-            {debug && <Row label="ID">{r.id}</Row>}
+            <Row label="Khu vực">{zoneName(r.zoneId)}</Row>
+            <Row label="Diện tích ước tính">{nf.format(r.areaM2)} m²</Row>
+            <Row label="Lưới trục">{r.gridRef}</Row>
           </dl>
           <Notes notes={r.notes} />
+
+          <OperationalData allocation={allocation} fields={['Người sử dụng']} />
+
+          <Section title="Nguồn & xác minh">
+            <dl>
+              <VerificationRow state={r.verification} />
+              <Row label="Hình học">{generated(r.source.geometry) ?? DASH}</Row>
+              <SourceFileRow dataset={dataset} />
+            </dl>
+          </Section>
+
+          <Technical>
+            <Row label="Mã">
+              <span className="fp-mono">{r.id}</span>
+            </Row>
+            <Row label="Mã chú thích PDF">
+              <span className="fp-mono fp-filename" title={r.source.annotationId}>
+                {r.source.annotationId ?? DASH}
+              </span>
+            </Row>
+          </Technical>
         </>
       )
     }
@@ -293,50 +449,69 @@ export function FloorDetailsPanel({ dataset, selected, onSelect, debug, issues, 
       raw = o
       body = (
         <>
-          <header className="fp-panel-head">
-            <p className="fp-kicker">{o.classification === 'FACILITY' ? 'Facility' : 'Object · UNKNOWN'}</p>
-            <h2>{o.name}</h2>
-            <Badge state={o.verification} />
-          </header>
+          <Head
+            kicker={o.classification === 'FACILITY' ? 'Tiện ích / thiết bị' : 'Vật thể · chưa xác định'}
+            title={objectName(o)}
+            state={o.verification}
+          />
           <dl>
-            <Row label="Classification">{o.classification}</Row>
-            <Row label="Kind">{o.kind}</Row>
-            <Row label="Floor">{floor.level}</Row>
-            <Row label="Zone">{zoneName(o.zoneId)}</Row>
-            <Row label="Geometry">{o.source.geometry}</Row>
-            <Row label="Source text">“{o.source.text}”</Row>
-            <Row label="Grid">{o.gridRef}</Row>
-            {debug && <Row label="ID">{o.id}</Row>}
+            <Row label="Khu vực">{zoneName(o.zoneId)}</Row>
+            <Row label="Phân loại">{CLASSIFICATION[o.classification]}</Row>
+            <Row label="Lưới trục">{o.gridRef}</Row>
           </dl>
           <Notes notes={o.notes} />
+
+          <Section title="Nguồn & xác minh">
+            <dl>
+              <VerificationRow state={o.verification} />
+              <Row label="Chữ trên bản vẽ">{o.source.text ? `“${o.source.text}”` : DASH}</Row>
+              <Row label="Cách xác định">{generated(o.source.geometry) ?? DASH}</Row>
+              <SourceFileRow dataset={dataset} />
+            </dl>
+          </Section>
+
+          <Technical>
+            <Row label="Mã">
+              <span className="fp-mono">{o.id}</span>
+            </Row>
+            <Row label="Loại (kind)">
+              <span className="fp-mono">{o.kind}</span>
+            </Row>
+          </Technical>
         </>
       )
     }
   }
 
   if (!body) {
-    body = <p className="fp-unknown">Entity {selected?.id} not found in this floor dataset.</p>
+    body = (
+      <p className="fp-callout" data-verification="UNKNOWN">
+        Không tìm thấy đối tượng <span className="fp-mono">{selected?.id}</span> trong dữ liệu tầng này.
+      </p>
+    )
   }
 
   const selIssues = selected ? issues.filter((i) => i.entityId === selected.id) : issues
 
   return (
-    <aside className="fp-panel" aria-label="Details">
+    <aside className="fp-panel" aria-label="Thông tin chi tiết">
       {selected && (
         <button type="button" className="fp-back" onClick={() => onSelect(null)}>
-          ← Floor overview
+          <span aria-hidden="true">←</span> Tổng quan tầng
         </button>
       )}
       {body}
       {debug && (
         <details className="fp-raw" open={selIssues.length > 0}>
           <summary>
-            Debug data{selIssues.length ? ` · ${selIssues.length} validation issue${selIssues.length > 1 ? 's' : ''}` : ''}
+            Dữ liệu gốc (JSON)
+            {selIssues.length > 0 && <span className="fp-issue-count">{selIssues.length} vấn đề kiểm tra dữ liệu</span>}
           </summary>
           {selIssues.length > 0 && (
             <ul className="fp-issues">
               {selIssues.slice(0, 50).map((i, k) => (
                 <li key={k} data-level={i.level}>
+                  <span className="fp-issue-level">{i.level === 'error' ? 'Lỗi' : 'Cảnh báo'}</span>
                   {i.entityId ? `${i.entityId}: ` : ''}
                   {i.message}
                 </li>

@@ -22,9 +22,9 @@ export default async function loadFloor16(): Promise<FloorDataset> {
       extraction: extraction.default,
     },
     {
-      // The PDF does not name the building.
-      building: { id: 'building-unknown', name: null },
-      sourceName: 'Floor 16 layout PDF (260710_VSF_Layout tang 16.pdf)',
+      // Not stated on the PDF; confirmed by the team (CAD xref layers are prefixed "TNP").
+      building: { id: 'building-technopark', name: 'Technopark' },
+      sourceName: '260710_VSF_Layout tang 16.pdf',
     },
   )
 }

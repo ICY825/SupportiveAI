@@ -64,7 +64,7 @@ render group/classification map, the facility label list, and rule thresholds.
 
 1. Purpose/owner of the unlabelled lavender highlight (D-C / 3-2, 38 desks).
 2. Meaning of the figures (38), (143), (145) on zone labels; why AI zone ≠ 145.
-3. Building name/code (not on the PDF).
+3. ~~Building name/code (not on the PDF).~~ Resolved: Technopark, confirmed by the team (not stated on the PDF).
 4. Private-office desks (L-shaped, no `1200x600` label) in perimeter rooms: not counted as workstations.
 5. Enclosed rooms (meeting rooms, offices, pantry, WC) other than the two annotated CBLĐ rooms: drawn
    in base geometry but not modelled as Room entities; names are not on the drawing.

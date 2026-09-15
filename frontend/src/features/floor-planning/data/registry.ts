@@ -16,7 +16,7 @@ export const FLOORS: FloorEntry[] = [
   {
     id: 'floor-16',
     level: 16,
-    label: 'Floor 16',
+    label: 'Tầng 16',
     load: () => import('./floors/floor-16').then((m) => m.default()),
   },
 ]

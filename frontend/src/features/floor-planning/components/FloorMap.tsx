@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { BaseLayer, EntityKind, EntityRef, FloorDataset, Point } from '../domain/spatial'
 import { gridRefAt } from '../map/grid'
+import { UNLABELED_ZONE, objectName } from '../labels'
 import type { MapSettings } from '../map/mapSettings'
 import { panBy, screenToFloor, zoomAt, type Viewport } from '../map/viewport'
 
@@ -118,7 +119,7 @@ export function FloorMap({
         ref={svgRef}
         className={`fp-svg${panning ? ' is-panning' : ''}${debug ? ' is-debug' : ''}`}
         role="application"
-        aria-label={`${layout.floor.name} interactive floor map`}
+        aria-label={`Bản đồ mặt bằng ${layout.floor.name}`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -169,8 +170,8 @@ export function FloorMap({
           <span>
             mm {Math.round(cursor[0] * layout.floor.mmPerPt)}, {Math.round(cursor[1] * layout.floor.mmPerPt)}
           </span>
-          <span>grid {gridRefAt(layout, cursor[0], cursor[1])}</span>
-          <span>zoom {viewport.scale.toFixed(2)} px/pt</span>
+          <span>lưới {gridRefAt(layout, cursor[0], cursor[1])}</span>
+          <span>thu phóng {viewport.scale.toFixed(2)} px/pt</span>
         </div>
       )}
     </div>
@@ -247,7 +248,7 @@ const EntityLayer = memo(function EntityLayer({ dataset }: { dataset: FloorDatas
             data-verification={z.verification}
             style={{ ['--zone-color' as string]: z.sourceColor ?? 'var(--fp-unknown)' }}
           >
-            <title>{z.name ?? 'Unlabeled zone (UNKNOWN)'}</title>
+            <title>{z.name ?? UNLABELED_ZONE}</title>
           </polygon>
         ))}
       </g>
@@ -276,7 +277,7 @@ const EntityLayer = memo(function EntityLayer({ dataset }: { dataset: FloorDatas
             data-verification={o.verification}
             data-classification={o.classification}
           >
-            <title>{o.name}</title>
+            <title>{objectName(o)}</title>
           </polygon>
         ))}
       </g>
@@ -322,7 +323,7 @@ const Labels = memo(function Labels({ dataset }: { dataset: FloorDataset }) {
           x={z.labelAnchor[0]}
           y={z.labelAnchor[1]}
         >
-          {z.name ?? 'UNLABELED · UNKNOWN'}
+          {z.name ?? UNLABELED_ZONE.toUpperCase()}
           {z.sourceLabelFigure !== null ? ` (${z.sourceLabelFigure})` : ''}
         </text>
       ))}

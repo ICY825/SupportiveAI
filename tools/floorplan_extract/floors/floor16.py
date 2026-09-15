@@ -11,7 +11,7 @@ drawing shows; unresolved items are marked UNKNOWN on purpose.
 FLOOR = {
     "id": "floor-16",
     "level": 16,
-    "buildingId": "building-unknown",  # building name/code is not stated in the PDF
+    "buildingId": "building-technopark",  # not stated in the PDF; confirmed by the team (Technopark)
     "name": "Tầng 16",
     "sourceTitle": "MẶT BẰNG CẢI TẠO TẦNG 16",
     "sourceScale": "1/150",

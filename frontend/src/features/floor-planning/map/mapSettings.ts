@@ -20,19 +20,6 @@ export interface MapSettings {
   debug: DebugOptions
 }
 
-export const BASE_LAYER_LABELS: Record<BaseLayerId, string> = {
-  facade: 'Facade & glazing',
-  structure: 'Columns & core walls',
-  core: 'Stairs & shafts',
-  walls: 'Walls',
-  partitions: 'Partitions',
-  doors: 'Doors',
-  fixtures: 'Fixtures & symbols',
-  furniture: 'Furniture',
-  grid: 'Structural grid',
-  dimensions: 'Dimensions',
-}
-
 export const DEFAULT_SETTINGS: MapSettings = {
   sourceMode: 'digital',
   sourceOpacity: 0.5,
