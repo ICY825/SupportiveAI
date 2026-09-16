@@ -55,6 +55,10 @@ function initialCollapsed(): boolean {
   } catch {
     // storage unavailable: fall back to screen width
   }
+  /*
+   * Below this the floor map, not the module list, is what the width is for:
+   * laptops start collapsed. An explicit choice is remembered and always wins.
+   */
   return window.innerWidth < 1440
 }
 
@@ -111,7 +115,7 @@ export function AppNav({ activeId, settingsOpen, onToggleSettings }: AppNavProps
   return (
     <nav className="app-nav" aria-label="Phân hệ">
       <a className="app-brand" href="#/floor-planning" aria-label="Vin Smart Future · Trung tâm Hành chính">
-        <img src={logoUrl} alt="" width="104" height="76" />
+        <img src={logoUrl} alt="Vin Smart Future" width="104" height="76" />
       </a>
 
       {GROUPS.map((group) => (

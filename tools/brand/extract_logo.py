@@ -1,10 +1,13 @@
-"""Build web logo assets from docs/wireframe/logo.png.
+"""Build web logo assets from docs/references/logo.png.
 
-The source PNG is fully opaque: the "transparent" checkerboard is painted into
-the pixels. The logo is a single flat red (#E6102F), so alpha is recovered from
-how much redder than neutral each pixel is, and the colour is set to the pure
-brand red. Neutral pixels (checkerboard, the star's white negative space,
-compression streaks) become transparent.
+The source PNG is rendered on an opaque black background.
+The logo contains:
+- Wing / star brand mark (red #F9021E)
+- "VINSMART FUTURE" wordmark (red #F9021E)
+- "ADMINISTRATION" sub-brand (white #FFFFFF)
+
+Alpha is recovered cleanly from the channels, keying out the black background
+while preserving smooth anti-aliasing.
 
     python3 tools/brand/extract_logo.py
 
@@ -16,52 +19,53 @@ from pathlib import Path
 from PIL import Image, ImageChops
 
 REPO = Path(__file__).resolve().parents[2]
-SRC = REPO / "docs/wireframe/logo.png"
+SRC = REPO / "docs/references/logo.png"
 ASSETS = REPO / "frontend/src/assets/brand"
 PUBLIC = REPO / "frontend/public"
 
-BRAND_RED = (230, 16, 47)  # measured from the source artwork
-FULL_REDNESS = BRAND_RED[0] - max(BRAND_RED[1], BRAND_RED[2])
+BRAND_RED = (249, 2, 30)  # measured from docs/references/logo.png
+SPLIT_Y = 890  # separation between red logo elements and white ADMINISTRATION text
 
 
 def key_out(img: Image.Image) -> Image.Image:
-    r, g, b = img.convert("RGB").split()
-    redness = ImageChops.subtract(r, ImageChops.lighter(g, b))
-    alpha = redness.point(lambda v: 0 if v < 12 else min(255, round(v * 255 / FULL_REDNESS)))
-    out = Image.new("RGBA", img.size, BRAND_RED + (0,))
-    out.putalpha(alpha)
+    img = img.convert("RGB")
+    w, h = img.size
+
+    top_rgb = img.crop((0, 0, w, SPLIT_Y))
+    bot_rgb = img.crop((0, SPLIT_Y, w, h))
+
+    # Top alpha: recovered from red channel
+    r_top, _, _ = top_rgb.split()
+    alpha_top = r_top.point(lambda v: 0 if v < 10 else min(255, round(v * 255 / 249)))
+    out_top = Image.new("RGBA", (w, SPLIT_Y), BRAND_RED + (0,))
+    out_top.putalpha(alpha_top)
+
+    # Bottom alpha: recovered from max(r, g, b) of white text
+    r_bot, g_bot, b_bot = bot_rgb.split()
+    max_bot = ImageChops.lighter(ImageChops.lighter(r_bot, g_bot), b_bot)
+    alpha_bot = max_bot.point(lambda v: 0 if v < 10 else min(255, round(v * 255 / 255)))
+    out_bot = Image.new("RGBA", (w, h - SPLIT_Y), (255, 255, 255, 0))
+    out_bot.putalpha(alpha_bot)
+
+    out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    out.paste(out_top, (0, 0))
+    out.paste(out_bot, (0, SPLIT_Y))
     return out
-
-
-def rows_with_ink(alpha: Image.Image) -> list[tuple[int, int]]:
-    """Vertical runs of rows that contain visible pixels."""
-    w, h = alpha.size
-    col_max = alpha.resize((1, h), Image.Resampling.BOX)  # mean per row
-    runs, start = [], None
-    for y in range(h):
-        ink = col_max.getpixel((0, y)) > 0
-        if ink and start is None:
-            start = y
-        if not ink and start is not None:
-            runs.append((start, y))
-            start = None
-    if start is not None:
-        runs.append((start, h))
-    return runs
 
 
 def trimmed(img: Image.Image, box: tuple[int, int, int, int], pad: int) -> Image.Image:
     crop = img.crop(box)
     bbox = crop.getchannel("A").getbbox()
-    crop = crop.crop(bbox)
-    canvas = Image.new("RGBA", (crop.width + pad * 2, crop.height + pad * 2), BRAND_RED + (0,))
+    if bbox:
+        crop = crop.crop(bbox)
+    canvas = Image.new("RGBA", (crop.width + pad * 2, crop.height + pad * 2), (0, 0, 0, 0))
     canvas.alpha_composite(crop, (pad, pad))
     return canvas
 
 
 def square(img: Image.Image) -> Image.Image:
     side = max(img.size)
-    canvas = Image.new("RGBA", (side, side), BRAND_RED + (0,))
+    canvas = Image.new("RGBA", (side, side), (0, 0, 0, 0))
     canvas.alpha_composite(img, ((side - img.width) // 2, (side - img.height) // 2))
     return canvas
 
@@ -72,16 +76,22 @@ def fit_height(img: Image.Image, height: int) -> Image.Image:
 
 def main() -> None:
     logo = key_out(Image.open(SRC))
-    w, h = logo.size
-    runs = rows_with_ink(logo.getchannel("A"))
-    if len(runs) < 2:
-        raise SystemExit(f"expected mark + wordmark rows, found {runs}")
-    mark_rows = runs[0]
-    full_rows = (runs[0][0], runs[-1][1])
+    w, _ = logo.size
+
+    full_bbox = logo.getchannel("A").getbbox()
+    if not full_bbox:
+        raise SystemExit("no visible logo content found")
+
+    mark_crop = logo.crop((0, 0, w, 580))
+    mark_bbox = mark_crop.getchannel("A").getbbox()
+    if not mark_bbox:
+        raise SystemExit("no visible mark content found")
 
     ASSETS.mkdir(parents=True, exist_ok=True)
-    full = trimmed(logo, (0, full_rows[0], w, full_rows[1]), pad=8)
-    mark = square(trimmed(logo, (0, mark_rows[0], w, mark_rows[1]), pad=4))
+    PUBLIC.mkdir(parents=True, exist_ok=True)
+
+    full = trimmed(logo, full_bbox, pad=8)
+    mark = square(trimmed(mark_crop, mark_bbox, pad=4))
 
     fit_height(full, 240).save(ASSETS / "vsf-logo.png", optimize=True)
     mark.resize((160, 160), Image.Resampling.LANCZOS).save(ASSETS / "vsf-mark.png", optimize=True)
