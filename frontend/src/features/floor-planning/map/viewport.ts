@@ -64,3 +64,9 @@ export function focusBBox(
     y: view.height / 2 - ((y0 + y1) / 2) * scale,
   }
 }
+
+/** Keep the floor point that was at the centre of the old view at the centre of the new one. */
+export function recenterOnResize(vp: Viewport, prev: Size, next: Size): Viewport {
+  const [cx, cy] = screenToFloor(vp, prev.width / 2, prev.height / 2)
+  return { scale: vp.scale, x: next.width / 2 - cx * vp.scale, y: next.height / 2 - cy * vp.scale }
+}

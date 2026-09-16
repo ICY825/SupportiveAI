@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clampScale, fitViewport, focusBBox, MAX_SCALE, panBy, screenToFloor, zoomAt } from '../map/viewport'
+import { clampScale, fitViewport, focusBBox, MAX_SCALE, panBy, recenterOnResize, screenToFloor, zoomAt } from '../map/viewport'
 
 describe('viewport math', () => {
   it('fits content centred inside the view', () => {
@@ -33,5 +33,15 @@ describe('viewport math', () => {
     const c = screenToFloor(vp, 400, 300)
     expect(c[0]).toBeCloseTo(110)
     expect(c[1]).toBeCloseTo(105)
+  })
+
+  it('keeps the centred floor point and zoom when the view resizes', () => {
+    const vp = { scale: 2.5, x: -120, y: 40 }
+    const before = screenToFloor(vp, 400, 300)
+    const next = recenterOnResize(vp, { width: 800, height: 600 }, { width: 1010, height: 600 })
+    expect(next.scale).toBe(2.5)
+    const after = screenToFloor(next, 505, 300)
+    expect(after[0]).toBeCloseTo(before[0])
+    expect(after[1]).toBeCloseTo(before[1])
   })
 })

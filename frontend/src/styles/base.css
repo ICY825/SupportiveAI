@@ -29,18 +29,13 @@ input {
 }
 
 .app-nav {
-  --nav-pad: 12px;
-  width: 232px;
+  --nav-pad: 10px;
+  width: 210px;
   flex: none;
   display: flex;
   flex-direction: column;
   background: var(--sidebar);
   overflow: hidden;
-}
-
-.app-nav.is-compact {
-  --nav-pad: 4px;
-  width: 84px;
 }
 
 /* ---------------------------------------------------------------- brand */
@@ -50,36 +45,23 @@ input {
   display: grid;
   place-items: center;
   margin: 0 var(--nav-pad);
-  padding: 22px 0 20px;
+  padding: 16px 0 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px 8px 0 0;
+  border-radius: 6px 6px 0 0;
 }
 
-.app-brand-logo {
+.app-brand img {
   display: block;
-  width: 132px;
+  width: 104px;
   height: auto;
-}
-
-.app-nav.is-compact .app-brand {
-  margin: 0;
-  padding: 0;
-  height: 48px;
-  border-radius: 0;
-}
-
-.app-brand-mark {
-  display: block;
-  width: 40px;
-  height: 40px;
 }
 
 /* ---------------------------------------------------------------- items */
 
 .app-nav-heading {
-  margin: 20px 0 6px;
-  padding: 0 calc(var(--nav-pad) + 12px);
-  font-size: 11px;
+  margin: 16px 0 4px;
+  padding: 0 calc(var(--nav-pad) + 8px);
+  font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -92,21 +74,17 @@ input {
   padding: 0 var(--nav-pad);
   display: flex;
   flex-direction: column;
-  gap: 2px;
-}
-
-.app-nav.is-compact .app-nav-list {
-  padding-top: 8px;
+  gap: 1px;
 }
 
 .app-nav-item {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 11px;
-  min-height: 40px;
-  padding: 0 12px;
-  border-radius: 8px;
+  gap: 9px;
+  min-height: 36px;
+  padding: 0 8px;
+  border-radius: 7px;
   color: rgba(255, 255, 255, 0.68);
   text-decoration: none;
 }
@@ -120,22 +98,8 @@ input {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 500;
-}
-
-.app-nav.is-compact .app-nav-item {
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
-  padding: 9px 0 8px;
-  text-align: center;
-}
-
-.app-nav.is-compact .app-nav-label {
-  font-size: 11px;
-  line-height: 1.15;
-  overflow: visible;
 }
 
 a.app-nav-item:hover {
@@ -156,8 +120,8 @@ a.app-nav-item:hover {
   content: '';
   position: absolute;
   left: calc(-1 * var(--nav-pad));
-  top: 9px;
-  bottom: 9px;
+  top: 8px;
+  bottom: 8px;
   width: 3px;
   border-radius: 0 3px 3px 0;
   background: var(--vsf-red);
@@ -168,15 +132,11 @@ a.app-nav-item:hover {
   cursor: not-allowed;
 }
 
-.app-nav-divider {
-  height: 1px;
-  margin: 8px 14px 0;
-  background: rgba(255, 255, 255, 0.08);
-}
-
 .app-nav-item:focus-visible,
 .app-brand:focus-visible,
-.app-nav-toggle:focus-visible {
+.app-nav-toggle:focus-visible,
+.app-nav-settings:focus-visible,
+.app-nav-expand:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--sidebar), 0 0 0 4px rgba(230, 16, 47, 0.85);
 }
@@ -189,30 +149,46 @@ a.app-nav-item:hover {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 12px calc(var(--nav-pad) + 8px) 14px calc(var(--nav-pad) + 12px);
+  padding: 8px calc(var(--nav-pad) + 2px) 10px var(--nav-pad);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.app-nav.is-compact .app-nav-foot {
-  flex-direction: column;
-  padding: 10px 0 12px;
+.app-nav-settings {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
 }
 
-.app-nav-stage {
-  padding: 2px 7px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.5);
-  cursor: help;
+.app-nav-settings svg {
+  flex: none;
+}
+
+.app-nav-settings:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.app-nav-settings.is-open {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 
 .app-nav-toggle {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -222,6 +198,31 @@ a.app-nav-item:hover {
 
 .app-nav-toggle:hover {
   background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+/* collapsed: only a small tab on the left edge, level with the page top bar */
+.app-nav-expand {
+  position: fixed;
+  z-index: 40;
+  left: 0;
+  top: 10px;
+  width: 18px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0 6px 6px 0;
+  background: var(--sidebar);
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  box-shadow: 1px 1px 4px rgba(28, 27, 26, 0.18);
+  transition: width 120ms ease-out;
+}
+
+.app-nav-expand:hover {
+  width: 24px;
   color: #fff;
 }
 

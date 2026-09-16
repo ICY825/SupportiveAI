@@ -203,8 +203,7 @@ export function FloorDetailsPanel({ dataset, selected, onSelect, debug, issues, 
     body = (
       <>
         <header className="fp-panel-head">
-          <p className="fp-kicker">Tầng {floor.level}</p>
-          <h2>{floor.sourceTitle}</h2>
+          <h2>{floor.name}</h2>
           <p className="fp-head-meta">
             Tòa nhà:{' '}
             {dataset.building.name ?? (

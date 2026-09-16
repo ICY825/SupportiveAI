@@ -50,6 +50,11 @@
   min-width: 0;
 }
 
+/* leave room for the sidebar's expand tab when the app nav is hidden */
+:root[data-nav-collapsed] .fp-topbar {
+  padding-left: 34px;
+}
+
 .fp-topbar h1 {
   font-size: 15px;
   font-weight: 600;
@@ -121,6 +126,260 @@
   color: var(--vsf-red-deep);
 }
 
+/* ---------------------------------------------------------------- top bar: search + help */
+
+.fp-topbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fp-scope + .fp-topbar-actions {
+  margin-left: 16px;
+}
+
+.fp-search-slot {
+  min-width: 0;
+}
+
+.fp-search {
+  position: relative;
+  width: clamp(220px, 20vw, 340px);
+}
+
+.fp-search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.fp-search input {
+  width: 100%;
+  height: 32px;
+  padding: 0 58px 0 32px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--fp-radius);
+  background: var(--canvas);
+  font-size: 12.5px;
+  color: var(--ink);
+  outline: none;
+  transition: background 120ms, border-color 120ms;
+}
+
+.fp-search input::placeholder {
+  color: #8f8a83;
+}
+
+.fp-search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.fp-search input:hover {
+  border-color: #c4bdb3;
+}
+
+.fp-search input:focus {
+  background: var(--paper);
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px rgba(28, 27, 26, 0.08);
+}
+
+.fp-search-kbd,
+.fp-help-panel kbd {
+  font: 500 10.5px/1 var(--font);
+  color: var(--muted);
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 3px 5px;
+}
+
+.fp-search-kbd {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.fp-search-pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 50;
+  width: max(100%, 400px);
+  max-width: calc(100vw - 24px);
+  padding: 4px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(28, 27, 26, 0.16);
+}
+
+.fp-search-pop ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fp-search-pop li {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.fp-search-pop li.is-active {
+  background: var(--canvas-2);
+}
+
+.fp-search-kind {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.fp-search-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fp-search-title,
+.fp-search-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fp-search-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.fp-search-sub {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--fp-text-2);
+}
+
+.fp-search-status {
+  display: inline-grid;
+  flex: none;
+}
+
+.fp-search-status[data-desk-status='occupied'] { color: var(--desk-occupied); }
+.fp-search-status[data-desk-status='available'] { color: var(--desk-available); }
+.fp-search-status[data-desk-status='reserved'] { color: var(--desk-reserved); }
+.fp-search-status[data-desk-status='conflict'] { color: var(--desk-conflict); }
+.fp-search-status[data-desk-status='unavailable'] { color: var(--desk-unavailable); }
+
+.fp-search-empty {
+  margin: 0;
+  padding: 10px 10px 12px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.fp-help {
+  position: relative;
+  flex: none;
+}
+
+.fp-help-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--fp-text-2);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fp-help-btn:hover,
+.fp-help-btn[aria-expanded='true'] {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.fp-help-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 50;
+  width: 360px;
+  max-width: calc(100vw - 24px);
+  padding: 14px 16px 12px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(28, 27, 26, 0.16);
+  outline: none;
+}
+
+.fp-page .fp-help-panel:focus-visible {
+  box-shadow: 0 10px 28px rgba(28, 27, 26, 0.16);
+}
+
+.fp-help-panel h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.fp-help-panel h3 {
+  margin: 12px 0 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--fp-hairline);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--fp-text-2);
+}
+
+.fp-help-panel dl {
+  margin: 0;
+}
+
+.fp-help-panel dl > div {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 12.5px;
+}
+
+.fp-help-panel dt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.fp-help-panel dd {
+  margin: 0;
+  color: var(--fp-text-2);
+}
+
+.fp-help-panel p {
+  margin: 3px 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--fp-text-2);
+}
+
 /* ---------------------------------------------------------------- shared text */
 
 .fp-muted {
@@ -168,13 +427,69 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: clamp(244px, 13vw, 272px) minmax(0, 1fr) clamp(304px, 19vw, 380px);
+  /* same columns in both view modes, so switching views never moves the map */
+  grid-template-columns: minmax(0, 1fr) clamp(360px, 21vw, 400px);
+}
+
+/* map settings panel, opened from the app sidebar's "Cài đặt bản đồ" button */
+.fp-workspace.has-settings {
+  grid-template-columns: clamp(244px, 13vw, 272px) minmax(0, 1fr) clamp(360px, 21vw, 400px);
 }
 
 .fp-sidebar {
   background: var(--paper);
   border-right: 1px solid var(--line);
   overflow-y: auto;
+  animation: fp-sidebar-in 160ms ease-out;
+}
+
+@keyframes fp-sidebar-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fp-sidebar {
+    animation: none;
+  }
+}
+
+.fp-sidebar-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 8px 10px 14px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+
+.fp-sidebar-head h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.fp-sidebar-close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--fp-radius);
+  background: transparent;
+  color: var(--fp-text-2);
+  cursor: pointer;
+}
+
+.fp-sidebar-close:hover {
+  background: var(--canvas-2);
+  color: var(--ink);
 }
 
 .fp-main {
@@ -738,10 +1053,6 @@
   border: 1.5px dashed var(--muted);
 }
 
-.fp-workspace.is-workspace {
-  grid-template-columns: clamp(244px, 13vw, 272px) minmax(0, 1fr) clamp(360px, 21vw, 400px);
-}
-
 .fp-svg:focus-visible {
   box-shadow: inset 0 0 0 2px rgba(210, 24, 31, 0.55);
 }
@@ -866,17 +1177,6 @@
   height: 8px;
   background: var(--ink);
   transform: translateX(-50%) rotate(45deg);
-}
-
-@media (max-width: 1100px) {
-  .fp-workspace.is-workspace {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(420px, 60vh) auto auto;
-  }
-  /* map first, so it stays above the desk bottom sheet */
-  .fp-workspace.is-workspace .fp-main {
-    order: -1;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1375,10 +1675,15 @@
 }
 
 @media (max-width: 1100px) {
-  .fp-workspace {
+  .fp-workspace,
+  .fp-workspace.has-settings {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(460px, 70vh) auto;
+    grid-template-rows: minmax(420px, 60vh) auto auto;
     overflow-y: auto;
+  }
+  /* map first in both views; it also stays above the desk bottom sheet */
+  .fp-main {
+    order: -1;
   }
   .fp-sidebar,
   .fp-panel {

@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent as React
 import type { DeskStatus } from '../domain/desk'
 import type { BaseLayer, EntityKind, EntityRef, FloorDataset, Point } from '../domain/spatial'
 import { gridRefAt } from '../map/grid'
+import { isSheetAnnotation } from '../map/sheetLabels'
 import { UNLABELED_ZONE, objectName } from '../labels'
 import type { MapSettings } from '../map/mapSettings'
 import { panBy, screenToFloor, zoomAt, type Viewport } from '../map/viewport'
@@ -370,7 +371,7 @@ const Labels = memo(function Labels({ dataset }: { dataset: FloorDataset }) {
   const { layout, zones } = dataset
   return (
     <g className="fp-labels" aria-hidden="true">
-      {layout.labels.map((l, i) => (
+      {layout.labels.filter((l) => !isSheetAnnotation(l)).map((l, i) => (
         <text
           key={i}
           className="fp-cad-label"
