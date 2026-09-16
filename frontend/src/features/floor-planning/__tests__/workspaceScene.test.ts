@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { FLOORS } from '../data/registry'
 import type { FloorDataset } from '../domain/spatial'
-import { buildSpikeScene, cropSourcePath, fitViewBox, planeTransform, project, sceneBounds, SPIKE_CROP } from '../workspace/scene'
+import { buildSpikeScene, cropSourcePath, fitViewBox, memoizeSceneGeometry, planeTransform, project, sceneBounds, SPIKE_CROP } from '../workspace/scene'
 
 let dataset: FloorDataset
 beforeAll(async () => { dataset = await FLOORS[0].load() })
@@ -100,3 +100,48 @@ describe('spatial spike framing', () => {
     }
   })
 })
+
+describe('spatial scene geometry memoization & depth sorting', () => {
+  it('memoizes geometry calculation based on scene dataset identity', () => {
+    const scene = buildSpikeScene(dataset)
+    const geom1 = memoizeSceneGeometry(scene)
+    const geom2 = memoizeSceneGeometry(scene)
+    expect(geom1).toBe(geom2) // exact same reference
+  })
+
+  it('depth sorts all desks and chairs monotonically', () => {
+    const scene = buildSpikeScene(dataset)
+    const geom = memoizeSceneGeometry(scene)
+    expect(geom.items.length).toBeGreaterThan(0)
+    for (let i = 1; i < geom.items.length; i++) {
+      expect(geom.items[i].depth).toBeGreaterThanOrEqual(geom.items[i - 1].depth)
+    }
+  })
+
+  it('pre-computes complete geometry for 19 workstations and chairs', () => {
+    const scene = buildSpikeScene(dataset)
+    const geom = memoizeSceneGeometry(scene)
+    expect(geom.markers).toHaveLength(19)
+    expect(geom.selectionPolygons.size).toBe(19)
+
+    const deskItems = geom.items.filter((item) => item.kind === 'desk')
+    expect(deskItems).toHaveLength(19)
+    for (const desk of deskItems) {
+      expect(desk.deskGeom).toBeDefined()
+      expect(desk.deskGeom!.legs.length).toBe(desk.ws.polygon.length)
+      expect(desk.deskGeom!.prism.faces.length).toBe(desk.ws.polygon.length)
+      expect(desk.deskGeom!.shadowPoints).toBeTruthy()
+      expect(desk.deskGeom!.prism.topPoints).toBeTruthy()
+    }
+
+    const chairItems = geom.items.filter((item) => item.kind === 'chair')
+    expect(chairItems).toHaveLength(19)
+    for (const chair of chairItems) {
+      expect(chair.chairGeom).toBeDefined()
+      expect(chair.chairGeom!.stem).toBeDefined()
+      expect(chair.chairGeom!.prism.faces.length).toBe(4)
+      expect(chair.chairGeom!.backPoints).toBeTruthy()
+    }
+  })
+})
+

@@ -1,11 +1,11 @@
-import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import type { DeskStatus } from '../domain/desk'
 import type { BaseLayer, EntityKind, EntityRef, FloorDataset, Point } from '../domain/spatial'
 import { gridRefAt } from '../map/grid'
 import { isSheetAnnotation } from '../map/sheetLabels'
 import { UNLABELED_ZONE, objectName } from '../labels'
 import type { MapSettings } from '../map/mapSettings'
-import { panBy, screenToFloor, zoomAt, type Viewport } from '../map/viewport'
+import { normalizeWheelZoom, panBy, screenToFloor, zoomAt, type Viewport } from '../map/viewport'
 
 interface FloorMapProps {
   dataset: FloorDataset
@@ -29,7 +29,8 @@ const DRAG_THRESHOLD_PX = 4
 const points = (poly: Point[]) => poly.map(([x, y]) => `${x},${y}`).join(' ')
 
 function entityFromTarget(target: EventTarget | null): EntityRef | null {
-  const el = (target as Element | null)?.closest?.('[data-entity-id]')
+  const targetEl = target instanceof Element ? target : (target as Node | null)?.parentElement
+  const el = targetEl?.closest?.('[data-entity-id]')
   if (!el) return null
   return { kind: el.getAttribute('data-entity-kind') as EntityKind, id: el.getAttribute('data-entity-id')! }
 }
@@ -57,22 +58,152 @@ export function FloorMap({
   const { layout } = dataset
   const { width, height } = layout.floor
 
-  // wheel must be non-passive to prevent page scroll
+  // Cached SVG bounding rect outside gesture hot path to prevent forced synchronous reflow
+  const cachedRect = useRef({ left: 0, top: 0, width: 0, height: 0 })
+
+  const updateCachedRect = useCallback(() => {
+    const svg = svgRef.current
+    if (svg) {
+      const r = svg.getBoundingClientRect()
+      cachedRect.current = { left: r.left, top: r.top, width: r.width, height: r.height }
+    }
+  }, [])
+
+  useEffect(() => {
+    updateCachedRect()
+    const svg = svgRef.current
+    if (!svg) return
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateCachedRect) : null
+    ro?.observe(svg)
+    window.addEventListener('resize', updateCachedRect, { passive: true })
+    window.addEventListener('scroll', updateCachedRect, { passive: true, capture: true })
+    return () => {
+      ro?.disconnect()
+      window.removeEventListener('resize', updateCachedRect)
+      window.removeEventListener('scroll', updateCachedRect, true)
+    }
+  }, [updateCachedRect])
+
+  // Coalesced gesture batching aligned to display refresh rate
+  const pendingPan = useRef<{ dx: number; dy: number }>({ dx: 0, dy: 0 })
+  const pendingZoom = useRef<{ factor: number; sx: number; sy: number } | null>(null)
+  const rafId = useRef<number | null>(null)
+  const onViewportChangeRef = useRef(onViewportChange)
+  const minFitScaleRef = useRef(minFitScale)
+
+  useEffect(() => {
+    onViewportChangeRef.current = onViewportChange
+    minFitScaleRef.current = minFitScale
+  }, [onViewportChange, minFitScale])
+
+  const flushGestures = useCallback(() => {
+    rafId.current = null
+    const pan = pendingPan.current
+    const zoom = pendingZoom.current
+    if ((!pan || (pan.dx === 0 && pan.dy === 0)) && !zoom) return
+
+    pendingPan.current = { dx: 0, dy: 0 }
+    pendingZoom.current = null
+
+    onViewportChangeRef.current((vp) => {
+      let next = vp
+      if (pan && (pan.dx !== 0 || pan.dy !== 0)) {
+        next = panBy(next, pan.dx, pan.dy)
+      }
+      if (zoom && zoom.factor !== 1) {
+        next = zoomAt(next, zoom.factor, zoom.sx, zoom.sy, minFitScaleRef.current)
+      }
+      return next
+    })
+  }, [])
+
+  const scheduleFrame = useCallback(() => {
+    if (rafId.current === null) {
+      rafId.current = requestAnimationFrame(flushGestures)
+    }
+  }, [flushGestures])
+
+  useEffect(() => {
+    return () => {
+      if (rafId.current !== null) {
+        cancelAnimationFrame(rafId.current)
+        rafId.current = null
+      }
+    }
+  }, [])
+
+  // Window blur cleans up any active drag to prevent stuck pointer lockouts
+  useEffect(() => {
+    const onBlur = () => {
+      const d = drag.current
+      if (d) {
+        drag.current = null
+        try {
+          if (svgRef.current?.hasPointerCapture?.(d.id)) {
+            svgRef.current.releasePointerCapture(d.id)
+          }
+        } catch {}
+        setPanning(false)
+        if (rafId.current !== null) {
+          cancelAnimationFrame(rafId.current)
+          flushGestures()
+        }
+      }
+    }
+    window.addEventListener('blur', onBlur)
+    return () => window.removeEventListener('blur', onBlur)
+  }, [flushGestures])
+
+  // Wheel must be non-passive to prevent page scroll
   useEffect(() => {
     const svg = svgRef.current
     if (!svg) return
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
-      const rect = svg.getBoundingClientRect()
-      const factor = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0015))
-      onViewportChange((vp) => zoomAt(vp, factor, e.clientX - rect.left, e.clientY - rect.top, minFitScale))
+      let rect = cachedRect.current
+      if (rect.width === 0) {
+        updateCachedRect()
+        rect = cachedRect.current
+      }
+      const factor = normalizeWheelZoom(e.deltaY, e.deltaMode)
+      const sx = e.clientX - rect.left
+      const sy = e.clientY - rect.top
+
+      if (Number.isFinite(factor) && Number.isFinite(sx) && Number.isFinite(sy)) {
+        if (pendingZoom.current) {
+          pendingZoom.current.factor = Math.max(0.01, Math.min(100, pendingZoom.current.factor * factor))
+          pendingZoom.current.sx = sx
+          pendingZoom.current.sy = sy
+        } else {
+          pendingZoom.current = { factor, sx, sy }
+        }
+        scheduleFrame()
+      }
     }
     svg.addEventListener('wheel', onWheel, { passive: false })
-    return () => svg.removeEventListener('wheel', onWheel)
-  }, [onViewportChange, minFitScale])
+    return () => {
+      svg.removeEventListener('wheel', onWheel)
+      if (rafId.current !== null) {
+        cancelAnimationFrame(rafId.current)
+        rafId.current = null
+      }
+    }
+  }, [scheduleFrame, updateCachedRect])
 
   const onPointerDown = (e: ReactPointerEvent<SVGSVGElement>) => {
     if (e.button !== 0) return
+    if (!Number.isFinite(e.clientX) || !Number.isFinite(e.clientY)) return
+    if (drag.current !== null) {
+      if (e.pointerType === 'mouse') {
+        if (drag.current.moved) {
+          setPanning(false)
+        }
+        drag.current = null
+      } else {
+        return
+      }
+    }
+    updateCachedRect()
     drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false }
   }
 
@@ -83,16 +214,25 @@ export function FloorMap({
       const dy = e.clientY - d.y
       if (!d.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD_PX) {
         d.moved = true
-        svgRef.current?.setPointerCapture(e.pointerId)
+        try {
+          svgRef.current?.setPointerCapture(e.pointerId)
+        } catch {}
         setPanning(true)
       }
       if (d.moved) {
-        d.x = e.clientX
-        d.y = e.clientY
-        onViewportChange((vp) => panBy(vp, dx, dy))
+        if (Number.isFinite(e.clientX) && Number.isFinite(e.clientY)) {
+          d.x = e.clientX
+          d.y = e.clientY
+        }
+        if (Number.isFinite(dx) && Number.isFinite(dy)) {
+          pendingPan.current.dx += dx
+          pendingPan.current.dy += dy
+          scheduleFrame()
+        }
         return
       }
     }
+    if (drag.current?.moved) return
     const ref = entityFromTarget(e.target)
     const key = ref ? `${ref.kind}:${ref.id}` : null
     if (key !== lastHover.current) {
@@ -100,21 +240,49 @@ export function FloorMap({
       onHover(ref)
     }
     if (settings.debug.enabled && settings.debug.coords) {
-      const rect = svgRef.current!.getBoundingClientRect()
+      let rect = cachedRect.current
+      if (rect.width === 0) {
+        updateCachedRect()
+        rect = cachedRect.current
+      }
       setCursor(screenToFloor(viewport, e.clientX - rect.left, e.clientY - rect.top))
     }
   }
 
   const onPointerUp = (e: ReactPointerEvent<SVGSVGElement>) => {
     const d = drag.current
-    drag.current = null
     if (!d || d.id !== e.pointerId) return
+    drag.current = null
+    if (rafId.current !== null) {
+      cancelAnimationFrame(rafId.current)
+      flushGestures()
+    }
     if (d.moved) {
-      svgRef.current?.releasePointerCapture(e.pointerId)
+      try {
+        if (svgRef.current?.hasPointerCapture?.(e.pointerId)) {
+          svgRef.current.releasePointerCapture(e.pointerId)
+        }
+      } catch {}
       setPanning(false)
       return
     }
     onSelect(entityFromTarget(e.target))
+  }
+
+  const onPointerCancel = (e: ReactPointerEvent<SVGSVGElement>) => {
+    const d = drag.current
+    if (!d || d.id !== e.pointerId) return
+    drag.current = null
+    if (rafId.current !== null) {
+      cancelAnimationFrame(rafId.current)
+      flushGestures()
+    }
+    try {
+      if (svgRef.current?.hasPointerCapture?.(e.pointerId)) {
+        svgRef.current.releasePointerCapture(e.pointerId)
+      }
+    } catch {}
+    setPanning(false)
   }
 
   const showDigital = settings.sourceMode !== 'source'
@@ -132,13 +300,11 @@ export function FloorMap({
         aria-roledescription="bản đồ tương tác"
         tabIndex={onKeyDown ? 0 : undefined}
         onKeyDown={onKeyDown}
+        onPointerEnter={updateCachedRect}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onPointerCancel={() => {
-          drag.current = null
-          setPanning(false)
-        }}
+        onPointerCancel={onPointerCancel}
         onPointerLeave={() => {
           lastHover.current = null
           onHover(null)
@@ -159,7 +325,16 @@ export function FloorMap({
             <path d="M0 0L1.6 1.6M1.6 0L0 1.6" stroke="var(--desk-unavailable-fill)" strokeWidth="0.25" />
           </pattern>
         </defs>
-        <g transform={`translate(${viewport.x} ${viewport.y}) scale(${viewport.scale})`}>
+        <g
+          className="fp-viewport-layer"
+          transform={`translate(${viewport.x} ${viewport.y}) scale(${viewport.scale})`}
+          style={{
+            transform: `translate3d(${viewport.x}px, ${viewport.y}px, 0px) scale3d(${viewport.scale}, ${viewport.scale}, 1)`,
+            transformBox: 'view-box',
+            transformOrigin: '0 0',
+            willChange: 'transform',
+          }}
+        >
           <rect className="fp-sheet" x={0} y={0} width={width} height={height} />
 
           {settings.zoneFills && <ZoneFills dataset={dataset} />}
@@ -357,7 +532,7 @@ const DeskStatusLayer = memo(function DeskStatusLayer({
 })
 
 /** Undimmed copy of the selected desk drawn above the dimmed status layer. */
-function SelectedDesk({ dataset, id, status }: { dataset: FloorDataset; id: string; status?: DeskStatus }) {
+const SelectedDesk = memo(function SelectedDesk({ dataset, id, status }: { dataset: FloorDataset; id: string; status?: DeskStatus }) {
   const w = useMemo(() => dataset.workstations.find((k) => k.id === id), [dataset, id])
   if (!w || !status) return null
   return (
@@ -365,7 +540,7 @@ function SelectedDesk({ dataset, id, status }: { dataset: FloorDataset; id: stri
       <DeskShape w={w} status={status} />
     </g>
   )
-}
+})
 
 const Labels = memo(function Labels({ dataset }: { dataset: FloorDataset }) {
   const { layout, zones } = dataset
@@ -398,7 +573,7 @@ const Labels = memo(function Labels({ dataset }: { dataset: FloorDataset }) {
   )
 })
 
-function Selection({ dataset, selected }: { dataset: FloorDataset; selected: EntityRef | null }) {
+const Selection = memo(function Selection({ dataset, selected }: { dataset: FloorDataset; selected: EntityRef | null }) {
   const shapes = useMemo(() => {
     if (!selected) return []
     switch (selected.kind) {
@@ -424,7 +599,7 @@ function Selection({ dataset, selected }: { dataset: FloorDataset; selected: Ent
       ))}
     </g>
   )
-}
+})
 
 const DebugLayer = memo(function DebugLayer({ dataset, settings }: { dataset: FloorDataset; settings: MapSettings }) {
   const { ids, bboxes, classification } = settings.debug

@@ -1,4 +1,4 @@
-import type { BaseLayer, BBox, FloorDataset, Point } from '../domain/spatial'
+import type { BaseLayer, BBox, FloorDataset, Point, Workstation } from '../domain/spatial'
 
 /** Camera crop, NOT a room or floor outline. Only these three complete source clusters are in the spike. */
 export const SPIKE_CLUSTER_IDS = ['cluster-16-13', 'cluster-16-17', 'cluster-16-18']
@@ -132,3 +132,166 @@ export function fitViewBox(bounds: BBox, view: { width: number; height: number }
     height,
   ]
 }
+
+export interface MemoizedPrismFace {
+  points: string
+  fill: string
+}
+
+export interface MemoizedPrism {
+  faces: MemoizedPrismFace[]
+  topPoints: string
+}
+
+export interface MemoizedDesk {
+  shadowPoints: string
+  legs: Array<{ a: Point; b: Point }>
+  prism: MemoizedPrism
+  codePos: Point
+}
+
+export interface MemoizedChair {
+  shadowPoints: string
+  stem: { a: Point; b: Point }
+  prism: MemoizedPrism
+  backPoints: string
+}
+
+export interface MemoizedSceneItem {
+  id: string
+  kind: 'desk' | 'chair'
+  depth: number
+  ws: Workstation
+  deskGeom?: MemoizedDesk
+  chairGeom?: MemoizedChair
+}
+
+export interface MemoizedSceneGeometry {
+  items: MemoizedSceneItem[]
+  markers: Array<{
+    ws: Workstation
+    pos: Point
+  }>
+  selectionPolygons: Map<string, string>
+  zoneCaptionPos: Point
+  cropCaptionPos: Point
+}
+
+export function createPrismGeometry(polygon: Point[], height: number, bottom: number): MemoizedPrism {
+  const faces = polygon
+    .map((a, i) => {
+      const b = polygon[(i + 1) % polygon.length]
+      return {
+        a,
+        b,
+        depth: project(a)[1] + project(b)[1],
+      }
+    })
+    .sort((a, b) => a.depth - b.depth)
+    .map(({ a, b }, i) => ({
+      points: points([project(a, bottom), project(b, bottom), project(b, height), project(a, height)]),
+      fill: i % 2 ? '#bbc7d0' : '#d2dbe1',
+    }))
+
+  return {
+    faces,
+    topPoints: projectedPoints(polygon, height),
+  }
+}
+
+function buildSceneGeometry(scene: SpikeScene): MemoizedSceneGeometry {
+  const rawItems: MemoizedSceneItem[] = []
+  const selectionPolygons = new Map<string, string>()
+
+  for (const ws of scene.workstations) {
+    const deskPrism = createPrismGeometry(ws.polygon, scene.deskHeight, scene.deskHeight - 0.5)
+    const [cx, cy] = ws.center
+    const deskGeom: MemoizedDesk = {
+      shadowPoints: projectedPoints(ws.polygon),
+      legs: ws.polygon.map(([px, py]) => {
+        const p: Point = [px + (cx - px) * 0.14, py + (cy - py) * 0.14]
+        return { a: project(p, 0), b: project(p, scene.deskHeight) }
+      }),
+      prism: deskPrism,
+      codePos: project(ws.center, scene.deskHeight + 0.5),
+    }
+
+    rawItems.push({
+      id: ws.id,
+      kind: 'desk',
+      depth: project(ws.center)[1],
+      ws,
+      deskGeom,
+    })
+
+    if (ws.chair) {
+      const { center, bbox } = ws.chair
+      const polygon = rectangle(bbox)
+      const dx = center[0] - ws.center[0]
+      const dy = center[1] - ws.center[1]
+      const back =
+        Math.abs(dx) > Math.abs(dy)
+          ? dx > 0
+            ? [polygon[1], polygon[2]]
+            : [polygon[3], polygon[0]]
+          : dy > 0
+          ? [polygon[2], polygon[3]]
+          : [polygon[0], polygon[1]]
+
+      const chairPrism = createPrismGeometry(polygon, scene.chairHeight, scene.chairHeight - 0.5)
+      const chairGeom: MemoizedChair = {
+        shadowPoints: projectedPoints(polygon),
+        stem: { a: project(center, 0.5), b: project(center, scene.chairHeight) },
+        prism: chairPrism,
+        backPoints: points([
+          project(back[0], scene.chairHeight),
+          project(back[1], scene.chairHeight),
+          project(back[1], scene.chairHeight + 3),
+          project(back[0], scene.chairHeight + 3),
+        ]),
+      }
+
+      rawItems.push({
+        id: ws.id,
+        kind: 'chair',
+        depth: project(center)[1],
+        ws,
+        chairGeom,
+      })
+    }
+
+    selectionPolygons.set(ws.id, projectedPoints(ws.polygon, scene.deskHeight + 0.15))
+  }
+
+  rawItems.sort((a, b) => a.depth - b.depth)
+
+  const markers = scene.workstations.map((ws) => ({
+    ws,
+    pos: project(ws.chair?.center ?? ws.center, scene.chairHeight + MARKER_ELEVATION),
+  }))
+
+  return {
+    items: rawItems,
+    markers,
+    selectionPolygons,
+    zoneCaptionPos: project(ZONE_LABEL_ANCHOR),
+    cropCaptionPos: project(CROP_LABEL_ANCHOR),
+  }
+}
+
+const sceneGeometryCache = new WeakMap<SpikeScene, MemoizedSceneGeometry>()
+
+/**
+ * Returns pre-projected, depth-sorted geometry for the 2.5D spatial scene.
+ * Memoized by scene dataset identity to eliminate redundant geometry calculations
+ * during continuous zoom and pan frames.
+ */
+export function memoizeSceneGeometry(scene: SpikeScene): MemoizedSceneGeometry {
+  let geom = sceneGeometryCache.get(scene)
+  if (!geom) {
+    geom = buildSceneGeometry(scene)
+    sceneGeometryCache.set(scene, geom)
+  }
+  return geom
+}
+

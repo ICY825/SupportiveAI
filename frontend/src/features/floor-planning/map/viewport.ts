@@ -37,16 +37,32 @@ export function clampScale(scale: number, fitScale: number): number {
 
 /** Zoom by `factor`, keeping the screen point (sx, sy) fixed. */
 export function zoomAt(vp: Viewport, factor: number, sx: number, sy: number, fitScale: number): Viewport {
+  if (
+    !Number.isFinite(vp.scale) ||
+    vp.scale <= 0 ||
+    !Number.isFinite(factor) ||
+    factor <= 0 ||
+    !Number.isFinite(sx) ||
+    !Number.isFinite(sy) ||
+    !Number.isFinite(fitScale) ||
+    fitScale <= 0
+  ) {
+    return vp
+  }
   const scale = clampScale(vp.scale * factor, fitScale)
   const k = scale / vp.scale
   return { scale, x: sx - (sx - vp.x) * k, y: sy - (sy - vp.y) * k }
 }
 
 export function panBy(vp: Viewport, dx: number, dy: number): Viewport {
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return vp
   return { ...vp, x: vp.x + dx, y: vp.y + dy }
 }
 
 export function screenToFloor(vp: Viewport, sx: number, sy: number): [number, number] {
+  if (!Number.isFinite(vp.scale) || vp.scale === 0 || !Number.isFinite(sx) || !Number.isFinite(sy)) {
+    return [0, 0]
+  }
   return [(sx - vp.x) / vp.scale, (sy - vp.y) / vp.scale]
 }
 
@@ -76,3 +92,15 @@ export function recenterOnResize(vp: Viewport, prev: Size, next: Size): Viewport
   const [cx, cy] = screenToFloor(vp, prev.width / 2, prev.height / 2)
   return { scale: vp.scale, x: next.width / 2 - cx * vp.scale, y: next.height / 2 - cy * vp.scale }
 }
+
+/**
+ * Normalizes wheel delta across line (1), page (2), and pixel (0) delta modes
+ * to produce smooth, predictable zoom factors.
+ */
+export function normalizeWheelZoom(deltaY: number, deltaMode: number, sensitivity = 1): number {
+  if (!Number.isFinite(deltaY) || deltaY === 0 || !Number.isFinite(sensitivity) || sensitivity <= 0) return 1
+  const rate = deltaMode === 1 ? 0.05 : deltaMode === 2 ? 0.5 : 0.0015
+  const exponent = Math.max(-10, Math.min(10, -deltaY * rate * sensitivity))
+  return Math.exp(exponent)
+}
+
