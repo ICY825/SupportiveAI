@@ -104,7 +104,7 @@ export interface FloorLayout {
 }
 
 export interface EntitySource {
-  kind: 'pdf-annotation' | 'pdf-vector' | 'pdf-text'
+  kind: 'pdf-annotation' | 'pdf-vector' | 'pdf-text' | 'authoring-rule'
   geometry?: string
   annotationId?: string
   annotationType?: string
@@ -112,6 +112,8 @@ export interface EntitySource {
   deskLabel?: string
   nominalSizeMm?: [number, number]
   rule?: string
+  /** Authoring-time template only; runtime rendering never evaluates it. */
+  templateId?: string
   text?: string
 }
 

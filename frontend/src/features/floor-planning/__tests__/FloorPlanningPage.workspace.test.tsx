@@ -5,6 +5,15 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { SPATIAL_OUT_OF_SCOPE } from '../labels'
 import { FloorPlanningPage } from '../pages/FloorPlanningPage'
 
+/**
+ * Search results, scoped to the search listbox: the floor picker is a <select>,
+ * so its floors are options in the document too.
+ */
+const searchResults = () => {
+  const list = screen.queryByRole('listbox', { name: 'Kết quả tìm kiếm' })
+  return list ? within(list).queryAllByRole('option') : []
+}
+
 beforeAll(() => {
   // jsdom has no layout engine
   globalThis.ResizeObserver = class {
@@ -105,8 +114,8 @@ describe('desk selection → workspace inspector', () => {
     expect(markers).toHaveLength(19)
     expect(new Set(markers.map((m) => m.getAttribute('data-status')))).toEqual(new Set(['occupied', 'available', 'reserved', 'conflict', 'unavailable']))
     const user = userEvent.setup()
-    await user.type(screen.getByRole('combobox'), 'ws-16-001')
-    expect(screen.queryByRole('option')).toBeNull()
+    await user.type(screen.getByRole('combobox', { name: 'Tìm kiếm trên mặt bằng' }), 'ws-16-001')
+    expect(searchResults()).toHaveLength(0)
     expect(screen.getByText(/Không tìm thấy kết quả/)).toBeTruthy()
   }, 30000)
 
@@ -155,13 +164,13 @@ describe('desk selection → workspace inspector', () => {
     const box = screen.getByRole('combobox', { name: 'Tìm kiếm trên mặt bằng' })
     await user.click(box)
     await user.type(box, 'nguyen van minh')
-    const options = screen.getAllByRole('option')
+    const options = searchResults()
     expect(options[0].textContent).toContain('Nguyễn Văn Minh')
     expect(box.getAttribute('aria-activedescendant')).toBe(options[0].id)
     await user.keyboard('{Enter}')
     const inspector = await screen.findByRole('complementary', { name: /^F16-.-065$/ })
     expect(within(inspector).getByText('Nguyễn Văn Minh')).toBeTruthy()
-    expect(screen.queryByRole('option')).toBeNull()
+    expect(searchResults()).toHaveLength(0)
     expect(document.activeElement).toBe(screen.getByRole('application'))
   }, 30000)
 
@@ -170,7 +179,7 @@ describe('desk selection → workspace inspector', () => {
     clickDesk(OCCUPIED)
     await screen.findByRole('complementary', { name: /^F16-/ })
     const user = userEvent.setup()
-    const box = screen.getByRole('combobox')
+    const box = screen.getByRole('combobox', { name: 'Tìm kiếm trên mặt bằng' })
     await user.click(box)
     await user.type(box, 'khong-co-gi')
     expect(screen.getByText(/Không tìm thấy kết quả/)).toBeTruthy()

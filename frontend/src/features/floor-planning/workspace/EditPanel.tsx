@@ -54,10 +54,10 @@ export function EditToolbar({
   saving,
   changedCount,
   invalidCount,
-  canUndo,
-  canRedo,
-  undoHint,
-  redoHint,
+  canUndo = false,
+  canRedo = false,
+  undoHint = '',
+  redoHint = '',
   onUndo,
   onRedo,
   onCancel,
@@ -68,57 +68,60 @@ export function EditToolbar({
   saving: boolean
   changedCount: number
   invalidCount: number
-  canUndo: boolean
-  canRedo: boolean
+  canUndo?: boolean
+  canRedo?: boolean
   /** shortcut spelled for this platform, e.g. "⌘Z" */
-  undoHint: string
-  redoHint: string
-  onUndo: () => void
-  onRedo: () => void
+  undoHint?: string
+  redoHint?: string
+  /** the history group is drawn only when both handlers are supplied */
+  onUndo?: () => void
+  onRedo?: () => void
   onCancel: () => void
   onSave: () => void
 }) {
   const blocked = !dirty || !valid || saving
   return (
     <div className="sw-edit-toolbar">
-      <div className="fp-toolbar sw-history" role="group" aria-label="Lịch sử chỉnh sửa">
-        <button
-          type="button"
-          onClick={onUndo}
-          disabled={!canUndo}
-          aria-label={LAYOUT_EDIT.undo}
-          title={`${LAYOUT_EDIT.undo} (${undoHint})`}
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-            <path
-              d="M3 7h6.2a3.4 3.4 0 0 1 0 6.8H6M3 7l2.6-2.6M3 7l2.6 2.6"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
-        <button
-          type="button"
-          onClick={onRedo}
-          disabled={!canRedo}
-          aria-label={LAYOUT_EDIT.redo}
-          title={`${LAYOUT_EDIT.redo} (${redoHint})`}
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-            <path
-              d="M13 7H6.8a3.4 3.4 0 0 0 0 6.8H10M13 7l-2.6-2.6M13 7l-2.6 2.6"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
-      </div>
+      {onUndo && onRedo && (
+        <div className="fp-toolbar sw-history" role="group" aria-label="Lịch sử chỉnh sửa">
+          <button
+            type="button"
+            onClick={onUndo}
+            disabled={!canUndo}
+            aria-label={LAYOUT_EDIT.undo}
+            title={`${LAYOUT_EDIT.undo} (${undoHint})`}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path
+                d="M3 7h6.2a3.4 3.4 0 0 1 0 6.8H6M3 7l2.6-2.6M3 7l2.6 2.6"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={onRedo}
+            disabled={!canRedo}
+            aria-label={LAYOUT_EDIT.redo}
+            title={`${LAYOUT_EDIT.redo} (${redoHint})`}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path
+                d="M13 7H6.8a3.4 3.4 0 0 0 0 6.8H10M13 7l-2.6-2.6M13 7l-2.6 2.6"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+      )}
       <p className="sw-edit-state" data-blocked={!valid ? 'invalid' : undefined}>
         {!valid
           ? LAYOUT_EDIT.invalidSummary(invalidCount)

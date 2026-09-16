@@ -5,6 +5,7 @@
  * language. Domain constants (SOURCE_VERIFIED, WORKSTATION, …) stay in code and
  * are translated here only for display.
  */
+import type { FloorOccupancy } from './data/registry'
 import type { PlacementIssue } from './domain/placement'
 import type { BaseLayerId, Classification, VerificationState } from './domain/spatial'
 import type { AssignmentType, DeviceType, Presence, SeatType } from './domain/allocation'
@@ -69,6 +70,16 @@ export const BASE_LAYER_LABELS: Record<BaseLayerId, string> = {
 }
 
 export const UNLABELED_ZONE = 'Khu vực chưa có nhãn'
+
+/** How much of a plate the company occupies; A is the upper wing, B the lower. */
+export const FLOOR_OCCUPANCY: Record<FloorOccupancy, string> = {
+  full: 'Toàn sàn',
+  'zone-a': 'Khu A',
+  'zone-b': 'Khu B',
+}
+
+/** Said on the floor picker for a floor the extractor has not produced yet. */
+export const FLOOR_NO_DATASET = 'chưa có dữ liệu'
 
 /** Display names by object kind; the raw CAD text stays visible as source text. */
 const OBJECT_KIND: Record<string, string> = {

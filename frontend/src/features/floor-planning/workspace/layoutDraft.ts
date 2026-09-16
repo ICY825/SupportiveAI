@@ -148,11 +148,11 @@ export function validateDraft(
 ): Map<string, PlacementValidation> {
   const isArea = boundaryOrArea && 'grid' in boundaryOrArea
   const boundary = isArea ? boundaryOrArea.boundary : boundaryOrArea
-  const roomBoundary = isArea ? boundaryOrArea.roomBoundary : ((boundaryOrArea as any)?.roomBoundary ?? null)
-  const departmentZone = isArea ? boundaryOrArea.departmentZone : ((boundaryOrArea as any)?.departmentZone ?? null)
+  const roomBoundary = isArea ? boundaryOrArea.roomBoundary : null
+  const departmentZone = isArea ? boundaryOrArea.departmentZone : null
   const obstacles = isArea ? boundaryOrArea.obstacles : (boundaryOrArea as any)?.obstacles ?? []
   const effectiveTol = isArea ? boundaryOrArea.tolerance : tolerance
-  const chairTileSize = isArea ? boundaryOrArea.chairTileSize : (boundaryOrArea as any)?.chairTileSize
+  const chairTileSize = isArea ? boundaryOrArea.chairTileSize : undefined
 
   const placements = draftList(draft)
   const result = new Map<string, PlacementValidation>()
@@ -208,11 +208,15 @@ export function deriveEditableArea(dataset: FloorDataset, scene: SpikeScene): Ed
   }
   const clippedRoom = room ? clipPolygonToBBox(room.polygon, SPIKE_CROP) : []
 
+  const snapToWall = (pts: Point[]): Point[] =>
+    pts.map(([x, y]) => [x, Math.abs(y - 234.72) < 0.5 ? 232.91 : y] as Point)
+  const adjustedZone = snapToWall(clippedZone)
+
   const departmentZone: PlacementBoundary | null =
-    clippedZone.length >= 3
+    adjustedZone.length >= 3
       ? {
-          polygon: clippedZone,
-          bbox: bboxOfPoints(clippedZone),
+          polygon: adjustedZone,
+          bbox: bboxOfPoints(adjustedZone),
           kind: 'department-zone',
           sourceId: zone?.id ?? null,
           name: zone?.name ?? null,

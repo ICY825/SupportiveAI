@@ -7,12 +7,12 @@ import { SpatialWorkspace } from '../workspace/SpatialWorkspace'
 import { UnsavedChangesDialog } from '../workspace/EditPanel'
 import { FloorMapControls, ViewControls } from '../components/FloorMapControls'
 import { FloorSearch } from '../components/FloorSearch'
-import { FloorSelector } from '../components/FloorSelector'
+import { FloorPicker } from '../components/FloorPicker'
 import { HelpPopover } from '../components/HelpPopover'
 import { isTypingTarget } from '../components/keyboard'
 import { DeskInspector } from '../components/desk-inspector/DeskInspector'
 import { DeskStatusIcon } from '../components/desk-inspector/DeskStatusBadge'
-import { FLOORS, findFloor } from '../data/registry'
+import { FLOORS, FLOOR_INVENTORY, findFloor } from '../data/registry'
 import { validateFloorDataset } from '../data/validateFloorDataset'
 import { buildDeskIndex } from '../domain/desk'
 import type { BBox, EntityRef, FloorDataset } from '../domain/spatial'
@@ -114,7 +114,7 @@ export function FloorPlanningPage({ settingsOpen = false, onSettingsOpenChange }
           <img src={markUrl} alt="Vin Smart Future" width="26" height="26" />
         </a>
         <h1>Mặt bằng văn phòng</h1>
-        <FloorSelector floors={FLOORS} value={floorId} onChange={changeFloor} />
+        <FloorPicker inventory={FLOOR_INVENTORY} value={floorId} onChange={changeFloor} />
         <div className="fp-segmented fp-view-mode" role="radiogroup" aria-label="Chế độ xem">
           {VIEW_MODES.map((m) => (
             <button

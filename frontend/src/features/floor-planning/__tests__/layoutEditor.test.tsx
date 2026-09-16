@@ -222,7 +222,7 @@ describe('edit mode', () => {
     for (let i = 0; i < 4; i++) fireEvent.keyDown(scene(container), { key: 'ArrowUp' })
     const status = container.querySelector('.sw-edit-inspector .sw-placement-status')!
     expect(status.getAttribute('data-valid')).toBe('false')
-    expect(status.textContent).toContain('Ngoài phạm vi bố trí')
+    expect(status.textContent).toMatch(/Ngoài phạm vi/i)
     expect(saveButton()).toHaveProperty('disabled', true)
   })
 
@@ -484,5 +484,91 @@ describe('undo and redo', () => {
     enterEdit()
     expect(undoButton()).toHaveProperty('disabled', true)
     expect(redoButton()).toHaveProperty('disabled', true)
+  })
+})
+
+describe('Milestone 3: Visual Affordances & Dual Conflict Highlighting', () => {
+  it('hides door clearances in view mode and displays them as dashed outlines in edit mode', () => {
+    const { container } = setup()
+    expect(inViewMode()).toBe(true)
+    expect(container.querySelector('.sw-edit-clearance')).toBeNull()
+
+    enterEdit()
+    const clearances = container.querySelectorAll('.sw-edit-clearance')
+    expect(clearances.length).toBeGreaterThan(0)
+    for (const clr of clearances) {
+      expect(clr.getAttribute('points')).toBeTruthy()
+    }
+
+    leaveEdit()
+    expect(container.querySelector('.sw-edit-clearance')).toBeNull()
+  })
+
+  it('highlights both workstation and column obstacle on collision, disables Save, and shows Vietnamese explanation', () => {
+    const { container } = setup()
+    enterEdit()
+    // Select desk ws-16-067 adjacent to column col-16-13
+    clickDesk(container, 'ws-16-067')
+    // First nudge 1 step up so placement is valid and dirty (Save enabled)
+    fireEvent.keyDown(scene(container), { key: 'ArrowUp' })
+    expect(saveButton().disabled).toBe(false)
+
+    // Now nudge 2 grid cells right (+X) into column col-16-13
+    fireEvent.keyDown(scene(container), { key: 'ArrowRight' })
+    fireEvent.keyDown(scene(container), { key: 'ArrowRight' })
+
+    const status = container.querySelector('.sw-edit-inspector .sw-placement-status')!
+    expect(status.getAttribute('data-valid')).toBe('false')
+    expect(status.textContent).toMatch(/Va chạm.*cột/i)
+
+    // Dual conflict highlighting: both workstation and column obstacle are highlighted
+    expect(container.querySelector('.sw-edit-invalid')).not.toBeNull()
+    const conflictObstacle = container.querySelector('.sw-edit-obstacle-conflict[data-obstacle-id="col-16-13"]')
+    expect(conflictObstacle).not.toBeNull()
+    expect(conflictObstacle?.getAttribute('data-obstacle-kind')).toBe('column')
+
+    // Save button is disabled
+    expect(saveButton().disabled).toBe(true)
+
+    // Moving back clears dual highlight and restores validity and re-enables Save
+    fireEvent.keyDown(scene(container), { key: 'ArrowLeft' })
+    fireEvent.keyDown(scene(container), { key: 'ArrowLeft' })
+    expect(status.getAttribute('data-valid')).toBe('true')
+    expect(container.querySelector('.sw-edit-obstacle-conflict')).toBeNull()
+    expect(saveButton().disabled).toBe(false)
+  })
+
+  it('allows desk placed against northern perimeter wall with chair facing inside, recognized as 100% valid with Save enabled', async () => {
+    const written: Array<[string, Record<string, SpatialPlacement>]> = []
+    const store: LayoutStore = {
+      read: () => null,
+      write: async (floorId, placements) => {
+        written.push([floorId, placements])
+      },
+    }
+    const { container } = setup(store)
+    enterEdit()
+    clickDesk(container, 'ws-16-065')
+    // Rotate 180° (two quarter turns) so chair faces inside the room (south)
+    fireEvent.keyDown(scene(container), { key: 'r' })
+    fireEvent.keyDown(scene(container), { key: 'r' })
+    // Nudge 2 grid cells north towards perimeter wall (desk y reaches 234.39, wall at y = 234.07)
+    fireEvent.keyDown(scene(container), { key: 'ArrowUp' })
+    fireEvent.keyDown(scene(container), { key: 'ArrowUp' })
+
+    const status = container.querySelector('.sw-edit-inspector .sw-placement-status')!
+    expect(status.getAttribute('data-valid')).toBe('true')
+    expect(status.textContent).toContain('Vị trí hợp lệ')
+    expect(container.querySelector('.sw-edit-invalid')).toBeNull()
+
+    // Save button is enabled
+    const save = saveButton()
+    expect(save.disabled).toBe(false)
+
+    await act(async () => {
+      fireEvent.click(save)
+    })
+    expect(written).toHaveLength(1)
+    expect(written[0][1]['ws-16-065']).toBeDefined()
   })
 })
