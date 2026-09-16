@@ -1,6 +1,6 @@
 # Data-driven floor generation assessment
 
-This assessment is based on the current `lystiger` branch at `0d739f8` on 16 September 2026. The repository already has an offline, deterministic floor extraction pipeline and a complete Floor 16 dataset. The visible 19-seat workspace is a deliberately fixed presentation crop, not the extent of the canonical data.
+This assessment is based on the current `lystiger` branch through `18dff92` on 16 September 2026. The repository already has an offline, deterministic floor extraction pipeline and a complete Floor 16 dataset. The visible 19-seat workspace is a deliberately fixed presentation crop, not the extent of the canonical data.
 
 # A. Current Architecture
 
