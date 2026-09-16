@@ -24,7 +24,7 @@ export const VERIFICATION: Record<VerificationState, { label: string; short: str
     label: 'Tự động trích xuất',
     short: 'Tự động',
     glyph: '≈',
-    hint: 'Suy ra từ hình học vector theo quy tắc; cần Admin xác nhận.',
+    hint: 'Suy ra theo quy tắc từ hình học nguồn hoặc mẫu bố trí; cần Admin xác nhận.',
   },
   UNVERIFIED: {
     label: 'Chờ xác minh',
@@ -275,4 +275,3 @@ export function placementIssueText(issue: PlacementIssue, codeOf: (entityId: str
       return PLACEMENT_ISSUE.clearanceConflict(issue.obstacleName, issue.target)
   }
 }
-

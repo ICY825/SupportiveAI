@@ -20,7 +20,7 @@ export type Classification = 'WORKSTATION' | 'FURNITURE' | 'FACILITY' | 'STRUCTU
 
 /**
  * SOURCE_VERIFIED  taken verbatim from the authoritative source (annotation/label present)
- * EXTRACTED        derived from source vectors by a documented rule; needs human confirmation
+ * EXTRACTED        derived from source geometry or a documented authoring rule; needs human confirmation
  * UNVERIFIED       partially derived (e.g. label found, outline not identified)
  * UNKNOWN          identity or meaning cannot be determined from the source
  */

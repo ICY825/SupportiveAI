@@ -114,6 +114,10 @@
 .fp-floor-picker select {
   appearance: none;
   height: 28px;
+  /* a native select sizes to its longest option, and the unextracted floors
+     carry a long annotation; the closed label only ever shows one floor */
+  width: 124px;
+  text-overflow: ellipsis;
   padding: 0 25px 0 10px;
   border: 1px solid var(--line-strong);
   border-radius: var(--fp-radius);
