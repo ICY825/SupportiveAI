@@ -28,10 +28,10 @@ afterEach(() => {
 const OCCUPIED = 'ws-16-065'
 const AVAILABLE = 'ws-16-066'
 
-const deskPolygon = (id: string) => document.querySelector<SVGPolygonElement>(`.fp-ws[data-entity-id="${id}"]`)!
+const deskMarker = (id: string) => document.querySelector<SVGGElement>(`.sw-marker[data-workstation-id="${id}"]`)!
 
 function clickDesk(id: string) {
-  const el = deskPolygon(id)
+  const el = deskMarker(id)
   fireEvent.pointerDown(el, { button: 0, pointerId: 1, clientX: 10, clientY: 10 })
   fireEvent.pointerUp(el, { button: 0, pointerId: 1, clientX: 10, clientY: 10 })
 }
@@ -50,7 +50,8 @@ describe('desk selection → workspace inspector', () => {
     clickDesk(OCCUPIED)
     const inspector = await screen.findByRole('complementary', { name: /^F16-.-065$/ })
     expect(within(inspector).getByText('Nguyễn Văn Minh')).toBeTruthy()
-    expect(document.querySelector('.fp-svg')!.classList.contains('has-desk-selection')).toBe(true)
+    expect(deskMarker(OCCUPIED).getAttribute('aria-pressed')).toBe('true')
+    expect(document.querySelector('.sw-selection')).not.toBeNull()
     expect(window.location.hash).toContain(`select=workstation%3A${OCCUPIED}`)
 
     clickDesk(AVAILABLE)
@@ -62,7 +63,7 @@ describe('desk selection → workspace inspector', () => {
       fireEvent.keyDown(window, { key: 'Escape' })
     })
     expect(screen.queryByRole('complementary', { name: /^F16-/ })).toBeNull()
-    expect(document.querySelector('.fp-svg')!.classList.contains('has-desk-selection')).toBe(false)
+    expect(document.querySelector('.sw-selection')).toBeNull()
     expect(window.location.hash).not.toContain('select=')
   }, 30000)
 
@@ -92,6 +93,42 @@ describe('desk selection → workspace inspector', () => {
     await screen.findByRole('application', {}, { timeout: 15000 })
     expect(screen.queryByText('Nguyễn Văn Minh')).toBeNull()
     expect(screen.getByRole('heading', { level: 2, name: OCCUPIED })).toBeTruthy()
+    expect(document.querySelector('.sw-scene')).toBeNull()
+    expect(document.querySelector('.fp-svg')).not.toBeNull()
+  }, 30000)
+
+  it('limits the scene and search to 19 desks, keeping all five operational states', async () => {
+    await openWorkspace()
+    const markers = [...document.querySelectorAll('.sw-marker')]
+    expect(markers).toHaveLength(19)
+    expect(new Set(markers.map((m) => m.getAttribute('data-status')))).toEqual(new Set(['occupied', 'available', 'reserved', 'conflict', 'unavailable']))
+    const user = userEvent.setup()
+    await user.type(screen.getByRole('combobox'), 'ws-16-001')
+    expect(screen.queryByRole('option')).toBeNull()
+    expect(screen.getByText(/Không tìm thấy kết quả/)).toBeTruthy()
+  }, 30000)
+
+  it('preserves selection when switching to the existing verification renderer and back', async () => {
+    await openWorkspace()
+    clickDesk(OCCUPIED)
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Đối chiếu trên bản vẽ' }))
+    expect(document.querySelector('.sw-scene')).toBeNull()
+    expect(document.querySelector('.fp-svg')).not.toBeNull()
+    expect(screen.getByRole('heading', { level: 2, name: OCCUPIED })).toBeTruthy()
+    expect(screen.queryByText('Nguyễn Văn Minh')).toBeNull()
+    await user.click(screen.getByRole('radio', { name: 'Bố trí chỗ ngồi' }))
+    expect(deskMarker(OCCUPIED).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByText('Nguyễn Văn Minh')).toBeTruthy()
+  }, 30000)
+
+  it('explains out-of-crop deep links instead of silently expanding the spike', async () => {
+    window.location.hash = '#/floor-planning?floor=floor-16&view=workspace&select=workstation:ws-16-001'
+    render(<FloorPlanningPage />)
+    await screen.findByRole('application', {}, { timeout: 15000 })
+    expect(screen.getByText('Vị trí ở ngoài phạm vi xem thử')).toBeTruthy()
+    expect(document.querySelectorAll('.sw-marker')).toHaveLength(19)
+    expect(document.querySelector('.sw-selection')).toBeNull()
   }, 30000)
 
   it('search: typing a name and pressing Enter selects that person\'s desk', async () => {

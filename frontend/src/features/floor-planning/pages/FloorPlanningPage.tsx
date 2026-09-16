@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { createDemoAllocation } from '../allocation/demoAllocation'
 import { FloorDetailsPanel } from '../components/FloorDetailsPanel'
 import { FloorMap } from '../components/FloorMap'
+import { SpatialWorkspace } from '../workspace/SpatialWorkspace'
 import { FloorMapControls, ViewControls } from '../components/FloorMapControls'
 import { FloorSearch } from '../components/FloorSearch'
 import { FloorSelector } from '../components/FloorSelector'
@@ -82,7 +83,7 @@ export function FloorPlanningPage({ settingsOpen = false, onSettingsOpenChange }
   const floorLabel = findFloor(floorId)?.label
 
   return (
-    <div className="fp-page">
+    <div className={`fp-page${view === 'workspace' ? ' is-spatial-page' : ''}`}>
       <header className="fp-topbar">
         <h1>Mặt bằng văn phòng</h1>
         <FloorSelector floors={FLOORS} value={floorId} onChange={changeFloor} />
@@ -122,7 +123,19 @@ export function FloorPlanningPage({ settingsOpen = false, onSettingsOpenChange }
           <span className="fp-mono">{current.error}</span>
         </div>
       )}
-      {current?.dataset && (
+      {current?.dataset && view === 'workspace' && (
+        <SpatialWorkspace
+          key={floorId}
+          dataset={current.dataset}
+          selected={selected}
+          onSelect={setSelected}
+          onVerify={() => setView('verification')}
+          searchSlot={searchSlot}
+          settingsOpen={settingsOpen}
+          onCloseSettings={() => onSettingsOpenChange?.(false)}
+        />
+      )}
+      {current?.dataset && view === 'verification' && (
         <FloorWorkspace
           key={floorId}
           dataset={current.dataset}
