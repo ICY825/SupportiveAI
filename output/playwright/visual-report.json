@@ -1,0 +1,274 @@
+{
+  "generatedAt": "2026-09-16T03:36:32.307Z",
+  "states": [
+    {
+      "name": "spatial-overview",
+      "map": {
+        "canvas": [
+          924,
+          614
+        ],
+        "drawn": [
+          586,
+          400
+        ],
+        "fillX": 0.634,
+        "fillY": 0.652
+      }
+    },
+    {
+      "name": "spatial-occupied",
+      "map": {
+        "canvas": [
+          924,
+          614
+        ],
+        "drawn": [
+          586,
+          400
+        ],
+        "fillX": 0.634,
+        "fillY": 0.652
+      }
+    },
+    {
+      "name": "spatial-available",
+      "map": {
+        "canvas": [
+          924,
+          614
+        ],
+        "drawn": [
+          586,
+          400
+        ],
+        "fillX": 0.634,
+        "fillY": 0.652
+      }
+    },
+    {
+      "name": "spatial-conflict",
+      "map": {
+        "canvas": [
+          924,
+          614
+        ],
+        "drawn": [
+          586,
+          400
+        ],
+        "fillX": 0.634,
+        "fillY": 0.652
+      }
+    },
+    {
+      "name": "verification-overview",
+      "map": {
+        "canvas": [
+          928,
+          852
+        ],
+        "drawn": [
+          802,
+          469
+        ],
+        "fillX": 0.865,
+        "fillY": 0.55
+      }
+    }
+  ],
+  "widths": [
+    {
+      "width": 2560,
+      "height": 1440,
+      "label": "ultrawide",
+      "view": "workspace",
+      "overflow": 2560,
+      "map": {
+        "canvas": [
+          2014,
+          900
+        ],
+        "drawn": [
+          907,
+          620
+        ],
+        "fillX": 0.45,
+        "fillY": 0.688
+      }
+    },
+    {
+      "width": 2560,
+      "height": 1440,
+      "label": "ultrawide",
+      "view": "verification",
+      "overflow": 2560,
+      "map": {
+        "canvas": [
+          1958,
+          1392
+        ],
+        "drawn": [
+          1750,
+          1023
+        ],
+        "fillX": 0.894,
+        "fillY": 0.735
+      }
+    },
+    {
+      "width": 1920,
+      "height": 1080,
+      "label": "desktop",
+      "view": "workspace",
+      "overflow": 1920,
+      "map": {
+        "canvas": [
+          1374,
+          794
+        ],
+        "drawn": [
+          795,
+          543
+        ],
+        "fillX": 0.579,
+        "fillY": 0.684
+      }
+    },
+    {
+      "width": 1920,
+      "height": 1080,
+      "label": "desktop",
+      "view": "verification",
+      "overflow": 1920,
+      "map": {
+        "canvas": [
+          1318,
+          1032
+        ],
+        "drawn": [
+          1161,
+          679
+        ],
+        "fillX": 0.881,
+        "fillY": 0.658
+      }
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "label": "default",
+      "view": "workspace",
+      "overflow": 1440,
+      "map": {
+        "canvas": [
+          924,
+          614
+        ],
+        "drawn": [
+          586,
+          400
+        ],
+        "fillX": 0.634,
+        "fillY": 0.652
+      }
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "label": "default",
+      "view": "verification",
+      "overflow": 1440,
+      "map": {
+        "canvas": [
+          928,
+          852
+        ],
+        "drawn": [
+          802,
+          469
+        ],
+        "fillX": 0.865,
+        "fillY": 0.55
+      }
+    },
+    {
+      "width": 1366,
+      "height": 768,
+      "label": "laptop-small",
+      "view": "workspace",
+      "overflow": 1366,
+      "map": {
+        "canvas": [
+          1006,
+          516
+        ],
+        "drawn": [
+          502,
+          343
+        ],
+        "fillX": 0.499,
+        "fillY": 0.665
+      }
+    },
+    {
+      "width": 1366,
+      "height": 768,
+      "label": "laptop-small",
+      "view": "verification",
+      "overflow": 1366,
+      "map": {
+        "canvas": [
+          1066,
+          720
+        ],
+        "drawn": [
+          930,
+          543
+        ],
+        "fillX": 0.872,
+        "fillY": 0.754
+      }
+    },
+    {
+      "width": 1280,
+      "height": 800,
+      "label": "laptop",
+      "view": "workspace",
+      "overflow": 1280,
+      "map": {
+        "canvas": [
+          920,
+          548
+        ],
+        "drawn": [
+          536,
+          366
+        ],
+        "fillX": 0.582,
+        "fillY": 0.668
+      }
+    },
+    {
+      "width": 1280,
+      "height": 800,
+      "label": "laptop",
+      "view": "verification",
+      "overflow": 1280,
+      "map": {
+        "canvas": [
+          980,
+          752
+        ],
+        "drawn": [
+          850,
+          497
+        ],
+        "fillX": 0.868,
+        "fillY": 0.661
+      }
+    }
+  ],
+  "errors": [],
+  "failures": []
+}
