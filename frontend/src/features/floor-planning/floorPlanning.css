@@ -1,4 +1,5 @@
 /* Floor verification view. Map stroke widths are in floor points (scaled with zoom). */
+@import './shell.css';
 
 .fp-page {
   /* extraction verification states: stroke/fill colours on the map */
@@ -16,7 +17,7 @@
 
   --fp-text-2: #57524b;
   --fp-hairline: #eeebe6;
-  --fp-radius: 6px;
+  --fp-radius: var(--fp-r);
   --fp-focus: 0 0 0 2px var(--paper), 0 0 0 4px rgba(210, 24, 31, 0.55);
 
   height: 100%;
@@ -55,8 +56,26 @@
   padding-left: 34px;
 }
 
+.fp-brand-collapsed {
+  display: none;
+  align-items: center;
+  flex: none;
+  text-decoration: none;
+  line-height: 0;
+}
+
+.fp-brand-collapsed img {
+  display: block;
+  width: 26px;
+  height: 26px;
+}
+
+:root[data-nav-collapsed] .fp-brand-collapsed {
+  display: flex;
+}
+
 .fp-topbar h1 {
-  font-size: 15px;
+  font-size: var(--fp-t-page);
   font-weight: 600;
   margin: 0;
   white-space: nowrap;
@@ -424,16 +443,23 @@
 /* ---------------------------------------------------------------- workspace */
 
 .fp-workspace {
+  /*
+   * The map outranks every other surface: the inspector is sized from the
+   * viewport so it gives width back as the window narrows, and never takes
+   * more than a fifth of a wide screen.
+   */
+  --fp-inspector-w: clamp(300px, 21vw, 392px);
+
   flex: 1;
   min-height: 0;
   display: grid;
   /* same columns in both view modes, so switching views never moves the map */
-  grid-template-columns: minmax(0, 1fr) clamp(360px, 21vw, 400px);
+  grid-template-columns: minmax(0, 1fr) var(--fp-inspector-w);
 }
 
 /* map settings panel, opened from the app sidebar's "Cài đặt bản đồ" button */
 .fp-workspace.has-settings {
-  grid-template-columns: clamp(244px, 13vw, 272px) minmax(0, 1fr) clamp(360px, 21vw, 400px);
+  grid-template-columns: clamp(248px, 13vw, 272px) minmax(0, 1fr) var(--fp-inspector-w);
 }
 
 .fp-sidebar {
@@ -521,10 +547,15 @@
   margin: 10px 0 2px;
 }
 
+.fp-controls .fp-segmented {
+  /* three Vietnamese source-mode labels; wrapping beats clipping one */
+  flex-wrap: wrap;
+}
+
 .fp-controls .fp-segmented button {
   flex: 1 1 auto;
   padding: 5px 4px;
-  font-size: 11.5px;
+  font-size: var(--fp-t-small);
 }
 
 .fp-slider {
@@ -668,9 +699,7 @@
 /* ---------------------------------------------------------------- map overlays */
 
 .fp-hover,
-.fp-view-controls,
-.fp-map-foot > * {
-  position: absolute;
+.fp-map-foot > :not(.fp-toolbar) {
   background: rgba(255, 255, 255, 0.94);
   border: 1px solid var(--line);
   border-radius: var(--fp-radius);
@@ -678,12 +707,13 @@
 }
 
 .fp-hover {
+  position: absolute;
   left: 12px;
   top: 12px;
   font-size: 12px;
   padding: 4px 9px;
   pointer-events: none;
-  max-width: calc(100% - 360px);
+  max-width: calc(100% - 24px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -693,48 +723,7 @@
   color: var(--muted);
 }
 
-.fp-view-controls {
-  right: 12px;
-  top: 12px;
-  display: flex;
-  gap: 0;
-  padding: 2px;
-}
-
-.fp-btn-group {
-  display: flex;
-}
-
-.fp-btn-group + .fp-btn-group,
-.fp-view-controls > .fp-btn-accent {
-  margin-left: 2px;
-  padding-left: 2px;
-  border-left: 1px solid var(--fp-hairline);
-}
-
-.fp-view-controls button {
-  min-width: 28px;
-  height: 26px;
-  padding: 0 9px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--fp-text-2);
-  white-space: nowrap;
-}
-
-.fp-view-controls button:hover {
-  background: var(--canvas-2);
-  color: var(--ink);
-}
-
-.fp-view-controls .fp-btn-accent {
-  color: var(--vsf-red-deep);
-  font-weight: 600;
-}
-
+/* zoom / fit / focus, bottom-right above the legend — the same corner as the workspace view */
 .fp-map-foot {
   position: absolute;
   right: 12px;
@@ -748,7 +737,6 @@
 }
 
 .fp-map-foot > * {
-  position: static;
   pointer-events: auto;
   max-width: min(100%, 720px);
 }
@@ -1053,8 +1041,10 @@
   border: 1.5px dashed var(--muted);
 }
 
-.fp-svg:focus-visible {
-  box-shadow: inset 0 0 0 2px rgba(210, 24, 31, 0.55);
+.fp-svg:focus-visible,
+.fp-page .sw-scene:focus-visible {
+  outline: none;
+  box-shadow: var(--fp-focus-inset);
 }
 
 /* physical workstation outlines give way to desk status fills */
@@ -1291,10 +1281,20 @@
 /* ---------------------------------------------------------------- details panel */
 
 .fp-panel {
+  /* rows restack from their own width, not the window's */
+  container-type: inline-size;
   background: var(--paper);
   border-left: 1px solid var(--line);
   overflow-y: auto;
-  padding: 14px 18px 28px;
+  padding: 14px var(--fp-pad-panel) 28px;
+}
+
+.fp-panel-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
 .fp-back {
@@ -1304,8 +1304,11 @@
   color: var(--fp-text-2);
   cursor: pointer;
   font-size: 12px;
-  margin-bottom: 8px;
   border-radius: 3px;
+}
+
+.fp-panel-nav .fp-icon-btn {
+  margin-right: -6px;
 }
 
 .fp-back:hover {
@@ -1316,12 +1319,21 @@
   margin-bottom: 10px;
 }
 
+/* title block + close, laid out like the workspace inspector's header */
+.fp-panel-head .fp-card-head {
+  margin-bottom: 6px;
+}
+
 .fp-panel-head h2 {
   font-size: 17px;
   line-height: 1.3;
   margin: 2px 0 6px;
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+
+.fp-panel-head .fp-card-head h2 {
+  margin-bottom: 0;
 }
 
 .fp-panel-head h2 .fp-unknown {
@@ -1351,7 +1363,27 @@
   gap: 10px;
   padding: 6px 0;
   border-top: 1px solid var(--fp-hairline);
-  font-size: 12.5px;
+  font-size: var(--fp-t-body);
+}
+
+/*
+ * Below this the label column cannot hold a term like "Vị trí làm việc vật lý"
+ * on one line. Stacking reads better than two cramped columns, and it is the
+ * panel — never the map — that gives up the width.
+ */
+@container (max-width: 330px) {
+  .fp-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1px;
+  }
+
+  .fp-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .fp-list li {
+    flex-wrap: wrap;
+  }
 }
 
 .fp-row:first-child {
@@ -1374,7 +1406,7 @@
 
 .fp-section h3,
 .fp-technical summary {
-  font-size: 11.5px;
+  font-size: var(--fp-t-small);
   font-weight: 600;
   color: var(--fp-text-2);
   margin: 0 0 4px;
@@ -1665,12 +1697,32 @@
   color: var(--fp-unknown-text);
 }
 
-@media (max-width: 1280px) {
-  .fp-source-note-extra {
+/*
+ * Laptop widths. Not a mobile layout: the map keeps its shape and the chrome
+ * around it gives up space first — secondary captions, then padding.
+ */
+@media (max-width: 1440px) {
+  .fp-topbar {
+    gap: 10px;
+    padding: 0 14px;
+  }
+  .fp-search {
+    width: clamp(216px, 18vw, 280px);
+  }
+}
+
+@media (max-width: 1366px) {
+  .fp-source-note-extra,
+  .fp-legend-title,
+  /* the demo-data caveat is repeated inside both inspectors */
+  .fp-scope {
     display: none;
   }
-  .fp-legend-title {
-    display: none;
+  .fp-panel {
+    --fp-pad-panel: 14px;
+  }
+  .fp-legend {
+    gap: 4px 10px;
   }
 }
 

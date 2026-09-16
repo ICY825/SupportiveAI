@@ -118,6 +118,22 @@ export const VIEW_MODES = [
   { id: 'workspace', label: 'Bố trí chỗ ngồi' },
 ] as const
 
+/* ------------------------------------------------------------------ spatial (operational) view */
+
+/**
+ * The operational view currently covers one department area of floor 16 rather
+ * than the whole floor. Wording says so plainly instead of calling itself a
+ * preview: what it shows is real extracted geometry.
+ */
+export const SPATIAL_VIEW_LABEL = 'Chế độ xem không gian'
+export const SPATIAL_SCOPE_LABEL = 'Phạm vi hiện tại'
+export const SPATIAL_SCOPE_BREADCRUMB = 'Khu vực làm việc'
+export const SPATIAL_OUT_OF_SCOPE = 'Vị trí ngoài phạm vi hiện tại'
+export const SPATIAL_OUT_OF_SCOPE_HINT = 'Chuyển sang bản vẽ để xem vị trí đang chọn.'
+export const SPATIAL_UNAVAILABLE = 'Chế độ xem không gian hiện chỉ có tại Tầng 16.'
+export const SCENE_ZONE_CAPTION = 'RANH GIỚI KHU AI'
+export const SCENE_CROP_CAPTION = 'Mặt bằng tiếp tục ngoài phạm vi hiện tại'
+
 export const DEMO_DATA_LABEL = 'Dữ liệu minh họa'
 export const DEMO_DATA_HINT = 'Nhân sự, chỗ ngồi và thiết bị là dữ liệu giả lập để thiết kế giao diện; chưa kết nối HR/Admin.'
 

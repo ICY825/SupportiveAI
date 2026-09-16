@@ -14,7 +14,13 @@ export interface Size {
 export const MIN_ZOOM_FACTOR = 0.5 // relative to fit scale
 export const MAX_SCALE = 60 // screen px per floor pt
 
-export function fitViewport(content: Size, view: Size, padding = 24): Viewport {
+/**
+ * Breathing room left around a fitted map, in screen pixels. Small because the
+ * map's own controls float over the canvas edges rather than sitting beside it.
+ */
+export const FIT_PADDING = 28
+
+export function fitViewport(content: Size, view: Size, padding = FIT_PADDING): Viewport {
   const w = Math.max(1, view.width - padding * 2)
   const h = Math.max(1, view.height - padding * 2)
   const scale = Math.min(w / content.width, h / content.height)

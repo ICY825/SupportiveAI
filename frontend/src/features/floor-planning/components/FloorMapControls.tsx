@@ -12,17 +12,17 @@ interface ViewControlsProps {
 
 export function ViewControls({ onZoomIn, onZoomOut, onFit, onReset, onFocusSelection }: ViewControlsProps) {
   return (
-    <div className="fp-view-controls" role="toolbar" aria-label="Điều khiển khung nhìn">
+    <div className="fp-toolbar fp-view-controls" role="toolbar" aria-label="Điều khiển khung nhìn">
       <div className="fp-btn-group">
-        <button type="button" onClick={onZoomIn} title="Phóng to" aria-label="Phóng to">
-          +
-        </button>
         <button type="button" onClick={onZoomOut} title="Thu nhỏ" aria-label="Thu nhỏ">
           −
         </button>
+        <button type="button" onClick={onZoomIn} title="Phóng to" aria-label="Phóng to">
+          +
+        </button>
       </div>
       <div className="fp-btn-group">
-        <button type="button" onClick={onFit} title="Vừa khung mặt bằng công trình">
+        <button type="button" onClick={onFit} title="Đưa toàn bộ mặt bằng vào khung nhìn">
           Vừa khung
         </button>
         <button type="button" onClick={onReset} title="Hiển thị toàn bộ tờ bản vẽ">

@@ -88,7 +88,7 @@ export function FloorSearch({ index, includesPeople, onPick }: FloorSearchProps)
         aria-controls={listId}
         aria-autocomplete="list"
         aria-activedescendant={showList && results.length ? optionId(active) : undefined}
-        placeholder={includesPeople ? 'Tìm bàn, nhân sự, khu vực…' : 'Tìm vị trí, khu vực, thiết bị…'}
+        placeholder={includesPeople ? 'Tìm bàn, nhân sự…' : 'Tìm vị trí, thiết bị…'}
         value={query}
         autoComplete="off"
         spellCheck={false}

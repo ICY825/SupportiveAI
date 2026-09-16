@@ -62,3 +62,73 @@ export function buildSpikeScene(dataset: FloorDataset) {
 }
 
 export type SpikeScene = ReturnType<typeof buildSpikeScene>
+
+/** Where the marker discs sit above the chair seat, and how wide they are. */
+export const MARKER_ELEVATION = 5
+export const MARKER_RADIUS = 1.85
+/** Anchors of the two captions drawn inside the scene. */
+export const ZONE_LABEL_ANCHOR: Point = [924, 230]
+export const CROP_LABEL_ANCHOR: Point = [940, 293]
+export const CROP_LABEL_OFFSET = 5
+/** Half-width / height allowed for a caption, in scene units. */
+const LABEL_ALLOWANCE: Point = [17, 2]
+
+/**
+ * Projected bounds of everything the scene draws, in scene units.
+ *
+ * Derived from the geometry rather than measured from the DOM so the first
+ * paint is already framed correctly and the value is testable. Text labels are
+ * given a generous allowance because their width depends on the font.
+ */
+export function sceneBounds(scene: SpikeScene): BBox {
+  let x0 = Infinity
+  let y0 = Infinity
+  let x1 = -Infinity
+  let y1 = -Infinity
+  const add = ([x, y]: Point) => {
+    if (x < x0) x0 = x
+    if (y < y0) y0 = y
+    if (x > x1) x1 = x
+    if (y > y1) y1 = y
+  }
+
+  // ground plate, at the elevation it is actually drawn at
+  for (const corner of rectangle(SPIKE_CROP)) add(project(corner, -0.8))
+  // furniture tops and the marker discs that float above the chairs
+  for (const ws of scene.workstations) {
+    for (const corner of ws.polygon) add(project(corner, scene.deskHeight))
+    const [mx, my] = project(ws.chair?.center ?? ws.center, scene.chairHeight + MARKER_ELEVATION)
+    add([mx - MARKER_RADIUS, my - MARKER_RADIUS])
+    add([mx + MARKER_RADIUS, my + MARKER_RADIUS])
+  }
+  // the two in-scene captions
+  const [zx, zy] = project(ZONE_LABEL_ANCHOR)
+  add([zx, zy - LABEL_ALLOWANCE[1]])
+  add([zx + LABEL_ALLOWANCE[0], zy])
+  const [cx, cy] = project(CROP_LABEL_ANCHOR)
+  add([cx - LABEL_ALLOWANCE[0], cy + CROP_LABEL_OFFSET])
+  add([cx + LABEL_ALLOWANCE[0], cy + CROP_LABEL_OFFSET + LABEL_ALLOWANCE[1]])
+
+  return [x0, y0, x1, y1]
+}
+
+
+/**
+ * A viewBox that fills `view` with `bounds` at the largest scale that still
+ * leaves `padding` screen pixels of margin. Returned as SVG viewBox order.
+ */
+export function fitViewBox(bounds: BBox, view: { width: number; height: number }, padding: number): BBox {
+  const contentWidth = Math.max(bounds[2] - bounds[0], 1e-6)
+  const contentHeight = Math.max(bounds[3] - bounds[1], 1e-6)
+  const usableWidth = Math.max(view.width - padding * 2, 1)
+  const usableHeight = Math.max(view.height - padding * 2, 1)
+  const scale = Math.min(usableWidth / contentWidth, usableHeight / contentHeight)
+  const width = Math.max(view.width, 1) / scale
+  const height = Math.max(view.height, 1) / scale
+  return [
+    (bounds[0] + bounds[2]) / 2 - width / 2,
+    (bounds[1] + bounds[3]) / 2 - height / 2,
+    width,
+    height,
+  ]
+}

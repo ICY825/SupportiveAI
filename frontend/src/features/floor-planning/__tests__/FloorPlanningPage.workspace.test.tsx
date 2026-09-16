@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { SPATIAL_OUT_OF_SCOPE } from '../labels'
 import { FloorPlanningPage } from '../pages/FloorPlanningPage'
 
 beforeAll(() => {
@@ -126,7 +127,7 @@ describe('desk selection → workspace inspector', () => {
     window.location.hash = '#/floor-planning?floor=floor-16&view=workspace&select=workstation:ws-16-001'
     render(<FloorPlanningPage />)
     await screen.findByRole('application', {}, { timeout: 15000 })
-    expect(screen.getByText('Vị trí ở ngoài phạm vi xem thử')).toBeTruthy()
+    expect(screen.getByText(SPATIAL_OUT_OF_SCOPE)).toBeTruthy()
     expect(document.querySelectorAll('.sw-marker')).toHaveLength(19)
     expect(document.querySelector('.sw-selection')).toBeNull()
   }, 30000)

@@ -548,9 +548,23 @@ export function FloorDetailsPanel({ dataset, selected, onSelect, debug, issues, 
   return (
     <aside className="fp-panel" aria-label="Thông tin chi tiết">
       {selected && (
-        <button type="button" className="fp-back" onClick={() => onSelect(null)}>
-          <span aria-hidden="true">←</span> Tổng quan tầng
-        </button>
+        /* same header affordances as the workspace inspector: go back, or close */
+        <div className="fp-panel-nav">
+          <button type="button" className="fp-back" onClick={() => onSelect(null)}>
+            <span aria-hidden="true">←</span> Tổng quan tầng
+          </button>
+          <button
+            type="button"
+            className="fp-icon-btn"
+            aria-label="Đóng bảng thông tin"
+            title="Đóng (Esc)"
+            onClick={() => onSelect(null)}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
       )}
       {body}
       {debug && (

@@ -20,10 +20,11 @@ import type { BBox, EntityRef, FloorDataset } from '../domain/spatial'
 import { DESK_STATUS, UNLABELED_ZONE, VIEW_MODES, objectName } from '../labels'
 import { ARROW_DIRECTION, nearestInDirection } from '../map/deskNavigation'
 import { buildSearchIndex, type SearchItem } from '../search/searchIndex'
-import { gridBounds } from '../map/grid'
+import { contentBounds } from '../map/contentBounds'
 import { DEFAULT_SETTINGS, type MapSettings } from '../map/mapSettings'
 import { useViewport } from '../map/useViewport'
 import { buildHash, parseHash, type ViewMode } from './urlState'
+import markUrl from '../../../assets/brand/vsf-mark.png'
 import '../floorPlanning.css'
 
 /** Smallest area (floor points) "focus" frames, so a single desk keeps its surroundings in view. */
@@ -85,6 +86,9 @@ export function FloorPlanningPage({ settingsOpen = false, onSettingsOpenChange }
   return (
     <div className={`fp-page${view === 'workspace' ? ' is-spatial-page' : ''}`}>
       <header className="fp-topbar">
+        <a className="fp-brand-collapsed" href="#/floor-planning" aria-label="Vin Smart Future · Trung tâm Hành chính">
+          <img src={markUrl} alt="Vin Smart Future" width="26" height="26" />
+        </a>
         <h1>Mặt bằng văn phòng</h1>
         <FloorSelector floors={FLOORS} value={floorId} onChange={changeFloor} />
         <div className="fp-segmented fp-view-mode" role="radiogroup" aria-label="Chế độ xem">
@@ -177,8 +181,8 @@ function FloorWorkspace({
   const [now] = useState(() => new Date())
   const { floor } = dataset.layout
   const content = useMemo(() => ({ width: floor.width, height: floor.height }), [floor])
-  // extra padding keeps source zone labels near the plate edge inside the fitted view
-  const home = useMemo(() => gridBounds(dataset.layout, 60), [dataset])
+  // "fit" frames the drawn floor, not the sheet: see map/contentBounds.ts
+  const home = useMemo(() => contentBounds(dataset), [dataset])
   const vp = useViewport(content, home)
   const issues = useMemo(() => validateFloorDataset(dataset), [dataset])
   const mainRef = useRef<HTMLElement>(null)
@@ -345,14 +349,15 @@ function FloorWorkspace({
         <p className="fp-sr-only" aria-live="polite">
           {selectionAnnouncement}
         </p>
-        <ViewControls
-          onZoomIn={() => vp.zoomBy(1.4)}
-          onZoomOut={() => vp.zoomBy(1 / 1.4)}
-          onFit={vp.fit}
-          onReset={vp.reset}
-          onFocusSelection={selBBox ? () => focusSelection(selBBox) : undefined}
-        />
+        {/* controls sit bottom-right in both modes, above the legend stack */}
         <div className="fp-map-foot">
+          <ViewControls
+            onZoomIn={() => vp.zoomBy(1.4)}
+            onZoomOut={() => vp.zoomBy(1 / 1.4)}
+            onFit={vp.fit}
+            onReset={vp.reset}
+            onFocusSelection={selBBox ? () => focusSelection(selBBox) : undefined}
+          />
           {settings.sourceMode !== 'digital' && (
             <p className="fp-source-note" title={dataset.layout.floor.sourcePdf}>
               <span className="fp-source-note-label">Bản vẽ gốc</span>

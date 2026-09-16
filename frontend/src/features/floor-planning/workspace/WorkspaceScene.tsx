@@ -1,10 +1,24 @@
 import { memo, useId, type KeyboardEvent, type RefObject } from 'react'
 import type { DeskRecord, DeskStatus } from '../domain/desk'
 import type { Point, Workstation } from '../domain/spatial'
-import { DESK_STATUS } from '../labels'
+import { DESK_STATUS, SCENE_CROP_CAPTION, SCENE_ZONE_CAPTION } from '../labels'
 import { initials } from '../components/desk-inspector/format'
-import { planeTransform, points, project, projectedPoints, rectangle, SPIKE_CROP, type SpikeScene } from './scene'
+import {
+  CROP_LABEL_ANCHOR,
+  CROP_LABEL_OFFSET,
+  MARKER_ELEVATION,
+  MARKER_RADIUS,
+  planeTransform,
+  points,
+  project,
+  projectedPoints,
+  rectangle,
+  SPIKE_CROP,
+  ZONE_LABEL_ANCHOR,
+  type SpikeScene,
+} from './scene'
 
+/** Used until the stage has been measured, and by environments without layout. */
 export const SCENE_VIEWBOX = '-39 -7 138 95'
 
 function Line({ a, b, ...props }: { a: Point; b: Point; stroke?: string; strokeWidth?: number }) {
@@ -88,12 +102,16 @@ const Architecture = memo(function Architecture({ scene, clipId }: { scene: Spik
   </g>
 })
 
-export function WorkspaceScene({ scene, desks, selectedId, onSelect, svgRef, zoom, pan, onKeyDown, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }: {
+export function WorkspaceScene({ scene, desks, selectedId, onSelect, svgRef, viewBox, origin, zoom, pan, onKeyDown, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }: {
   scene: SpikeScene
   desks: ReadonlyMap<string, DeskRecord>
   selectedId?: string
   onSelect: (id: string) => void
   svgRef: RefObject<SVGSVGElement | null>
+  /** framing for the current stage size; see fitViewBox in ./scene */
+  viewBox: string
+  /** scene point the zoom is anchored on */
+  origin: Point
   zoom: number
   pan: Point
   onKeyDown: (e: KeyboardEvent<SVGSVGElement>) => void
@@ -108,10 +126,10 @@ export function WorkspaceScene({ scene, desks, selectedId, onSelect, svgRef, zoo
     { ws, kind: 'desk', depth: project(ws.center)[1] },
     ...(ws.chair ? [{ ws, kind: 'chair', depth: project(ws.chair.center)[1] }] : []),
   ]).sort((a, b) => a.depth - b.depth)
-  return <svg ref={svgRef} className="sw-scene" viewBox={SCENE_VIEWBOX} role="application" aria-label="Bố trí chỗ ngồi · 19 bàn khu Mô hình & Nền tảng AI" aria-describedby="sw-map-help" tabIndex={0}
+  return <svg ref={svgRef} className="sw-scene" viewBox={viewBox} role="application" aria-label="Bố trí chỗ ngồi · 19 bàn khu Mô hình & Nền tảng AI" aria-describedby="sw-map-help" tabIndex={0}
     onKeyDown={onKeyDown} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerCancel}>
     <defs><clipPath id={clipId}><rect x={SPIKE_CROP[0]} y={SPIKE_CROP[1]} width={SPIKE_CROP[2] - SPIKE_CROP[0]} height={SPIKE_CROP[3] - SPIKE_CROP[1]} /></clipPath></defs>
-    <g transform={`translate(${pan[0]} ${pan[1]}) translate(31 40) scale(${zoom}) translate(-31 -40)`}>
+    <g className="sw-scene-content" transform={`translate(${pan[0]} ${pan[1]}) translate(${origin[0]} ${origin[1]}) scale(${zoom}) translate(${-origin[0]} ${-origin[1]})`}>
       <Architecture scene={scene} clipId={clipId} />
       {objects.map(({ ws, kind }) => {
         const desk = desks.get(ws.id)
@@ -128,23 +146,23 @@ export function WorkspaceScene({ scene, desks, selectedId, onSelect, svgRef, zoo
       {scene.workstations.map((ws) => {
         const desk = desks.get(ws.id)
         if (!desk) return null
-        const [x, y] = project(ws.chair?.center ?? ws.center, scene.chairHeight + 5)
+        const [x, y] = project(ws.chair?.center ?? ws.center, scene.chairHeight + MARKER_ELEVATION)
         return <g key={ws.id} data-workstation-id={ws.id} data-status={desk.status} className={`sw-marker${selectedId === ws.id ? ' is-selected' : ''}`} transform={`translate(${x} ${y})`}
           role="button" tabIndex={-1} aria-label={`Bàn ${desk.seat.code} · ${DESK_STATUS[desk.status].label}`} aria-pressed={selectedId === ws.id}
           onClick={(e) => { if (e.detail === 0) onSelect(ws.id) }}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(ws.id) } }}>
           <title>{desk.seat.code} · {DESK_STATUS[desk.status].label}{desk.occupants[0] ? ` · ${desk.occupants[0].employee.name}` : ''}</title>
-          <circle className="sw-marker-disc" r={1.85} />
+          <circle className="sw-marker-disc" r={MARKER_RADIUS} />
           {desk.status === 'occupied' && desk.occupants[0]
             ? <text textAnchor="middle" y={0.48} className="sw-avatar-text">{initials(desk.occupants[0].employee.name)}</text>
             : <SeatSymbol status={desk.status} />}
         </g>
       })}
-      <g aria-hidden="true" className="sw-plane-label" transform={`translate(${project([924, 230])[0]} ${project([924, 230])[1]})`}>
-        <text>RANH GIỚI KHU AI</text>
+      <g aria-hidden="true" className="sw-plane-label" transform={`translate(${project(ZONE_LABEL_ANCHOR)[0]} ${project(ZONE_LABEL_ANCHOR)[1]})`}>
+        <text>{SCENE_ZONE_CAPTION}</text>
         <path d="M0 1.2v2.9" stroke="#7c9bb6" strokeWidth={0.2} />
       </g>
-      <text aria-hidden="true" x={project([940, 293])[0]} y={project([940, 293])[1] + 5} className="sw-crop-label" textAnchor="middle">Mặt bằng tiếp tục · Phạm vi xem thử</text>
+      <text aria-hidden="true" x={project(CROP_LABEL_ANCHOR)[0]} y={project(CROP_LABEL_ANCHOR)[1] + CROP_LABEL_OFFSET} className="sw-crop-label" textAnchor="middle">{SCENE_CROP_CAPTION}</text>
     </g>
   </svg>
 }
