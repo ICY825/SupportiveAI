@@ -18,6 +18,7 @@ import type { FloorDataset } from '../domain/spatial'
 import {
   basePlacements,
   deriveEditableArea,
+  gridForEntity,
   gridPoints,
   placementFromWorkstation,
 } from '../workspace/layoutDraft'
@@ -222,7 +223,7 @@ describe('floor 16 placements, boundary and projection', () => {
     expect(area.boundary.kind).toBe('zone-annotation')
     expect(area.boundary.sourceId).toBe('zone-16-ai-platform')
     expect(area.grid.cellSize).toBeCloseTo(600 / dataset.layout.floor.mmPerPt, 9)
-    expect(gridPoints(area, (p) => pointInPolygon(p, area.boundary.polygon)).length).toBeGreaterThan(50)
+    expect(gridPoints(area, area.grid, (p) => pointInPolygon(p, area.boundary.polygon)).length).toBeGreaterThan(50)
   })
 
   it('rejects a desk pushed outside the editable area', () => {
@@ -233,6 +234,35 @@ describe('floor 16 placements, boundary and projection', () => {
     expect(validatePlacement(outside, { others: [], boundary: area.boundary }).reasons).toContainEqual({
       type: 'outside-boundary',
     })
+  })
+
+  it('puts every desk back exactly, whatever route it takes through the grid', () => {
+    const scene = buildSpikeScene(dataset)
+    const area = deriveEditableArea(dataset, scene)
+    for (const ws of scene.workstations) {
+      const original = placementFromWorkstation(ws)
+      const grid = gridForEntity(area.grid, original)
+      // the authoritative position is on its own lattice, so snapping is a no-op
+      expect(snapPlacementToGrid(original, grid)).toEqual(original)
+      for (const [dx, dy] of [
+        [1, 0],
+        [3, -2],
+        [-4, 5],
+      ]) {
+        const away = snapPlacementToGrid(
+          translatePlacement(original, dx * grid.cellSize, dy * grid.cellSize),
+          grid,
+        )
+        expect(away).not.toEqual(original)
+        const back = snapPlacementToGrid(
+          translatePlacement(away, -dx * grid.cellSize, -dy * grid.cellSize),
+          grid,
+        )
+        expect(back).toEqual(original)
+      }
+      // a sub-cell drag from the original resolves back onto the original
+      expect(snapPlacementToGrid(translatePlacement(original, grid.cellSize * 0.3, 0), grid)).toEqual(original)
+    }
   })
 
   it('inverts the scene projection exactly, which is what pointer drags rely on', () => {

@@ -202,6 +202,21 @@ async function run() {
   report.states.push({ name: 'spatial-edit-selected', map: await measure(page, 'workspace') })
   await shot(page, 'spatial-edit-selected')
 
+  // Clicking the in-scene handle must not leave a UA focus ring on it: the ring
+  // on a focusable SVG <g> follows the element geometry and paints a solid blob
+  // over the map. The keyboard path is the map's own ring plus R and the arrows.
+  await page.locator('.sw-edit-handle').click()
+  const handleFocus = await page.evaluate(() => {
+    const g = document.querySelector('.sw-edit-handle')
+    if (!g) return null
+    return { outline: getComputedStyle(g).outlineStyle, active: document.activeElement?.tagName }
+  })
+  check(handleFocus?.outline === 'none', `edit: rotate handle keeps a UA focus ring (${handleFocus?.outline})`)
+  check(handleFocus?.active === 'svg', `edit: rotating from the map moved focus off the map (${handleFocus?.active})`)
+  const rotated = await page.locator('.sw-edit-facts dd').first().innerText()
+  check(rotated.trim() === '90°', `edit: handle click did not rotate the selection (${rotated.trim()})`)
+  await page.locator('.sw-edit-reset').click()
+
   // an invalid placement must be visible on the object, not only in the panel
   await page.locator('.sw-scene').press('ArrowRight')
   await page.locator('.sw-placement-status[data-valid="false"]').first().waitFor()

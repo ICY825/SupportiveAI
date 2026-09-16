@@ -106,16 +106,21 @@ export function EditInspector({
   validation,
   area,
   mmPerPt,
+  moved,
   codeOf,
   onRotate,
+  onReset,
 }: {
   code: string
   placement: SpatialPlacement
   validation: PlacementValidation | undefined
   area: EditableArea
   mmPerPt: number
+  /** differs from the authoritative placement, so "back to original" is offered */
+  moved: boolean
   codeOf: (entityId: string) => string
   onRotate: () => void
+  onReset: () => void
 }) {
   const [x0, y0] = placementBounds(placement)
   return (
@@ -143,6 +148,15 @@ export function EditInspector({
         {LAYOUT_EDIT.rotate}
         <kbd>R</kbd>
       </button>
+      {/* The snap lattice is anchored on this desk's own original corner, so
+          the original position is always one of the cells it can land on. This
+          is the direct way back when it is several cells away. */}
+      {moved && (
+        <button type="button" className="fp-btn is-wide sw-edit-reset" onClick={onReset}>
+          {LAYOUT_EDIT.reset}
+          <span aria-hidden="true">↺</span>
+        </button>
+      )}
       <p className="sw-edit-hint">{LAYOUT_EDIT.hint}</p>
     </section>
   )

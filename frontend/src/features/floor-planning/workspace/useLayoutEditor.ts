@@ -17,6 +17,7 @@ import {
   snapPlacementToGrid,
   translatePlacement,
   type PlacementValidation,
+  type SpatialGrid,
   type SpatialPlacement,
 } from '../domain/placement'
 import type { Point } from '../domain/spatial'
@@ -24,6 +25,7 @@ import {
   changedIds,
   createDraft,
   draftIsValid,
+  gridForEntity,
   isDraftDirty,
   mergeStoredPlacements,
   setDraftPlacement,
@@ -66,6 +68,10 @@ export interface LayoutEditor {
   cancelDrag: () => void
   nudge: (entityId: string, cells: Point) => void
   rotate: (entityId: string) => void
+  /** put one entity back exactly where the authoritative layout has it */
+  resetPlacement: (entityId: string) => void
+  /** the lattice this entity snaps to; the renderer draws the selected one */
+  gridFor: (entityId: string | undefined) => SpatialGrid
   save: () => Promise<void>
   cancel: () => void
 }
@@ -111,6 +117,11 @@ export function useLayoutEditor({
   )
   const valid = useMemo(() => draftIsValid(validation), [validation])
 
+  const gridFor = useCallback(
+    (entityId: string | undefined) => (entityId ? gridForEntity(area.grid, basePlacements[entityId]) : area.grid),
+    [area.grid, basePlacements],
+  )
+
   const update = useCallback((placement: SpatialPlacement) => {
     setDraft((current) => (current ? setDraftPlacement(current, placement) : current))
   }, [])
@@ -149,9 +160,9 @@ export function useLayoutEditor({
         state.moved = true
         setDrag({ ...state })
       }
-      update(snapPlacementToGrid(translatePlacement(state.from, dx, dy), area.grid))
+      update(snapPlacementToGrid(translatePlacement(state.from, dx, dy), gridFor(state.entityId)))
     },
-    [area.grid, update],
+    [gridFor, update],
   )
 
   const endDrag = useCallback(() => clearDrag(), [clearDrag])
@@ -169,11 +180,12 @@ export function useLayoutEditor({
         if (!current) return current
         const placement = current.placements[entityId]
         if (!placement) return current
-        const moved = translatePlacement(placement, cx * area.grid.cellSize, cy * area.grid.cellSize)
-        return setDraftPlacement(current, snapPlacementToGrid(moved, area.grid))
+        const grid = gridFor(entityId)
+        const moved = translatePlacement(placement, cx * grid.cellSize, cy * grid.cellSize)
+        return setDraftPlacement(current, snapPlacementToGrid(moved, grid))
       })
     },
-    [area.grid],
+    [gridFor],
   )
 
   /**
@@ -189,10 +201,19 @@ export function useLayoutEditor({
         if (!placement) return current
         const [x0, y0, x1, y1] = placementBounds(placement)
         const centred = placementAt(rotatePlacementBy(placement, 90), [(x0 + x1) / 2, (y0 + y1) / 2])
-        return setDraftPlacement(current, snapPlacementToGrid(centred, area.grid))
+        return setDraftPlacement(current, snapPlacementToGrid(centred, gridFor(entityId)))
       })
     },
-    [area.grid],
+    [gridFor],
+  )
+
+  const resetPlacement = useCallback(
+    (entityId: string) => {
+      const original = basePlacements[entityId]
+      if (!original) return
+      setDraft((current) => (current ? setDraftPlacement(current, original) : current))
+    },
+    [basePlacements],
   )
 
   const save = useCallback(async () => {
@@ -234,6 +255,8 @@ export function useLayoutEditor({
     cancelDrag,
     nudge,
     rotate,
+    resetPlacement,
+    gridFor,
     save,
     cancel,
   }

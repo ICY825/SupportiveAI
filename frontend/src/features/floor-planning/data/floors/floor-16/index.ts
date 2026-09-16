@@ -6,11 +6,12 @@ import type { FloorDataset } from '../../../domain/spatial'
  * `tools/floorplan_extract/extract_floor.py floor16` — do not edit by hand.
  */
 export default async function loadFloor16(): Promise<FloorDataset> {
-  const [layout, zones, workstations, objects, extraction] = await Promise.all([
+  const [layout, zones, workstations, objects, obstacles, extraction] = await Promise.all([
     import('./floor16.layout.json'),
     import('./floor16.zones.json'),
     import('./floor16.workstations.json'),
     import('./floor16.objects.json'),
+    import('./floor16.obstacles.json'),
     import('./floor16.extraction.json'),
   ])
   return buildDataset(
@@ -19,6 +20,7 @@ export default async function loadFloor16(): Promise<FloorDataset> {
       zones: zones.default,
       workstations: workstations.default,
       objects: objects.default,
+      obstacles: obstacles.default,
       extraction: extraction.default,
     },
     {

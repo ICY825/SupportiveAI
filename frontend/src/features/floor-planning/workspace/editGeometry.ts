@@ -6,7 +6,7 @@
  * so no coordinate conversion ends up inside JSX.
  */
 import { pointInPolygon } from '../domain/geometry'
-import { placementBounds, type SpatialPlacement } from '../domain/placement'
+import { placementBounds, type SpatialGrid, type SpatialPlacement } from '../domain/placement'
 import type { Point } from '../domain/spatial'
 import { gridPoints, type EditableArea } from './layoutDraft'
 import { project, projectedPoints, rectangle } from './scene'
@@ -18,10 +18,14 @@ export interface EditOverlayGeometry {
   boundary: string
 }
 
-export function buildEditOverlay(area: EditableArea): EditOverlayGeometry {
+/**
+ * `grid` is the lattice the selected object actually snaps to, so the dots the
+ * person sees are the positions it can land on — not a decorative overlay.
+ */
+export function buildEditOverlay(area: EditableArea, grid: SpatialGrid): EditOverlayGeometry {
   const inside = (point: Point) => pointInPolygon(point, area.boundary.polygon)
   return {
-    dots: gridPoints(area, inside).map((p) => project(p)),
+    dots: gridPoints(area, grid, inside).map((p) => project(p)),
     boundary: projectedPoints(area.boundary.polygon),
   }
 }

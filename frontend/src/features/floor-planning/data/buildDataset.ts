@@ -5,6 +5,7 @@ import type {
   FloorDataset,
   FloorLayout,
   FloorObject,
+  FloorObstacle,
   Room,
   Workstation,
   Zone,
@@ -16,6 +17,7 @@ export interface FloorFiles {
   zones: unknown
   workstations: unknown
   objects: unknown
+  obstacles?: unknown
   extraction: unknown
 }
 
@@ -47,6 +49,7 @@ export function buildDataset(files: FloorFiles, meta: FloorMeta): FloorDataset {
   const zones = obj(files.zones, 'zones')
   const ws = obj(files.workstations, 'workstations')
   const objects = obj(files.objects, 'objects')
+  const obstacles = files.obstacles ? obj(files.obstacles, 'obstacles') : null
 
   return {
     building: meta.building,
@@ -54,6 +57,7 @@ export function buildDataset(files: FloorFiles, meta: FloorMeta): FloorDataset {
     layout: layout as unknown as FloorLayout,
     zones: arr<Zone>(zones.zones, 'zones.zones'),
     rooms: arr<Room>(zones.rooms, 'zones.rooms'),
+    obstacles: obstacles ? arr<FloorObstacle>(obstacles.obstacles, 'obstacles.obstacles') : [],
     clusters: arr<DeskCluster>(ws.clusters, 'workstations.clusters'),
     workstations: arr<Workstation>(ws.workstations, 'workstations.workstations'),
     objects: arr<FloorObject>(objects.objects, 'objects.objects'),

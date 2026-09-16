@@ -5,6 +5,7 @@ import { FloorSearch } from '../components/FloorSearch'
 import { isTypingTarget } from '../components/keyboard'
 import { formatDate, initials } from '../components/desk-inspector/format'
 import { buildDeskIndex, DESK_STATUSES, type DeskRecord, type DeskStatus } from '../domain/desk'
+import { placementsEqual } from '../domain/placement'
 import type { BBox, EntityRef, FloorDataset, Point } from '../domain/spatial'
 import {
   DESK_STATUS,
@@ -15,7 +16,6 @@ import {
   SPATIAL_SCOPE_BREADCRUMB,
   SPATIAL_SCOPE_LABEL,
   SPATIAL_UNAVAILABLE,
-  SPATIAL_VIEW_LABEL,
 } from '../labels'
 import { ARROW_DIRECTION, DIRECTION_VECTOR, nearestInDirection } from '../map/deskNavigation'
 import { normalizeWheelZoom } from '../map/viewport'
@@ -198,6 +198,18 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
   }, [editor])
 
   const codeOf = useCallback((entityId: string) => desks.get(entityId)?.seat.code.split('-').at(-1) ?? entityId, [desks])
+  /** Rotating from the map keeps the keyboard on the map, where R and the arrows live. */
+  const rotateSelected = useCallback((entityId: string) => {
+    editorRef.current.rotate(entityId)
+    svgRef.current?.focus()
+  }, [])
+  const selectedId = desk?.workstation.id
+  const movedFromOriginal = (() => {
+    if (!selectedId) return false
+    const original = base[selectedId]
+    const current = editor.placements[selectedId]
+    return !!original && !!current && !placementsEqual(original, current)
+  })()
   const selectedValidation = desk ? editor.validation.get(desk.workstation.id) : undefined
   const invalidCount = useMemo(() => [...editor.validation.values()].filter((v) => !v.valid).length, [editor.validation])
 
@@ -523,7 +535,9 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
         </div>
         <div className="sw-heading-actions">
           <LayoutModeSwitch mode={editor.mode} onChange={changeMode} />
-          {editing ? (
+          {/* Nothing names the mode a third time: the top bar already says
+              which view this is and the switch above says which mode. */}
+          {editing && (
             <EditToolbar
               dirty={editor.dirty}
               valid={editor.valid}
@@ -533,8 +547,6 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
               onCancel={editor.cancel}
               onSave={() => { void editor.save() }}
             />
-          ) : (
-            <span className="fp-tag sw-preview-label">{SPATIAL_VIEW_LABEL}</span>
           )}
         </div>
       </header>
@@ -542,7 +554,7 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
         <div className="sw-map-top">
           <span><i /> Khu Mô hình &amp; Nền tảng AI</span>
           {editing
-            ? <span className="sw-edit-caption">{LAYOUT_EDIT.gridLabel(GRID_CELL_MM)}{desk ? ' · ' : ''}{desk ? <PlacementStatus validation={selectedValidation} codeOf={codeOf} className="is-inline" /> : null}</span>
+            ? <span className="sw-edit-caption"><span title={LAYOUT_EDIT.gridNote}>{LAYOUT_EDIT.gridLabel(GRID_CELL_MM)}</span>{desk ? ' · ' : ''}{desk ? <PlacementStatus validation={selectedValidation} codeOf={codeOf} className="is-inline" /> : null}</span>
             : <span className={desk ? 'sw-selected-caption' : undefined}>{desk ? `Đang chọn ${desk.seat.code}` : 'Góc nhìn cố định'}</span>}
         </div>
         <div className="sw-map-stage" ref={stageRef}>
@@ -557,7 +569,7 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
             zoom={zoom}
             pan={pan}
             ariaLabel={editing ? 'Chỉnh sửa bố trí · khu Mô hình & Nền tảng AI' : undefined}
-            ground={editing ? <EditGround area={area} /> : undefined}
+            ground={editing ? <EditGround area={area} grid={editor.gridFor(selectedId)} /> : undefined}
             overlay={editing ? (
               <EditAffordances
                 placements={editor.placements}
@@ -565,7 +577,7 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
                 validation={editor.validation}
                 deskHeight={scene.deskHeight}
                 dragging={editor.drag?.moved === true}
-                onRotate={editor.rotate}
+                onRotate={rotateSelected}
               />
             ) : undefined}
             onKeyDown={onKeyDown}
@@ -595,7 +607,9 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
           area={area}
           mmPerPt={dataset.layout.floor.mmPerPt}
           codeOf={codeOf}
-          onRotate={() => { editor.rotate(desk.workstation.id); svgRef.current?.focus() }}
+          moved={movedFromOriginal}
+          onRotate={() => rotateSelected(desk.workstation.id)}
+          onReset={() => { editor.resetPlacement(desk.workstation.id); svgRef.current?.focus() }}
         />
       )}
       {editing && !desk && (

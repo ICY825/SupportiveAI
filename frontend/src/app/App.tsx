@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FloorPlanningPage } from '../features/floor-planning/pages/FloorPlanningPage'
+import { LockerManagementPage } from '../features/lockers/pages/LockerManagementPage'
 import { AppNav } from './AppNav'
 
 const SETTINGS_KEY = 'vsf.map.settingsOpen'
@@ -12,9 +13,25 @@ function initialSettingsOpen(): boolean {
   }
 }
 
-/** Application shell. Only the floor planning module exists so far. */
+function getActiveModule(hash: string): string {
+  if (hash.startsWith('#/lockers')) {
+    return 'lockers'
+  }
+  return 'floor-planning'
+}
+
+/** Application shell. Handles navigation between Floor Planning and Locker Management. */
 export function App() {
   const [settingsOpen, setSettingsOpen] = useState(initialSettingsOpen)
+  const [activeModule, setActiveModule] = useState(() => getActiveModule(window.location.hash))
+
+  useEffect(() => {
+    const onHashChange = () => {
+      setActiveModule(getActiveModule(window.location.hash))
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
 
   const changeSettingsOpen = (open: boolean) => {
     setSettingsOpen(open)
@@ -27,9 +44,17 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <AppNav activeId="floor-planning" settingsOpen={settingsOpen} onToggleSettings={() => changeSettingsOpen(!settingsOpen)} />
+      <AppNav
+        activeId={activeModule}
+        settingsOpen={settingsOpen}
+        onToggleSettings={() => changeSettingsOpen(!settingsOpen)}
+      />
       <div className="app-content">
-        <FloorPlanningPage settingsOpen={settingsOpen} onSettingsOpenChange={changeSettingsOpen} />
+        {activeModule === 'lockers' ? (
+          <LockerManagementPage />
+        ) : (
+          <FloorPlanningPage settingsOpen={settingsOpen} onSettingsOpenChange={changeSettingsOpen} />
+        )}
       </div>
     </div>
   )

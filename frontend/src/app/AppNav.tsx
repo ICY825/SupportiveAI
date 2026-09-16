@@ -28,7 +28,12 @@ const MODULES: Module[] = [
     href: '#/floor-planning',
     icon: icon('M3 3.5h14v13H3z M3 10h5.5 M8.5 3.5V7 M12.5 10v6.5 M8.5 13h8.5'),
   },
-  { id: 'lockers', label: 'Tủ locker', icon: icon('M4 2.5h12v15H4z M10 2.5v15 M7.5 8.5v2 M12.5 8.5v2') },
+  {
+    id: 'lockers',
+    label: 'Tủ locker',
+    href: '#/lockers',
+    icon: icon('M4 2.5h12v15H4z M10 2.5v15 M7.5 8.5v2 M12.5 8.5v2'),
+  },
   {
     id: 'parcels',
     label: 'Chuyển phát nhanh',

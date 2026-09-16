@@ -111,6 +111,23 @@ def layer_key(name: str | None) -> str:
     return (name or "").split("$")[-1]
 
 
+def bezier_point(p0: Pt, p1: Pt, p2: Pt, p3: Pt, t: float) -> Pt:
+    omt = 1.0 - t
+    return (
+        omt**3 * p0[0] + 3 * omt**2 * t * p1[0] + 3 * omt * t**2 * p2[0] + t**3 * p3[0],
+        omt**3 * p0[1] + 3 * omt**2 * t * p1[1] + 3 * omt * t**2 * p2[1] + t**3 * p3[1],
+    )
+
+
+def line_intersect(p: Pt, d_p: Pt, q: Pt, d_q: Pt) -> Pt | None:
+    det = d_p[0] * (-d_q[1]) - d_p[1] * (-d_q[0])
+    if abs(det) < 1e-6:
+        return None
+    dx, dy = q[0] - p[0], q[1] - p[1]
+    s = (dx * (-d_q[1]) - dy * (-d_q[0])) / det
+    return (p[0] + s * d_p[0], p[1] + s * d_p[1])
+
+
 # ---------------------------------------------------------------- grid
 
 def grid_from(page, drawings, cfg, texts):
@@ -383,12 +400,38 @@ def extract(cfg, pdf_path: Path, out_dir: Path, public_dir: Path):
 
     rooms = []
     for r in cfg.ROOMS:
-        used_annots.add(r["annot"])
-        used_annots.add(r["labelAnnot"])
-        poly, gsrc = annot_geometry(r["annot"])
+        if r.get("annot"):
+            used_annots.add(r["annot"])
+        if r.get("labelAnnot"):
+            used_annots.add(r["labelAnnot"])
+
+        if r.get("wallBbox"):
+            x0, y0, x1, y1 = r["wallBbox"]
+            poly = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+            gsrc = "smallest closed shape enclosing the CAD label" if r.get("sourceText") else "highlight annotation rectangle"
+        elif r.get("annot"):
+            poly, gsrc = annot_geometry(r["annot"])
+        else:
+            continue
+
         cx = sum(p[0] for p in poly) / len(poly)
         cy = sum(p[1] for p in poly) / len(poly)
         containing = [z["id"] for z in zones if point_in_poly((cx, cy), [tuple(p) for p in z["polygon"]])]
+
+        if r.get("sourceText"):
+            src = {"kind": "pdf-text", "text": r["sourceText"], "geometry": gsrc}
+            notes = []
+        else:
+            src = {
+                "kind": "pdf-annotation",
+                "annotationId": r.get("annot"),
+                "labelAnnotationId": r.get("labelAnnot"),
+                "geometry": gsrc,
+            }
+            notes = [
+                "Source label names an occupant. Occupant NOT imported: assignment data is out of scope and must come from HR/Admin."
+            ]
+
         rooms.append({
             "id": r["id"],
             "floorId": fid,
@@ -400,10 +443,8 @@ def extract(cfg, pdf_path: Path, out_dir: Path, public_dir: Path):
             "bbox": bbox_of(poly),
             "areaM2": round(poly_area(poly) * mm_per_pt * mm_per_pt / 1e6, 1),
             "gridRef": grid_ref((cx, cy), columns, rows),
-            "source": {"kind": "pdf-annotation", "annotationId": r["annot"], "labelAnnotationId": r["labelAnnot"],
-                       "geometry": gsrc},
-            "notes": ["Source label names an occupant. Occupant NOT imported: assignment data is out of scope "
-                      "and must come from HR/Admin."],
+            "source": src,
+            "notes": notes,
         })
 
     ignored_annots = []
@@ -690,6 +731,152 @@ def extract(cfg, pdf_path: Path, out_dir: Path, public_dir: Path):
             })
     objects_out.sort(key=lambda o: o["id"])
 
+    # --- concrete columns & core walls from KT-Betong
+    betong_lines = []
+    for d in drawings:
+        if layer_key(d.get("layer")) == "KT-Betong":
+            for it in d["items"]:
+                if it[0] == "l":
+                    p1, p2 = it[1], it[2]
+                    betong_lines.append(((p1.x, p1.y), (p2.x, p2.y)))
+
+    n_betong = len(betong_lines)
+    b_parent = list(range(n_betong))
+
+    def b_find(i):
+        while b_parent[i] != i:
+            b_parent[i] = b_parent[b_parent[i]]
+            i = b_parent[i]
+        return i
+
+    b_tol = 5.0
+    b_grid = collections.defaultdict(list)
+    b_boxes = [(min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)) for (x1, y1), (x2, y2) in betong_lines]
+    for i, b in enumerate(b_boxes):
+        gx0, gx1 = int(b[0] // b_tol), int(b[2] // b_tol)
+        gy0, gy1 = int(b[1] // b_tol), int(b[3] // b_tol)
+        for gx in range(gx0 - 1, gx1 + 2):
+            for gy in range(gy0 - 1, gy1 + 2):
+                for j in b_grid[(gx, gy)]:
+                    bj = b_boxes[j]
+                    if not (b[2] < bj[0] - b_tol or b[0] > bj[2] + b_tol or b[3] < bj[1] - b_tol or b[1] > bj[3] + b_tol):
+                        ri, rj = b_find(i), b_find(j)
+                        if ri != rj:
+                            b_parent[ri] = rj
+        for gx in range(gx0, gx1 + 1):
+            for gy in range(gy0, gy1 + 1):
+                b_grid[(gx, gy)].append(i)
+
+    b_comps = collections.defaultdict(list)
+    for i in range(n_betong):
+        b_comps[b_find(i)].append(i)
+
+    columns_raw = []
+    for members in b_comps.values():
+        minx = min(b_boxes[i][0] for i in members)
+        miny = min(b_boxes[i][1] for i in members)
+        maxx = max(b_boxes[i][2] for i in members)
+        maxy = max(b_boxes[i][3] for i in members)
+        w, h = maxx - minx, maxy - miny
+        if w * h < 50.0:
+            continue
+        cx, cy = (minx + maxx) / 2, (miny + maxy) / 2
+        columns_raw.append({"bbox": [minx, miny, maxx, maxy], "c": (cx, cy), "w": w, "h": h})
+
+    columns_raw.sort(key=lambda col: reading_order(col["c"]))
+
+    columns_out = []
+    for idx, col in enumerate(columns_raw, 1):
+        minx, miny, maxx, maxy = col["bbox"]
+        cx, cy = col["c"]
+        cid = f"col-{lvl}-{idx:02d}"
+        gr = grid_ref((cx, cy), columns, rows)
+        poly = [[r2(minx), r2(miny)], [r2(maxx), r2(miny)], [r2(maxx), r2(maxy)], [r2(minx), r2(maxy)]]
+        columns_out.append({
+            "id": cid,
+            "floorId": fid,
+            "kind": "column",
+            "category": "solid",
+            "name": f"Cột bê tông ({gr})",
+            "verification": "EXTRACTED",
+            "polygon": poly,
+            "bbox": [r2(minx), r2(miny), r2(maxx), r2(maxy)],
+            "center": [r2(cx), r2(cy)],
+            "gridRef": gr,
+            "source": {
+                "kind": "pdf-vector",
+                "geometry": "clustered lines from KT-Betong CAD layer",
+            },
+            "notes": [],
+        })
+
+    # --- door swing clearance sectors from A-DOOR and KT-Cua
+    door_layers = {"A-DOOR", "KT-Cua"}
+    door_curves = []
+    for d in drawings:
+        layer = layer_key(d.get("layer"))
+        if layer in door_layers:
+            for it in d["items"]:
+                if it[0] == "c":
+                    p0 = (it[1].x, it[1].y)
+                    p1 = (it[2].x, it[2].y)
+                    p2 = (it[3].x, it[3].y)
+                    p3 = (it[4].x, it[4].y)
+                    if math.dist(p0, p3) > 5.0:
+                        door_curves.append((layer, p0, p1, p2, p3))
+
+    unique_door_arcs = []
+    for c in door_curves:
+        p0, p3 = c[1], c[4]
+        if not any((math.dist(p0, u[1]) < 0.5 and math.dist(p3, u[4]) < 0.5) or
+                   (math.dist(p0, u[4]) < 0.5 and math.dist(p3, u[1]) < 0.5) for u in unique_door_arcs):
+            unique_door_arcs.append(c)
+
+    unique_door_arcs.sort(key=lambda u: reading_order((min(u[1][0], u[4][0]), min(u[1][1], u[4][1]))))
+
+    doors_out = []
+    for idx, (d_layer, p0, p1, p2, p3) in enumerate(unique_door_arcs, 1):
+        v0 = (p1[0] - p0[0], p1[1] - p0[1])
+        n0 = (-v0[1], v0[0])
+        v3 = (p3[0] - p2[0], p3[1] - p2[1])
+        n3 = (-v3[1], v3[0])
+        C = line_intersect(p0, n0, p3, n3)
+        if not C:
+            c1, c2 = (p0[0], p3[1]), (p3[0], p0[1])
+            pm = bezier_point(p0, p1, p2, p3, 0.5)
+            C = c1 if abs(math.dist(c1, p0) - math.dist(c1, pm)) < abs(math.dist(c2, p0) - math.dist(c2, pm)) else c2
+
+        radius_pt = math.dist(C, p0)
+        radius_mm = round(radius_pt * mm_per_pt)
+        arc_pts = [bezier_point(p0, p1, p2, p3, s / 6.0) for s in range(7)]
+        poly_pts = [C] + arc_pts
+        poly = [[r2(x), r2(y)] for x, y in poly_pts]
+        did = f"door-{lvl}-{idx:02d}"
+        dclrid = f"door-clr-{lvl}-{idx:02d}"
+        gr = grid_ref(C, columns, rows)
+        doors_out.append({
+            "id": dclrid,
+            "doorId": did,
+            "floorId": fid,
+            "kind": "door-clearance",
+            "category": "clearance",
+            "name": f"Khoảng quét mở cửa {idx:02d} ({radius_mm}mm)",
+            "verification": "EXTRACTED",
+            "polygon": poly,
+            "bbox": bbox_of(poly_pts),
+            "hinge": [r2(C[0]), r2(C[1])],
+            "center": [r2(C[0]), r2(C[1])],
+            "radiusMm": radius_mm,
+            "gridRef": gr,
+            "source": {
+                "kind": "pdf-vector",
+                "geometry": f"door swing arc from {d_layer} CAD layer",
+            },
+            "notes": [],
+        })
+
+    obstacles_out = columns_out + doors_out
+
     # --- write
     out_dir.mkdir(parents=True, exist_ok=True)
     generated = {
@@ -714,6 +901,7 @@ def extract(cfg, pdf_path: Path, out_dir: Path, public_dir: Path):
     write(f"{stem}.zones.json", {**generated, "zones": zones, "rooms": rooms})
     write(f"{stem}.workstations.json", {**generated, "rule": rule, "clusters": clusters_out, "workstations": ws_out})
     write(f"{stem}.objects.json", {**generated, "objects": objects_out})
+    write(f"{stem}.obstacles.json", {**generated, "obstacles": obstacles_out})
 
     ws_by_zone = collections.Counter(w["zoneId"] or "(none)" for w in ws_out if w["classification"] == "WORKSTATION")
     report = {
@@ -746,6 +934,11 @@ def extract(cfg, pdf_path: Path, out_dir: Path, public_dir: Path):
         "workstationsByZone": dict(sorted(ws_by_zone.items())),
         "zoneLabelFigures": {z["id"]: z["sourceLabelFigure"] for z in zones},
         "objects": dict(obj_counter),
+        "obstacles": {
+            "columns": len(columns_out),
+            "doorClearances": len(doors_out),
+            "total": len(obstacles_out),
+        },
         "ignoredAnnotations": ignored_annots,
     }
     write(f"{stem}.extraction.json", report)
@@ -768,7 +961,7 @@ def main():
     out = Path(args.out) if args.out else REPO / f"frontend/src/features/floor-planning/data/floors/{fid}"
     report = extract(cfg, REPO / cfg.FLOOR["sourcePdf"], out, Path(args.public))
     summary = {k: report[k] for k in ("scale", "desks", "chairSymbolsDetected", "classificationCounts", "clusters",
-                                      "workstationsByZone", "zoneLabelFigures", "objects", "unmappedCadLayers")}
+                                      "workstationsByZone", "zoneLabelFigures", "objects", "obstacles", "unmappedCadLayers")}
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 

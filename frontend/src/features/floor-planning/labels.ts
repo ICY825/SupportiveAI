@@ -126,12 +126,11 @@ export const VIEW_MODES = [
  * than the whole floor. Wording says so plainly instead of calling itself a
  * preview: what it shows is real extracted geometry.
  */
-export const SPATIAL_VIEW_LABEL = 'Chế độ xem không gian'
 export const SPATIAL_SCOPE_LABEL = 'Phạm vi hiện tại'
 export const SPATIAL_SCOPE_BREADCRUMB = 'Khu vực làm việc'
 export const SPATIAL_OUT_OF_SCOPE = 'Vị trí ngoài phạm vi hiện tại'
 export const SPATIAL_OUT_OF_SCOPE_HINT = 'Chuyển sang bản vẽ để xem vị trí đang chọn.'
-export const SPATIAL_UNAVAILABLE = 'Chế độ xem không gian hiện chỉ có tại Tầng 16.'
+export const SPATIAL_UNAVAILABLE = 'Bố trí chỗ ngồi hiện chỉ có tại Tầng 16.'
 export const SCENE_ZONE_CAPTION = 'RANH GIỚI KHU AI'
 export const SCENE_CROP_CAPTION = 'Mặt bằng tiếp tục ngoài phạm vi hiện tại'
 
@@ -198,11 +197,13 @@ export const LAYOUT_EDIT = {
   placementStatus: 'Trạng thái bố trí',
   valid: 'Vị trí hợp lệ',
   rotate: 'Xoay 90°',
+  reset: 'Về vị trí gốc',
   save: 'Lưu bố trí',
   cancel: 'Hủy',
   saving: 'Đang lưu…',
   noSelection: 'Chọn một bàn trên mặt bằng để di chuyển hoặc xoay.',
   hint: 'Kéo bàn để di chuyển · Phím mũi tên để dịch từng ô · R để xoay · Esc để bỏ chọn',
+  gridNote: 'Lưới bám theo vị trí gốc của bàn đang chọn, nên luôn đưa được bàn về đúng chỗ cũ.',
   changed: (n: number) => `${n} bàn đã đổi`,
   noChange: 'Chưa có thay đổi',
   invalidSummary: (n: number) => `${n} bàn chưa hợp lệ`,

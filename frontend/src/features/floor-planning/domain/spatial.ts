@@ -115,7 +115,7 @@ export interface EntitySource {
   text?: string
 }
 
-interface SpatialEntity {
+export interface SpatialEntity {
   id: string
   floorId: string
   verification: VerificationState
@@ -123,6 +123,23 @@ interface SpatialEntity {
   gridRef: string
   source?: EntitySource
   notes: string[]
+}
+
+export type SolidObstacleKind = 'column' | 'wall'
+export type ClearanceObstacleKind = 'door-clearance'
+export type ObstacleKind = SolidObstacleKind | ClearanceObstacleKind
+export type ObstacleCategory = 'solid' | 'clearance'
+
+export interface FloorObstacle extends SpatialEntity {
+  kind: ObstacleKind
+  category: ObstacleCategory
+  polygon: Point[]
+  bbox: BBox
+  name?: string | null
+  doorId?: string
+  hinge?: Point
+  radiusMm?: number
+  center?: Point
 }
 
 export interface Zone extends SpatialEntity {
@@ -196,6 +213,11 @@ export interface ExtractionReport {
   clusters: number
   workstationsByZone: Record<string, number>
   ignoredAnnotations: { annotationId: string; type: string; opacity: number; bbox: BBox; reason: string }[]
+  obstacles?: {
+    columns: number
+    doorClearances: number
+    total: number
+  }
 }
 
 /** Everything the renderer needs for one floor. Pure data, no UI. */
@@ -204,6 +226,7 @@ export interface FloorDataset {
   layout: FloorLayout
   zones: Zone[]
   rooms: Room[]
+  obstacles: FloorObstacle[]
   clusters: DeskCluster[]
   workstations: Workstation[]
   objects: FloorObject[]

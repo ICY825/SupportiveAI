@@ -181,7 +181,15 @@
 .sw-edit-box { fill: none; stroke: var(--sw-edit); stroke-width: 0.5; stroke-linejoin: round; }
 .sw-edit-invalid polygon:last-child { fill: none; stroke: var(--sw-invalid); stroke-width: 0.55; stroke-linejoin: round; }
 
+/*
+ * The handle and the desk markers are pointer affordances with tabindex="-1":
+ * the keyboard path is the map's own focus ring plus R and the arrow keys. The
+ * UA ring on an SVG <g> follows the element geometry, which on a disc paints a
+ * solid black blob over the map, so it is replaced rather than merely hidden.
+ */
+.sw-scene [role='button']:focus { outline: none; }
 .sw-edit-handle { cursor: pointer; }
+.sw-edit-handle:focus-visible circle { stroke-width: 0.6; }
 .sw-edit-handle circle { fill: var(--paper); stroke: var(--sw-edit); stroke-width: 0.3; }
 .sw-edit-handle path { fill: none; stroke: var(--sw-edit); stroke-width: 0.42; stroke-linecap: round; }
 .sw-edit-handle .sw-edit-handle-tip { fill: var(--sw-edit); stroke: none; }
@@ -209,6 +217,7 @@
 .sw-edit-coords { font: var(--fp-t-micro) var(--mono); color: var(--sw-muted); }
 .sw-edit-status-label { margin-top: 2px; }
 .sw-edit-rotate { margin-top: 14px; }
+.sw-edit-reset { margin-top: 8px; }
 .sw-edit-rotate kbd { font: 10px var(--mono); border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px; color: var(--sw-muted); }
 .sw-edit-hint { margin: 12px 0 0; font-size: 10px; line-height: 1.7; color: var(--sw-muted); }
 .sw-edit-empty-body { margin: 8px 0 0; font-size: var(--fp-t-small); color: var(--fp-text-2); }
@@ -262,7 +271,6 @@
     overflow-y: auto;
   }
   .sw-context { border-left: 0; border-top: 1px solid var(--line); overflow-y: visible; }
-  .sw-preview-label { display: none; }
 }
 @media (max-width: 600px) {
   .sw-workspace { --sw-gutter: 12px; --sw-stage-min: 320px; }

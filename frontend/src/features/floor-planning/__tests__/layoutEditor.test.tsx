@@ -207,7 +207,8 @@ describe('edit mode', () => {
     expect(status().getAttribute('data-valid')).toBe('true')
     expect(status().textContent).toContain('Vị trí hợp lệ')
     expect(container.querySelector('.sw-edit-invalid')).toBeNull()
-    expect(saveButton()).toHaveProperty('disabled', false)
+    // back at the authoritative position, so there is nothing left to commit
+    expect(saveButton()).toHaveProperty('disabled', true)
   })
 
   it('refuses a placement pushed outside the editable area', () => {
@@ -243,8 +244,38 @@ describe('edit mode', () => {
     fireEvent.keyDown(scene(container), { key: 'ArrowRight' })
     const once = deskTop(container)
     expect(once).not.toBe(before)
+    // the snap lattice is anchored on this desk's own original corner, so the
+    // way back is always reachable — moving away must never be one-way
     fireEvent.keyDown(scene(container), { key: 'ArrowLeft' })
-    expect(deskTop(container)).not.toBe(once)
+    expect(deskTop(container)).toBe(before)
+    expect(saveButton()).toHaveProperty('disabled', true)
+  })
+
+  it('returns a desk to its original position from several cells away', () => {
+    const { container } = setup()
+    enterEdit()
+    const before = deskTop(container)
+    clickDesk(container)
+    for (const key of ['ArrowRight', 'ArrowRight', 'ArrowUp', 'ArrowLeft']) {
+      fireEvent.keyDown(scene(container), { key })
+    }
+    expect(deskTop(container)).not.toBe(before)
+
+    fireEvent.click(container.querySelector<HTMLButtonElement>('.sw-edit-reset')!)
+    expect(deskTop(container)).toBe(before)
+    expect(container.querySelector('.sw-edit-reset')).toBeNull()
+    expect(saveButton()).toHaveProperty('disabled', true)
+  })
+
+  it('returns a dragged desk to its original position, which a drag alone can reach', () => {
+    const { container } = setup()
+    enterEdit()
+    const before = deskTop(container)
+    dragBy(container, deskNode(container), 90, 20)
+    expect(deskTop(container)).not.toBe(before)
+
+    fireEvent.click(container.querySelector<HTMLButtonElement>('.sw-edit-reset')!)
+    expect(deskTop(container)).toBe(before)
   })
 
   it('abandons only the gesture on Escape while dragging, keeping the edit session', () => {

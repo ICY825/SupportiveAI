@@ -44,4 +44,15 @@ describe('app shell', () => {
     expect(screen.queryByText('Đối chiếu bản vẽ')).toBeNull()
     expect(toggle.getAttribute('aria-pressed')).toBe('false')
   }, 30000)
+
+  it('navigates to lockers module when hash is #/lockers', async () => {
+    localStorage.setItem('vsf.nav.collapsed', '0')
+    window.location.hash = '#/lockers'
+    render(<App />)
+
+    expect(await screen.findByText('Quản lý tủ locker')).toBeTruthy()
+    expect(screen.getByText(/18 ngăn tủ/)).toBeTruthy()
+    const activeNavItem = screen.getByRole('link', { name: /Tủ locker/ })
+    expect(activeNavItem.classList.contains('is-active')).toBe(true)
+  })
 })

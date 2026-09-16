@@ -54,20 +54,40 @@ export interface LayoutDraft {
  * back through the entity's own `rotationDeg`: a desk drawn turned 90° has a
  * 5.6×11.2 pt bbox but is still a 1200×600 desk.
  *
- * The centre comes from the bbox rather than `Workstation.center`, which is
- * rounded in the dataset: placements must round-trip to the original bounds.
+ * The centre comes from the bbox, not from `Workstation.center` (rounded in
+ * the dataset), and is derived corner-plus-half-footprint — the same arithmetic
+ * snapPlacementToGrid uses. Any other spelling of the midpoint differs by an
+ * ULP, and then a desk nudged away and back would never compare equal to where
+ * it started.
  */
 export function placementFromWorkstation(ws: Workstation): SpatialPlacement {
   const [x0, y0, x1, y1] = ws.bbox
   const turned = normalizeRotation(ws.rotationDeg) % 180 !== 0
   return {
     entityId: ws.id,
-    x: (x0 + x1) / 2,
-    y: (y0 + y1) / 2,
+    x: x0 + (x1 - x0) / 2,
+    y: y0 + (y1 - y0) / 2,
     width: turned ? y1 - y0 : x1 - x0,
     depth: turned ? x1 - x0 : y1 - y0,
     rotation: normalizeRotation(ws.rotationDeg),
   }
+}
+
+/**
+ * The lattice ONE entity snaps to: the shared cell size, anchored on that
+ * entity's own authoritative corner.
+ *
+ * A single floor-wide lattice cannot work on this data. The extracted desks
+ * are not on a module — nominally identical desks come out 595–609 mm deep and
+ * sit at irregular spacings — so a global origin puts almost every desk off
+ * lattice, and the position it started in becomes unreachable: move it once and
+ * it can never be put back. Anchoring per entity makes "move n cells and back"
+ * exact, which is the behaviour the offset has to have.
+ */
+export const gridForEntity = (grid: SpatialGrid, base: SpatialPlacement | undefined): SpatialGrid => {
+  if (!base) return grid
+  const [x0, y0] = placementBounds(base)
+  return { origin: [x0, y0], cellSize: grid.cellSize }
 }
 
 export function basePlacements(workstations: readonly Workstation[]): Record<string, SpatialPlacement> {
@@ -174,8 +194,23 @@ function gridOrigin(scene: SpikeScene): Point {
 }
 
 /** Grid intersections inside the boundary, in floor coordinates. */
-export function gridPoints(area: EditableArea, contains: (point: Point) => boolean): Point[] {
-  const { cellSize, origin } = area.grid
+export function gridPoints(
+  area: EditableArea,
+  contains: (point: Point) => boolean,
+): Point[]
+export function gridPoints(
+  area: EditableArea,
+  grid: SpatialGrid,
+  contains: (point: Point) => boolean,
+): Point[]
+export function gridPoints(
+  area: EditableArea,
+  gridOrContains: SpatialGrid | ((point: Point) => boolean),
+  maybeContains?: (point: Point) => boolean,
+): Point[] {
+  const grid = typeof gridOrContains === 'function' ? area.grid : gridOrContains
+  const contains = typeof gridOrContains === 'function' ? gridOrContains : (maybeContains ?? (() => true))
+  const { cellSize, origin } = grid
   if (!(cellSize > 0)) return []
   const [bx0, by0, bx1, by1] = area.boundary.bbox
   const startX = origin[0] + Math.ceil((bx0 - origin[0]) / cellSize) * cellSize

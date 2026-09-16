@@ -108,12 +108,20 @@ ROOMS = [
         "labelAnnot": "6018f180-d5bf-4a60-a51e-bac2d346227f",
         "id": "room-16-cbld-01",
         "name": "Phòng CBLĐ",
+        "wallBbox": [117.07, 141.55, 171.65, 184.39],
     },
     {
         "annot": "36453438-913e-41c0-8122-ffcc637e52c1",
         "labelAnnot": "dfaa3272-e795-4440-be1b-b6d62da83eb3",
         "id": "room-16-cbld-02",
         "name": "Phòng CBLĐ",
+        "wallBbox": [339.41, 415.65, 381.17, 469.79],
+    },
+    {
+        "id": "room-16-acoustic-01",
+        "name": "Phòng cách âm",
+        "wallBbox": [117.07, 184.39, 210.10, 240.98],
+        "sourceText": "PHÒNG CÁCH ÂM TƯỜNG TRẦN SÀN",
     },
 ]
 

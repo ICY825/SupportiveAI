@@ -1,5 +1,5 @@
 import { memo, useId, useMemo } from 'react'
-import type { PlacementValidation, SpatialPlacement } from '../domain/placement'
+import type { PlacementValidation, SpatialGrid, SpatialPlacement } from '../domain/placement'
 import { LAYOUT_EDIT } from '../labels'
 import { buildEditOverlay, placementOutline, rotateHandleAnchor } from './editGeometry'
 import type { EditableArea } from './layoutDraft'
@@ -13,8 +13,8 @@ import type { EditableArea } from './layoutDraft'
  */
 
 /** Subtle planning grid and the outline of the area layout may use. */
-export const EditGround = memo(function EditGround({ area }: { area: EditableArea }) {
-  const overlay = useMemo(() => buildEditOverlay(area), [area])
+export const EditGround = memo(function EditGround({ area, grid }: { area: EditableArea; grid: SpatialGrid }) {
+  const overlay = useMemo(() => buildEditOverlay(area, grid), [area, grid])
   return (
     <g className="sw-edit-ground" aria-hidden="true" pointerEvents="none">
       <polygon className="sw-edit-boundary" points={overlay.boundary} />
