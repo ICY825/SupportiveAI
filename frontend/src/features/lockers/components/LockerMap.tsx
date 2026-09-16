@@ -55,19 +55,22 @@ export function LockerMap({ lockers, selectedLocker, onSelectLocker }: LockerMap
   }))
 
   // Fit viewport to building plate (matching FloorPlanningPage default size)
+  const fitToSize = useCallback((width: number, height: number) => {
+    if (width <= 0 || height <= 0) return
+    const availW = Math.max(1, width - FIT_PADDING * 2)
+    const availH = Math.max(1, height - FIT_PADDING * 2)
+    const scale = Math.min(availW / PLATE_WIDTH, availH / PLATE_HEIGHT)
+    const x = (width - PLATE_WIDTH * scale) / 2 - PLATE_BBOX[0] * scale
+    const y = (height - PLATE_HEIGHT * scale) / 2 - PLATE_BBOX[1] * scale
+    setViewport({ scale, x, y })
+  }, [])
+
   const fitToContainer = useCallback(() => {
     const el = containerRef.current
     if (!el) return
     const rect = el.getBoundingClientRect()
-    if (rect.width <= 0 || rect.height <= 0) return
-
-    const availW = Math.max(1, rect.width - FIT_PADDING * 2)
-    const availH = Math.max(1, rect.height - FIT_PADDING * 2)
-    const scale = Math.min(availW / PLATE_WIDTH, availH / PLATE_HEIGHT)
-    const x = (rect.width - PLATE_WIDTH * scale) / 2 - PLATE_BBOX[0] * scale
-    const y = (rect.height - PLATE_HEIGHT * scale) / 2 - PLATE_BBOX[1] * scale
-    setViewport({ scale, x, y })
-  }, [])
+    fitToSize(rect.width, rect.height)
+  }, [fitToSize])
 
   // Reset to full sheet (Toàn tờ)
   const resetToSheet = useCallback(() => {
@@ -86,22 +89,44 @@ export function LockerMap({ lockers, selectedLocker, onSelectLocker }: LockerMap
 
   useEffect(() => {
     fitToContainer()
+
+    const el = containerRef.current
+    let ro: ResizeObserver | null = null
+    if (el && typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(([entry]) => {
+        if (entry) {
+          fitToSize(entry.contentRect.width, entry.contentRect.height)
+        } else {
+          fitToContainer()
+        }
+      })
+      ro.observe(el)
+    }
+
     const onResize = () => fitToContainer()
     window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [fitToContainer])
 
-  // Center on a locker
-  const focusOnLocker = useCallback((locker: LockerItem) => {
-    const el = containerRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    const targetScale = 1.6
-    const [cx, cy] = locker.center
-    const x = rect.width / 2 - cx * targetScale
-    const y = rect.height / 2 - cy * targetScale
-    setViewport({ scale: targetScale, x, y })
-  }, [])
+    // Also observe data-nav-collapsed attribute changes on documentElement
+    let mo: MutationObserver | null = null
+    if (typeof MutationObserver !== 'undefined') {
+      mo = new MutationObserver(() => {
+        requestAnimationFrame(() => {
+          fitToContainer()
+        })
+      })
+      mo.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-nav-collapsed'],
+      })
+    }
+
+    return () => {
+      ro?.disconnect()
+      mo?.disconnect()
+      window.removeEventListener('resize', onResize)
+    }
+  }, [fitToContainer, fitToSize])
+
 
   // Zoom by factor
   const handleZoom = (factor: number) => {
@@ -270,10 +295,7 @@ export function LockerMap({ lockers, selectedLocker, onSelectLocker }: LockerMap
                 locker={locker}
                 isSelected={selectedLocker?.id === locker.id}
                 isHovered={hoveredLocker?.id === locker.id}
-                onSelect={(loc) => {
-                  onSelectLocker(loc)
-                  focusOnLocker(loc)
-                }}
+                onSelect={onSelectLocker}
                 onHover={setHoveredLocker}
               />
             ))}
