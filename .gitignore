@@ -28,6 +28,7 @@ minio_data/
 .idea/
 *.swp
 .DS_Store
+docs/references/
 
 # Node / Frontend
 node_modules/

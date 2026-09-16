@@ -1,14 +1,26 @@
-# Wireframe — Trung tâm Hành chính Vinsmart Future (V1, tầng 19)
+# Wireframe — Trung tâm Hành chính Vinsmart Future (Thiết kế dùng chung)
 
-Wireframe màn hình quản trị cho 4 đề bài của pilot, xuất từ dự án Claude Design
-[Vinsmart Admin Wireframes](https://claude.ai/design/p/3b7f6062-3d5e-4b47-90cf-f780fba3ad1a?file=Vinsmart+Admin+Wireframes.dc.html).
+Wireframe màn hình quản trị tích hợp 4 đề bài của pilot, chia sẻ ngôn ngữ thiết kế chung giữa các nhóm phát triển.
+
+## Phân định vai trò & Phân hệ
+- **Nhóm chúng tôi (Layout / Mặt bằng văn phòng):** Phụ trách triển khai phân hệ **Mặt bằng văn phòng** (hiện tại: Tầng 16 Technopark Tower với 2 chế độ *Bố trí chỗ ngồi* và *Xác minh mặt bằng*).
+- **Các nhóm đồng đội (3 phân hệ khóa / Sắp triển khai):** Đảm nhiệm phát triển 3 đề bài còn lại:
+  1. **Đề bài 2:** Quản lý tủ locker (`#1c`)
+  2. **Đề bài 3:** Chuyển phát nhanh / thư đến (`#1d`)
+  3. **Đề bài 4:** Quản lý công văn đến/đi (`#1e`)
+- **Wireframe này là thiết kế dùng chung (Shared Design):** Cung cấp layout shell, thanh điều hướng `AppNav`, thanh công cụ `topbar`, token màu sắc và panel ngữ cảnh chuẩn để các nhóm đồng đội dễ dàng tích hợp và đồng bộ UX.
+
+---
 
 ## Tệp
 
 | Tệp | Nội dung |
 |-----|----------|
-| `Vinsmart Admin Wireframes.dc.html` | Canvas chứa toàn bộ artboard |
-| `support.js` | Runtime của Claude Design (file sinh tự động — không sửa tay) |
+| `Vinsmart Admin Wireframes.dc.html` | Canvas HTML chứa toàn bộ artboard đã căn chỉnh theo phiên bản hiện tại |
+| `logo.webp` | Logo thương hiệu VinSmart Future chuẩn (định dạng WebP tối ưu) |
+| `support.js` | Runtime của Claude Design |
+
+---
 
 ## Cách xem
 
@@ -20,25 +32,39 @@ python3 -m http.server 8000
 # mở http://localhost:8000/Vinsmart%20Admin%20Wireframes.dc.html
 ```
 
-Cần kết nối mạng: `support.js` tải React/Babel từ unpkg và font Inter/Caveat từ Google Fonts.
-Có thể nhảy thẳng tới một artboard bằng anchor, ví dụ `#1b`.
+- Có thể nhảy thẳng tới một artboard bằng anchor trên URL, ví dụ `#1b`.
+- Trong wireframe, menu bên trái hỗ trợ click trực tiếp để chuyển đổi qua lại giữa các phân hệ.
+
+---
 
 ## Danh sách artboard
 
-| ID | Màn hình | Tương ứng tài liệu kiến trúc |
-|----|----------|------------------------------|
-| 0a | Nền tảng thị giác — màu, chữ, trạng thái | — |
-| 1a | Shell + Dashboard tổng quan 4 đề bài, KPI | 5.6. Báo cáo & dashboard |
-| 1b | Đề bài 1 — Quy hoạch văn phòng, sơ đồ tầng 19 + đề xuất AI | 4.1. Đề 1 — Quy hoạch văn phòng |
-| 1c | Đề bài 2 — Quản lý tủ locker (3 khu tủ L1–L3) | 4.2. Đề 2 — Quản lý tủ locker |
-| 1d | Đề bài 3 — Chuyển phát nhanh / thư đến, nhắc tự động | 4.3. Đề 3 — Chuyển phát nhanh |
-| 1e | Đề bài 4 — Công văn đến/đi, AI bóc tách file scan | 4.4. Đề 4 — Quản lý công văn đến/đi |
+| ID | Màn hình | Vai trò & Trạng thái | Nội dung chính |
+|----|----------|----------------------|----------------|
+| **0a** | Nền tảng thị giác & Quy chuẩn chung | Dùng chung cho cả 4 nhóm | Bảng màu thương hiệu VSF, 5 trạng thái vận hành tài nguyên, cấu trúc thanh điều hướng AppNav |
+| **1a** | Shell chung + Dashboard tổng quan | Dùng chung điều hành | Tổng quan chỉ số 4 đề bài, hàng đợi tác vụ liên thông, hiệu quả pilot |
+| **1b** | Đề bài 1 — Mặt bằng văn phòng | **Scope nhóm Layout (Đang sử dụng)** | Sơ đồ Tầng 16 Technopark, chế độ *Bố trí chỗ ngồi* (19 bàn AI, 3 cụm bàn, Inspector chi tiết) và chế độ *Xác minh mặt bằng* (CAD) |
+| **1c** | Đề bài 2 — Quản lý tủ locker | **Đồng đội (Sắp triển khai)** | Sơ đồ 3 khu tủ L1–L3, chế độ Sơ đồ / Danh sách, quy tắc thu hồi và cấp phát tự động |
+| **1d** | Đề bài 3 — Chuyển phát nhanh | **Đồng đội (Sắp triển khai)** | Bảng tiếp nhận thư/vận đơn, quy tắc thông báo tự động (email/Teams), AI nhận diện tem bưu cục |
+| **1e** | Đề bài 4 — Công văn đến/đi | **Đồng đội (Sắp triển khai)** | Danh sách công văn theo hạn, PDF viewer với vùng bôi đỏ, panel AI bóc tách OCR (Human-in-the-loop) |
 
-## Quy ước thị giác
+---
 
-- Màu nhấn duy nhất: đỏ VSF `#D2181F` (đỏ đậm `#B3161D` cho chữ/link).
-- Màu phụ cho cảnh báo: vàng đồng `#8A6F20`.
-- Nền `#F6F4F1`, thẻ `#FFFFFF`, sidebar than `#1C1B1A`.
-- Font Inter (600 tiêu đề, 400 nội dung); ghi chú viết tay dùng Caveat.
-- Trạng thái: Quá hạn (đỏ đặc) · Chưa xử lý (viền đỏ) · Cần kiểm tra (vàng đồng) · Hoàn tất (xám).
-- Panel AI luôn nằm bên phải, đánh dấu bằng badge `AI`; người dùng xác nhận trước khi hệ thống ghi dữ liệu.
+## Quy chuẩn giao diện dùng chung cho các nhóm đồng đội
+
+1. **Thanh điều hướng AppNav (200px):**
+   - Phía trên: Logo VSF chuẩn (`logo.webp`).
+   - Nhóm **"Đang sử dụng"**: Mặt bằng văn phòng (đang kết nối route thực tế `#/floor-planning`).
+   - Nhóm **"Sắp triển khai"**: Tủ locker, Chuyển phát nhanh, Công văn đến/đi (kèm tag *Sắp tới / Khóa*).
+   - Phía dưới: Nút *Cài đặt hệ thống* và nút *Thu gọn sidebar*.
+2. **Thanh Topbar tiêu chuẩn:**
+   - Tiêu đề phân hệ · Bộ lọc phạm vi/tầng · Bộ chuyển đổi chế độ xem (`view-toggle`) · Ô tìm kiếm nhanh với phím tắt `Ctrl K` · Nút Trợ giúp `?`.
+3. **Bảng màu trạng thái tài nguyên (Resource Operational States):**
+   - **Đang sử dụng:** Xanh lam than `#3D617F` (nền `#E8EFF5`).
+   - **Còn trống:** Xanh lục `#297A60` (nền `#EEF8F3`).
+   - **Đã đặt trước / Cần kiểm tra:** Vàng đồng `#9A701E` (nền `#FBF2DD`).
+   - **Xung đột / Quá hạn:** Đỏ VSF `#B6443D` / `#D2181F` (nền `#FBECEA`).
+   - **Tạm ngưng / Hỏng:** Xám `#6D7882` (nền `#EDF0F2`).
+4. **Panel AI & Ngữ cảnh bên phải (280–300px):**
+   - Luôn hiển thị thông tin chi tiết đối tượng đang chọn (Bàn / Tủ / Thư / Công văn).
+   - Đề xuất AI luôn đi kèm độ tin cậy và nút phê duyệt trước khi lưu vào hệ thống (*Human-in-the-loop*).

@@ -345,7 +345,7 @@ OCR tiếng Việt với công văn hành chính: dấu thanh, dấu đỏ chồ
 |---|---|---|
 | Backend | Python + FastAPI | 🚧 |
 | Database | PostgreSQL | 🚧 |
-| Frontend | ❓ | Chưa chọn |
+| Frontend | React 19 + TypeScript + Vite | ✅ Đã chọn (ADR 0001: Pure SVG map rendering, no heavy map library) |
 | Lưu trữ file | Filesystem + backup | Đủ cho pilot; bọc sẵn lớp abstraction để đổi sang S3/MinIO sau |
 | Scheduler | APScheduler | Đủ nếu tải chỉ vài chục job/ngày |
 | Queue | ⏭ | Chỉ thêm khi có bằng chứng cần |
@@ -378,7 +378,7 @@ backend/
 │   └── scheduler/
 └── tests/
 
-frontend/                       # ❓ chưa chọn công nghệ
+frontend/                       # React 19 + TypeScript + Vite (ADR 0001)
 
 docs/
 ├── architecture/
@@ -494,8 +494,8 @@ Mọi KPI trong đề bài đều là **so sánh** ("giảm bao nhiêu", "nhanh 
 |---|---|
 | C1 | **Phân quyền công văn** cần theo phòng ban và độ mật, tức là row-level chứ không chỉ role-level. Mô hình cụ thể ra sao? |
 | C2 | Ngưỡng tin cậy để AI tự đề xuất vs bắt nhập tay — hiệu chỉnh từ ground truth ở tuần nào? |
-| C3 | Công nghệ frontend. |
-| C4 | Quy ước màu và ký hiệu trên sơ đồ chỗ ngồi (Đề 1). |
+| C3 | ~~Công nghệ frontend.~~ → ✅ **Đã chốt:** React 19 + TypeScript + Vite + Pure SVG/CSS (ADR 0001). |
+| C4 | ~~Quy ước màu và ký hiệu trên sơ đồ chỗ ngồi (Đề 1).~~ → ✅ **Đã chốt:** 5 mã màu trạng thái vận hành tại `docs/wireframe` và `tokens.css`. |
 | C5 | Chính sách lưu trữ và xoá file scan công văn. |
 | C6 | Kế hoạch UAT: ai test, test cái gì, tiêu chí nghiệm thu. |
 
