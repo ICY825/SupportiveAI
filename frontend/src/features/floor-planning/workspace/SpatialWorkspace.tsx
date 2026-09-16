@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, 
 import { createPortal } from 'react-dom'
 import { createDemoAllocation } from '../allocation/demoAllocation'
 import { FloorSearch } from '../components/FloorSearch'
-import { isTypingTarget } from '../components/keyboard'
+import { isMac, isTypingTarget } from '../components/keyboard'
 import { formatDate, initials } from '../components/desk-inspector/format'
 import { buildDeskIndex, DESK_STATUSES, type DeskRecord, type DeskStatus } from '../domain/desk'
 import { placementsEqual } from '../domain/placement'
@@ -43,6 +43,9 @@ const MAX_ZOOM = 2.5
 const PAN_LIMIT = 0.3
 /** Pointer travel before a press becomes a drag rather than a click. */
 const DRAG_THRESHOLD_PX = 4
+/** Spelled for this platform, for the toolbar tooltips. */
+const UNDO_HINT = isMac() ? '⌘Z' : 'Ctrl+Z'
+const REDO_HINT = isMac() ? '⌘⇧Z' : 'Ctrl+Y'
 
 function Status({ desk }: { desk: DeskRecord }) {
   return <span className="fp-chip sw-status" data-status={desk.status}><svg viewBox="-2 -2 4 4" aria-hidden="true"><SeatSymbol status={desk.status} /></svg>{DESK_STATUS[desk.status].label}</span>
@@ -202,6 +205,14 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     editorRef.current.rotate(entityId)
     svgRef.current?.focus()
   }, [])
+  const undoStep = useCallback(() => {
+    editorRef.current.undo()
+    svgRef.current?.focus()
+  }, [])
+  const redoStep = useCallback(() => {
+    editorRef.current.redo()
+    svgRef.current?.focus()
+  }, [])
   const selectedId = desk?.workstation.id
   const movedFromOriginal = (() => {
     if (!selectedId) return false
@@ -345,7 +356,17 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
    */
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented || isTypingTarget(e.target)) return
+      if (e.defaultPrevented || isTypingTarget(e.target)) return
+      // Undo is bound at the window because the inspector and the toolbar can
+      // hold focus; the map's own handler only sees keys while the map is focused.
+      if (editing && (e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z' || e.key === 'y' || e.key === 'Y')) {
+        e.preventDefault()
+        const redoing = e.key === 'y' || e.key === 'Y' || e.shiftKey
+        if (redoing) editorRef.current.redo()
+        else editorRef.current.undo()
+        return
+      }
+      if (e.key !== 'Escape') return
       if (drag.current?.kind === 'object') {
         releaseDrag(true)
         return
@@ -354,7 +375,7 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onSelect, releaseDrag])
+  }, [onSelect, releaseDrag, editing])
 
   // Window blur cleans up any active drag to prevent stuck pointer lockouts
   useEffect(() => {
@@ -540,6 +561,12 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
               saving={editor.saving}
               changedCount={editor.changedCount}
               invalidCount={invalidCount}
+              canUndo={editor.canUndo}
+              canRedo={editor.canRedo}
+              undoHint={UNDO_HINT}
+              redoHint={REDO_HINT}
+              onUndo={undoStep}
+              onRedo={redoStep}
               /* Hủy throws away a session's work, so it asks first when there
                  is work to lose — the same confirmation the page uses. */
               onCancel={() => changeMode('view')}
@@ -578,6 +605,7 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
                 deskHeight={scene.deskHeight}
                 dragging={editor.drag?.moved === true}
                 onRotate={rotateSelected}
+                obstacles={area.obstacles}
               />
             ) : undefined}
             onKeyDown={onKeyDown}

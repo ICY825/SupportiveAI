@@ -9,7 +9,7 @@
  * committed placements are only ever replaced wholesale at a Save. Geometry,
  * snapping and validation live in ../domain; this file only sequences them.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   placementAt,
   placementBounds,
@@ -40,6 +40,13 @@ export type WorkspaceMode = 'view' | 'edit'
 /** Larger keyboard step, for crossing a cluster without holding the key. */
 export const NUDGE_COARSE_CELLS = 4
 
+/**
+ * Steps kept per edit session. A step is a completed gesture — a whole drag,
+ * one nudge, one rotation, one reset — never an intermediate drag frame, so
+ * undoing once undoes something the person would recognise as an action.
+ */
+export const HISTORY_LIMIT = 50
+
 export interface DragState {
   entityId: string
   /** placement when the drag started, so Escape restores it exactly */
@@ -57,6 +64,8 @@ export interface LayoutEditor {
   valid: boolean
   saving: boolean
   changedCount: number
+  canUndo: boolean
+  canRedo: boolean
   drag: DragState | null
   enterEdit: () => void
   /** true when it exited; false when the caller must confirm first */
@@ -68,6 +77,8 @@ export interface LayoutEditor {
   cancelDrag: () => void
   nudge: (entityId: string, cells: Point) => void
   rotate: (entityId: string) => void
+  undo: () => void
+  redo: () => void
   /** put one entity back exactly where the authoritative layout has it */
   resetPlacement: (entityId: string) => void
   /** the lattice this entity snaps to; the renderer draws the selected one */
@@ -91,21 +102,53 @@ export function useLayoutEditor({
     mergeStoredPlacements(basePlacements, store.read(floorId)),
   )
   const [mode, setMode] = useState<WorkspaceMode>('view')
-  const [draft, setDraft] = useState<LayoutDraft | null>(null)
+  const [draft, setDraftState] = useState<LayoutDraft | null>(null)
+  const [past, setPast] = useState<LayoutDraft[]>([])
+  const [future, setFuture] = useState<LayoutDraft[]>([])
   const [drag, setDrag] = useState<DragState | null>(null)
   const [saving, setSaving] = useState(false)
   const dragRef = useRef<DragState | null>(null)
-  /** Read by pointer handlers, which run after the commit that set it. */
-  const draftRef = useRef<LayoutDraft | null>(draft)
-  useEffect(() => {
-    draftRef.current = draft
-  }, [draft])
+
+  /**
+   * The draft is mirrored in a ref and written synchronously, because pointer
+   * and key handlers have to read the value the previous event produced — a
+   * ref synced in an effect lags a frame behind a drag.
+   */
+  const draftRef = useRef<LayoutDraft | null>(null)
+  const setDraft = useCallback((next: LayoutDraft | null) => {
+    draftRef.current = next
+    setDraftState(next)
+  }, [])
+
+  const resetHistory = useCallback(() => {
+    setPast([])
+    setFuture([])
+  }, [])
+
+  /** Records the state a gesture started from, and forks the redo branch. */
+  const pushHistory = useCallback((before: LayoutDraft) => {
+    setPast((p) => (p.length >= HISTORY_LIMIT ? [...p.slice(p.length - HISTORY_LIMIT + 1), before] : [...p, before]))
+    setFuture([])
+  }, [])
+
+  /** One undoable change. A no-op change records nothing. */
+  const applyStep = useCallback(
+    (next: (current: LayoutDraft) => LayoutDraft) => {
+      const current = draftRef.current
+      if (!current) return
+      const updated = next(current)
+      if (updated === current) return
+      pushHistory(current)
+      setDraft(updated)
+    },
+    [pushHistory, setDraft],
+  )
 
   const placements = mode === 'edit' && draft ? draft.placements : committed
 
   const validation = useMemo(
-    () => validateDraft({ placements }, area.boundary, area.tolerance),
-    [placements, area.boundary, area.tolerance],
+    () => validateDraft({ placements }, area),
+    [placements, area],
   )
   const dirty = useMemo(
     () => (mode === 'edit' && draft ? isDraftDirty(draft, committed) : false),
@@ -122,14 +165,20 @@ export function useLayoutEditor({
     [area.grid, basePlacements],
   )
 
-  const update = useCallback((placement: SpatialPlacement) => {
-    setDraft((current) => (current ? setDraftPlacement(current, placement) : current))
-  }, [])
+  /** Live preview during a drag; the whole drag is one history step, not each frame. */
+  const update = useCallback(
+    (placement: SpatialPlacement) => {
+      const current = draftRef.current
+      if (current) setDraft(setDraftPlacement(current, placement))
+    },
+    [setDraft],
+  )
 
   const enterEdit = useCallback(() => {
-    setDraft((current) => current ?? createDraft(committed))
+    if (!draftRef.current) setDraft(createDraft(committed))
+    resetHistory()
     setMode('edit')
-  }, [committed])
+  }, [committed, setDraft, resetHistory])
 
   const clearDrag = useCallback(() => {
     dragRef.current = null
@@ -140,9 +189,10 @@ export function useLayoutEditor({
     if (dirty) return false
     clearDrag()
     setDraft(null)
+    resetHistory()
     setMode('view')
     return true
-  }, [dirty, clearDrag])
+  }, [dirty, clearDrag, setDraft, resetHistory])
 
   const startDrag = useCallback((entityId: string) => {
     const from = draftRef.current?.placements[entityId]
@@ -165,7 +215,20 @@ export function useLayoutEditor({
     [gridFor, update],
   )
 
-  const endDrag = useCallback(() => clearDrag(), [clearDrag])
+  /**
+   * A drag becomes one history step here, reconstructed from where the dragged
+   * object started rather than from a snapshot taken on pointerdown — a press
+   * that never moved leaves no step at all.
+   */
+  const endDrag = useCallback(() => {
+    const state = dragRef.current
+    const current = draftRef.current
+    if (state?.moved && current) {
+      const before = setDraftPlacement(current, state.from)
+      if (before !== current) pushHistory(before)
+    }
+    clearDrag()
+  }, [clearDrag, pushHistory])
 
   const cancelDrag = useCallback(() => {
     const state = dragRef.current
@@ -176,8 +239,7 @@ export function useLayoutEditor({
 
   const nudge = useCallback(
     (entityId: string, [cx, cy]: Point) => {
-      setDraft((current) => {
-        if (!current) return current
+      applyStep((current) => {
         const placement = current.placements[entityId]
         if (!placement) return current
         const grid = gridFor(entityId)
@@ -185,7 +247,7 @@ export function useLayoutEditor({
         return setDraftPlacement(current, snapPlacementToGrid(moved, grid))
       })
     },
-    [gridFor],
+    [gridFor, applyStep],
   )
 
   /**
@@ -195,8 +257,7 @@ export function useLayoutEditor({
    */
   const rotate = useCallback(
     (entityId: string) => {
-      setDraft((current) => {
-        if (!current) return current
+      applyStep((current) => {
         const placement = current.placements[entityId]
         if (!placement) return current
         const [x0, y0, x1, y1] = placementBounds(placement)
@@ -204,17 +265,40 @@ export function useLayoutEditor({
         return setDraftPlacement(current, snapPlacementToGrid(centred, gridFor(entityId)))
       })
     },
-    [gridFor],
+    [gridFor, applyStep],
   )
 
   const resetPlacement = useCallback(
     (entityId: string) => {
       const original = basePlacements[entityId]
       if (!original) return
-      setDraft((current) => (current ? setDraftPlacement(current, original) : current))
+      applyStep((current) => setDraftPlacement(current, original))
     },
-    [basePlacements],
+    [basePlacements, applyStep],
   )
+
+  /**
+   * Undo abandons any gesture in progress: stepping back while a pointer is
+   * still down would leave the drag anchored to a placement that no longer
+   * exists, and the next move would jump.
+   */
+  const undo = useCallback(() => {
+    const current = draftRef.current
+    if (!current || past.length === 0) return
+    clearDrag()
+    setPast((p) => p.slice(0, -1))
+    setFuture((f) => [current, ...f].slice(0, HISTORY_LIMIT))
+    setDraft(past[past.length - 1])
+  }, [past, clearDrag, setDraft])
+
+  const redo = useCallback(() => {
+    const current = draftRef.current
+    if (!current || future.length === 0) return
+    clearDrag()
+    setFuture((f) => f.slice(1))
+    setPast((p) => [...p, current].slice(-HISTORY_LIMIT))
+    setDraft(future[0])
+  }, [future, clearDrag, setDraft])
 
   const save = useCallback(async () => {
     if (!draft || !valid || saving) return
@@ -224,18 +308,20 @@ export function useLayoutEditor({
       await store.write(floorId, next)
       setCommitted(next)
       setDraft(null)
+      resetHistory()
       clearDrag()
       setMode('view')
     } finally {
       setSaving(false)
     }
-  }, [draft, valid, saving, store, floorId, clearDrag])
+  }, [draft, valid, saving, store, floorId, clearDrag, setDraft, resetHistory])
 
   const cancel = useCallback(() => {
     clearDrag()
     setDraft(null)
+    resetHistory()
     setMode('view')
-  }, [clearDrag])
+  }, [clearDrag, setDraft, resetHistory])
 
   return {
     mode,
@@ -246,6 +332,8 @@ export function useLayoutEditor({
     valid,
     saving,
     changedCount,
+    canUndo: mode === 'edit' && past.length > 0,
+    canRedo: mode === 'edit' && future.length > 0,
     drag,
     enterEdit,
     tryExitEdit,
@@ -255,6 +343,8 @@ export function useLayoutEditor({
     cancelDrag,
     nudge,
     rotate,
+    undo,
+    redo,
     resetPlacement,
     gridFor,
     save,

@@ -40,7 +40,7 @@ export const GRID_CELL_MM = 600
  * of them snapped into adjacent 600 mm cells can share a few millimetres. That
  * is drawing tolerance, not a layout conflict.
  */
-export const PLACEMENT_TOLERANCE_MM = 25
+export const PLACEMENT_TOLERANCE_MM = 40
 
 export interface LayoutDraft {
   placements: Record<string, SpatialPlacement>
@@ -148,11 +148,11 @@ export function validateDraft(
 ): Map<string, PlacementValidation> {
   const isArea = boundaryOrArea && 'grid' in boundaryOrArea
   const boundary = isArea ? boundaryOrArea.boundary : boundaryOrArea
-  const roomBoundary = isArea ? boundaryOrArea.roomBoundary : null
-  const departmentZone = isArea ? boundaryOrArea.departmentZone : null
+  const roomBoundary = isArea ? boundaryOrArea.roomBoundary : ((boundaryOrArea as any)?.roomBoundary ?? null)
+  const departmentZone = isArea ? boundaryOrArea.departmentZone : ((boundaryOrArea as any)?.departmentZone ?? null)
   const obstacles = isArea ? boundaryOrArea.obstacles : (boundaryOrArea as any)?.obstacles ?? []
   const effectiveTol = isArea ? boundaryOrArea.tolerance : tolerance
-  const chairTileSize = isArea ? boundaryOrArea.chairTileSize : undefined
+  const chairTileSize = isArea ? boundaryOrArea.chairTileSize : (boundaryOrArea as any)?.chairTileSize
 
   const placements = draftList(draft)
   const result = new Map<string, PlacementValidation>()

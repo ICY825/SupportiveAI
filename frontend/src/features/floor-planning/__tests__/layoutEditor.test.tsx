@@ -391,3 +391,98 @@ describe('draft, save and cancel', () => {
     expect(deskTop(again.container)).not.toBe(original)
   })
 })
+
+describe('undo and redo', () => {
+  const undoButton = () => screen.getByRole('button', { name: 'Hoàn tác' }) as HTMLButtonElement
+  const redoButton = () => screen.getByRole('button', { name: 'Làm lại' }) as HTMLButtonElement
+  const undoKey = () => act(() => { fireEvent.keyDown(window, { key: 'z', ctrlKey: true }) })
+  const redoKey = () => act(() => { fireEvent.keyDown(window, { key: 'z', ctrlKey: true, shiftKey: true }) })
+
+  it('offers nothing to undo on a fresh session', () => {
+    setup()
+    enterEdit()
+    expect(undoButton()).toHaveProperty('disabled', true)
+    expect(redoButton()).toHaveProperty('disabled', true)
+  })
+
+  it('steps back and forward through nudges one gesture at a time', () => {
+    const { container } = setup()
+    enterEdit()
+    clickDesk(container)
+    const start = deskTop(container)
+
+    fireEvent.keyDown(scene(container), { key: 'ArrowRight' })
+    const one = deskTop(container)
+    fireEvent.keyDown(scene(container), { key: 'ArrowUp' })
+    const two = deskTop(container)
+    expect(new Set([start, one, two]).size).toBe(3)
+
+    undoKey()
+    expect(deskTop(container)).toBe(one)
+    undoKey()
+    expect(deskTop(container)).toBe(start)
+    expect(undoButton()).toHaveProperty('disabled', true)
+    expect(saveButton()).toHaveProperty('disabled', true)
+
+    redoKey()
+    expect(deskTop(container)).toBe(one)
+    redoKey()
+    expect(deskTop(container)).toBe(two)
+    expect(redoButton()).toHaveProperty('disabled', true)
+  })
+
+  it('treats a whole drag as one step, and a press that never moved as none', () => {
+    const { container } = setup()
+    enterEdit()
+    const start = deskTop(container)
+
+    dragBy(container, deskNode(container), 90, 20)
+    const dragged = deskTop(container)
+    expect(dragged).not.toBe(start)
+
+    // a plain click must not become an undoable step
+    clickDesk(container)
+    expect(undoButton()).toHaveProperty('disabled', false)
+
+    fireEvent.click(undoButton())
+    expect(deskTop(container)).toBe(start)
+    expect(undoButton()).toHaveProperty('disabled', true)
+  })
+
+  it('undoes a rotation', () => {
+    const { container } = setup()
+    enterEdit()
+    clickDesk(container)
+    const angle = () => within(container.querySelector<HTMLElement>('.sw-edit-inspector')!).getByText(/^\d+°$/).textContent
+
+    fireEvent.keyDown(scene(container), { key: 'r' })
+    expect(angle()).toBe('90°')
+    undoKey()
+    expect(angle()).toBe('0°')
+  })
+
+  it('drops the redo branch once a new change is made', () => {
+    const { container } = setup()
+    enterEdit()
+    clickDesk(container)
+    fireEvent.keyDown(scene(container), { key: 'ArrowRight' })
+    undoKey()
+    expect(redoButton()).toHaveProperty('disabled', false)
+
+    fireEvent.keyDown(scene(container), { key: 'ArrowUp' })
+    expect(redoButton()).toHaveProperty('disabled', true)
+  })
+
+  it('starts each edit session with an empty history', () => {
+    const { container } = setup()
+    enterEdit()
+    clickDesk(container)
+    fireEvent.keyDown(scene(container), { key: 'ArrowRight' })
+    leaveEdit()
+    fireEvent.click(screen.getByRole('button', { name: 'Hủy thay đổi' }))
+
+    enterEdit()
+    expect(undoButton()).toHaveProperty('disabled', true)
+    expect(redoButton()).toHaveProperty('disabled', true)
+  })
+})

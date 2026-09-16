@@ -136,6 +136,9 @@
 }
 
 /*
+ * Scoped to [role='radiogroup'] because the locker module reuses .fp-view-mode
+ * for a tablist of its own; these rules are for the floor-planning view switch.
+ *
  * The view switch is the only mode control on the page, so it is the one that
  * has to be unmistakable. A white chip on a beige chip was not: at a glance the
  * two segments read as equals. Tabs against the bar's own bottom rule carry the
@@ -143,7 +146,7 @@
  * background separates "which view" from the floor selector's pill — "what am I
  * looking at" and "how am I looking at it" stop looking like one control.
  */
-.fp-segmented.fp-view-mode {
+.fp-segmented.fp-view-mode[role='radiogroup'] {
   align-self: stretch;
   gap: 0;
   padding: 0;
@@ -153,7 +156,7 @@
   margin-bottom: -1px;
 }
 
-.fp-view-mode button {
+.fp-view-mode[role='radiogroup'] button {
   position: relative;
   display: flex;
   align-items: center;
@@ -162,7 +165,7 @@
   color: var(--fp-text-2);
 }
 
-.fp-view-mode button::after {
+.fp-view-mode[role='radiogroup'] button::after {
   content: '';
   position: absolute;
   right: 8px;
@@ -173,19 +176,18 @@
   background: transparent;
 }
 
-.fp-view-mode button:hover::after {
+.fp-view-mode[role='radiogroup'] button:hover::after {
   background: var(--line-strong);
 }
 
-.fp-segmented .fp-view-mode button.is-active,
-.fp-view-mode button.is-active {
+.fp-view-mode[role='radiogroup'] button.is-active {
   background: transparent;
   box-shadow: none;
   color: var(--ink);
   font-weight: 600;
 }
 
-.fp-view-mode button.is-active::after {
+.fp-view-mode[role='radiogroup'] button.is-active::after {
   background: var(--ink);
 }
 

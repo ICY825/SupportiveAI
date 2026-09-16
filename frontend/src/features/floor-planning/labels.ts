@@ -198,6 +198,8 @@ export const LAYOUT_EDIT = {
   placementStatus: 'Trạng thái bố trí',
   valid: 'Vị trí hợp lệ',
   rotate: 'Xoay 90°',
+  undo: 'Hoàn tác',
+  redo: 'Làm lại',
   reset: 'Về vị trí gốc',
   save: 'Lưu bố trí',
   cancel: 'Hủy',

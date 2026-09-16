@@ -1,8 +1,10 @@
 import { memo, useId, useMemo } from 'react'
 import type { PlacementValidation, SpatialGrid, SpatialPlacement } from '../domain/placement'
+import type { FloorObstacle } from '../domain/spatial'
 import { LAYOUT_EDIT } from '../labels'
 import { buildEditOverlay, placementOutline, rotateHandleAnchor } from './editGeometry'
 import type { EditableArea } from './layoutDraft'
+import { projectedPoints } from './scene'
 
 /**
  * Editing affordances drawn inside the scene. None of this exists in view
@@ -18,6 +20,15 @@ export const EditGround = memo(function EditGround({ area, grid }: { area: Edita
   return (
     <g className="sw-edit-ground" aria-hidden="true" pointerEvents="none">
       <polygon className="sw-edit-boundary" points={overlay.boundary} />
+      {overlay.doorClearances.length > 0 && (
+        <g className="sw-edit-clearances">
+          {overlay.doorClearances.map((c) => (
+            <polygon key={c.id} className="sw-edit-clearance" points={c.points} data-clearance-id={c.id}>
+              {c.name ? <title>{c.name}</title> : null}
+            </polygon>
+          ))}
+        </g>
+      )}
       <g className="sw-edit-grid">
         {overlay.dots.map(([x, y], i) => (
           <circle key={i} cx={x} cy={y} r={0.2} />
@@ -27,6 +38,16 @@ export const EditGround = memo(function EditGround({ area, grid }: { area: Edita
   )
 })
 
+export interface EditAffordancesProps {
+  placements: Record<string, SpatialPlacement>
+  selectedId: string | undefined
+  validation: ReadonlyMap<string, PlacementValidation>
+  deskHeight: number
+  dragging: boolean
+  onRotate: (entityId: string) => void
+  obstacles?: readonly FloorObstacle[]
+}
+
 export function EditAffordances({
   placements,
   selectedId,
@@ -34,20 +55,38 @@ export function EditAffordances({
   deskHeight,
   dragging,
   onRotate,
-}: {
-  placements: Record<string, SpatialPlacement>
-  selectedId: string | undefined
-  validation: ReadonlyMap<string, PlacementValidation>
-  deskHeight: number
-  dragging: boolean
-  onRotate: (entityId: string) => void
-}) {
+  obstacles,
+}: EditAffordancesProps) {
   const hatchId = useId()
   const selected = selectedId ? placements[selectedId] : undefined
   const invalid = useMemo(
     () => Object.values(placements).filter((p) => validation.get(p.entityId)?.valid === false),
     [placements, validation],
   )
+
+  const obstacleMap = useMemo(() => {
+    if (!obstacles || obstacles.length === 0) return new Map<string, FloorObstacle>()
+    return new Map(obstacles.map((o) => [o.id, o]))
+  }, [obstacles])
+
+  const collidingObstacles = useMemo(() => {
+    if (obstacleMap.size === 0) return []
+    const collidingMap = new Map<string, FloorObstacle>()
+    for (const val of validation.values()) {
+      if (val.valid) continue
+      for (const reason of val.reasons) {
+        if (
+          (reason.type === 'obstacle-collision' || reason.type === 'clearance-conflict') &&
+          reason.obstacleId
+        ) {
+          const obs = obstacleMap.get(reason.obstacleId)
+          if (obs) collidingMap.set(obs.id, obs)
+        }
+      }
+    }
+    return Array.from(collidingMap.values())
+  }, [validation, obstacleMap])
+
   const handle = selected && !dragging ? rotateHandleAnchor(selected, deskHeight) : null
 
   return (
@@ -59,8 +98,28 @@ export function EditAffordances({
         </pattern>
       </defs>
       <g pointerEvents="none" aria-hidden="true">
+        {collidingObstacles.map((obs) => (
+          <g
+            key={obs.id}
+            className={`sw-edit-invalid sw-edit-obstacle-conflict sw-edit-conflict-obstacle sw-edit-obstacle-${obs.kind}`}
+            data-obstacle-id={obs.id}
+            data-conflict-obstacle={obs.id}
+            data-obstacle-kind={obs.kind}
+          >
+            <polygon
+              className="sw-edit-obstacle-hatch"
+              points={projectedPoints(obs.polygon, 0)}
+              fill={`url(#${hatchId})`}
+              opacity={0.45}
+            />
+            <polygon
+              className="sw-edit-obstacle-outline"
+              points={projectedPoints(obs.polygon, 0)}
+            />
+          </g>
+        ))}
         {invalid.map((placement) => (
-          <g key={placement.entityId} className="sw-edit-invalid">
+          <g key={placement.entityId} className="sw-edit-invalid" data-workstation-id={placement.entityId}>
             <polygon points={placementOutline(placement, deskHeight)} fill={`url(#${hatchId})`} opacity={0.4} />
             <polygon points={placementOutline(placement, deskHeight)} />
           </g>

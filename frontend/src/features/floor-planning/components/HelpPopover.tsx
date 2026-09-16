@@ -48,6 +48,21 @@ export function HelpPopover() {
     [['?'], 'Mở / đóng trợ giúp này'],
   ]
 
+  /**
+   * Edit mode rebinds keys the view mode already uses, so it gets its own list
+   * rather than footnotes on the rows above. Nothing here works until a layout
+   * draft is open, which is what the heading says.
+   */
+  const editRows: [string[], string][] = [
+    [['Kéo bàn'], 'Di chuyển bàn, bám theo lưới'],
+    [['←', '↑', '→', '↓'], 'Dịch bàn đang chọn một ô lưới'],
+    [['Shift', '←↑→↓'], 'Dịch bàn bốn ô lưới'],
+    [['R'], 'Xoay bàn 90°'],
+    [[mod, 'Z'], 'Hoàn tác thay đổi gần nhất'],
+    [[mod, '⇧', 'Z'], 'Làm lại thay đổi vừa hoàn tác'],
+    [['Esc'], 'Huỷ thao tác kéo đang thực hiện, sau đó bỏ chọn bàn'],
+  ]
+
   return (
     <div className="fp-help" ref={rootRef}>
       <button
@@ -67,6 +82,19 @@ export function HelpPopover() {
           <h2 id={titleId}>Thao tác trên mặt bằng</h2>
           <dl>
             {rows.map(([keys, action]) => (
+              <div key={action}>
+                <dt>
+                  {keys.map((k) => (
+                    <kbd key={k}>{k}</kbd>
+                  ))}
+                </dt>
+                <dd>{action}</dd>
+              </div>
+            ))}
+          </dl>
+          <h3>Chỉnh sửa bố trí</h3>
+          <dl>
+            {editRows.map(([keys, action]) => (
               <div key={action}>
                 <dt>
                   {keys.map((k) => (
