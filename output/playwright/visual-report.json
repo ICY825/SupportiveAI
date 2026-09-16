@@ -1,64 +1,64 @@
 {
-  "generatedAt": "2026-09-16T03:36:32.307Z",
+  "generatedAt": "2026-09-16T03:57:56.676Z",
   "states": [
     {
       "name": "spatial-overview",
       "map": {
         "canvas": [
-          924,
-          614
+          928,
+          660
         ],
         "drawn": [
-          586,
-          400
+          588,
+          402
         ],
         "fillX": 0.634,
-        "fillY": 0.652
+        "fillY": 0.609
       }
     },
     {
       "name": "spatial-occupied",
       "map": {
         "canvas": [
-          924,
-          614
+          928,
+          660
         ],
         "drawn": [
-          586,
-          400
+          588,
+          402
         ],
         "fillX": 0.634,
-        "fillY": 0.652
+        "fillY": 0.609
       }
     },
     {
       "name": "spatial-available",
       "map": {
         "canvas": [
-          924,
-          614
+          928,
+          660
         ],
         "drawn": [
-          586,
-          400
+          588,
+          402
         ],
         "fillX": 0.634,
-        "fillY": 0.652
+        "fillY": 0.609
       }
     },
     {
       "name": "spatial-conflict",
       "map": {
         "canvas": [
-          924,
-          614
+          928,
+          660
         ],
         "drawn": [
-          586,
-          400
+          588,
+          402
         ],
         "fillX": 0.634,
-        "fillY": 0.652
+        "fillY": 0.609
       }
     },
     {
@@ -86,15 +86,20 @@
       "overflow": 2560,
       "map": {
         "canvas": [
-          2014,
-          900
+          1958,
+          1196
         ],
         "drawn": [
-          907,
-          620
+          1216,
+          831
         ],
-        "fillX": 0.45,
-        "fillY": 0.688
+        "fillX": 0.621,
+        "fillY": 0.695
+      },
+      "inspector": {
+        "width": 392,
+        "right": 2560,
+        "top": 48
       }
     },
     {
@@ -114,6 +119,11 @@
         ],
         "fillX": 0.894,
         "fillY": 0.735
+      },
+      "inspector": {
+        "width": 392,
+        "right": 2560,
+        "top": 48
       }
     },
     {
@@ -124,15 +134,20 @@
       "overflow": 1920,
       "map": {
         "canvas": [
-          1374,
-          794
+          1318,
+          836
         ],
         "drawn": [
-          795,
-          543
+          837,
+          572
         ],
-        "fillX": 0.579,
+        "fillX": 0.635,
         "fillY": 0.684
+      },
+      "inspector": {
+        "width": 392,
+        "right": 1920,
+        "top": 48
       }
     },
     {
@@ -152,6 +167,11 @@
         ],
         "fillX": 0.881,
         "fillY": 0.658
+      },
+      "inspector": {
+        "width": 392,
+        "right": 1920,
+        "top": 48
       }
     },
     {
@@ -162,15 +182,20 @@
       "overflow": 1440,
       "map": {
         "canvas": [
-          924,
-          614
+          928,
+          660
         ],
         "drawn": [
-          586,
-          400
+          588,
+          402
         ],
         "fillX": 0.634,
-        "fillY": 0.652
+        "fillY": 0.609
+      },
+      "inspector": {
+        "width": 302,
+        "right": 1440,
+        "top": 48
       }
     },
     {
@@ -190,6 +215,11 @@
         ],
         "fillX": 0.865,
         "fillY": 0.55
+      },
+      "inspector": {
+        "width": 302,
+        "right": 1440,
+        "top": 48
       }
     },
     {
@@ -200,15 +230,20 @@
       "overflow": 1366,
       "map": {
         "canvas": [
-          1006,
-          516
+          1066,
+          528
         ],
         "drawn": [
-          502,
-          343
+          513,
+          350
         ],
-        "fillX": 0.499,
-        "fillY": 0.665
+        "fillX": 0.481,
+        "fillY": 0.663
+      },
+      "inspector": {
+        "width": 300,
+        "right": 1366,
+        "top": 48
       }
     },
     {
@@ -228,6 +263,11 @@
         ],
         "fillX": 0.872,
         "fillY": 0.754
+      },
+      "inspector": {
+        "width": 300,
+        "right": 1366,
+        "top": 48
       }
     },
     {
@@ -238,15 +278,20 @@
       "overflow": 1280,
       "map": {
         "canvas": [
-          920,
-          548
+          980,
+          560
         ],
         "drawn": [
-          536,
-          366
+          547,
+          374
         ],
-        "fillX": 0.582,
-        "fillY": 0.668
+        "fillX": 0.558,
+        "fillY": 0.667
+      },
+      "inspector": {
+        "width": 300,
+        "right": 1280,
+        "top": 48
       }
     },
     {
@@ -266,6 +311,11 @@
         ],
         "fillX": 0.868,
         "fillY": 0.661
+      },
+      "inspector": {
+        "width": 300,
+        "right": 1280,
+        "top": 48
       }
     }
   ],

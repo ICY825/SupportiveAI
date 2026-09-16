@@ -35,7 +35,7 @@ function Status({ desk }: { desk: DeskRecord }) {
 
 function CompactInspector({ desk, onClose, onVerify }: { desk: DeskRecord; onClose: () => void; onVerify: () => void }) {
   const people = desk.status === 'reserved' && desk.reservation ? [desk.reservation] : desk.occupants
-  return <aside className="fp-card sw-inspector" aria-labelledby="sw-desk-title">
+  return <aside className="sw-inspector" aria-labelledby="sw-desk-title">
     <header className="fp-card-head"><div><p className="fp-eyebrow">Bàn đang chọn</p><h2 id="sw-desk-title" className="fp-card-title">{desk.seat.code}</h2></div><button type="button" className="fp-icon-btn" onClick={onClose} aria-label="Đóng bảng thông tin bàn" title="Đóng (Esc)"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg></button></header>
     <Status desk={desk} />
     <div className="sw-person-section">
@@ -159,16 +159,16 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
 
   return <main className="sw-workspace">
     {searchSlot && createPortal(<FloorSearch index={search} includesPeople onPick={(item) => { selectDesk(item.target.id); reset() }} />, searchSlot)}
-    <header className="sw-heading">
-      <div>
-        <p className="fp-eyebrow sw-breadcrumb">{dataset.building.name} <span>/</span> {dataset.layout.floor.name} <span>/</span> {SPATIAL_SCOPE_BREADCRUMB}</p>
-        <h2 className="fp-page-title">Mô hình &amp; Nền tảng AI</h2>
-        <p className="sw-heading-meta">{desks.size} chỗ ngồi · 3 cụm bàn · Một phần khu vực</p>
-      </div>
-      <span className="fp-tag sw-preview-label">{SPATIAL_VIEW_LABEL}</span>
-    </header>
-    <div className="sw-body">
-      <section className="fp-card sw-map-panel" aria-label="Không gian bố trí chỗ ngồi">
+    <div className="sw-main">
+      <header className="sw-heading">
+        <div>
+          <p className="fp-eyebrow sw-breadcrumb">{dataset.building.name} <span>/</span> {dataset.layout.floor.name} <span>/</span> {SPATIAL_SCOPE_BREADCRUMB}</p>
+          <h2 className="fp-page-title">Mô hình &amp; Nền tảng AI</h2>
+          <p className="sw-heading-meta">{desks.size} chỗ ngồi · 3 cụm bàn · Một phần khu vực</p>
+        </div>
+        <span className="fp-tag sw-preview-label">{SPATIAL_VIEW_LABEL}</span>
+      </header>
+      <section className="sw-map-panel" aria-label="Không gian bố trí chỗ ngồi">
         <div className="sw-map-top"><span><i /> Khu Mô hình &amp; Nền tảng AI</span><span className={desk ? 'sw-selected-caption' : undefined}>{desk ? `Đang chọn ${desk.seat.code}` : 'Góc nhìn cố định'}</span></div>
         <div className="sw-map-stage" ref={stageRef}>
           <WorkspaceScene scene={scene} desks={desks} selectedId={desk?.workstation.id} onSelect={selectDesk} svgRef={svgRef} viewBox={viewBox} origin={origin} zoom={zoom} pan={pan} onKeyDown={onKeyDown} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={() => { drag.current = null }} />
@@ -185,16 +185,16 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
         <div className="sw-legend" role="group" aria-label={`Trạng thái chỗ ngồi · ${SPATIAL_SCOPE_LABEL}`}>{DESK_STATUSES.map((status) => <div key={status} data-status={status} title={DESK_STATUS[status].hint}><svg viewBox="-2 -2 4 4" aria-hidden="true"><SeatSymbol status={status} /></svg><span>{DESK_STATUS[status].label}</span><b>{counts(status)}</b></div>)}</div>
         <footer className="sw-map-foot"><span id="sw-map-help">Nhấp vào bàn để xem thông tin · Phím mũi tên để chuyển bàn</span><span className="sw-boundary-key"><i /> Ranh giới khu vực</span></footer>
       </section>
-      <div className="sw-context">
-        {desk ? <CompactInspector desk={desk} onClose={() => { onSelect(null); svgRef.current?.focus() }} onVerify={onVerify} /> : <aside className="fp-card sw-overview" aria-label={`Tổng quan · ${SPATIAL_SCOPE_LABEL}`}>
-          <p className="fp-eyebrow">{SPATIAL_SCOPE_LABEL}</p><div className="sw-capacity"><strong>{desks.size}</strong><span>chỗ ngồi</span></div>
-          <div className="sw-occupancy-bar" aria-hidden="true">{DESK_STATUSES.map((s) => <span key={s} data-status={s} style={{ flex: counts(s) }} />)}</div>
-          <h3 className="sw-empty-title">{outsideCrop ? SPATIAL_OUT_OF_SCOPE : 'Chọn một bàn trên mặt bằng'}</h3><p>{outsideCrop ? SPATIAL_OUT_OF_SCOPE_HINT : 'Xem trạng thái chỗ ngồi, nhân sự và bộ phận tại từng vị trí.'}</p>
-          {outsideCrop && <button type="button" className="fp-btn is-wide sw-verify" onClick={onVerify}>Đối chiếu trên bản vẽ <span aria-hidden="true">↗</span></button>}
-          <div className="sw-overview-note"><strong>Cách đọc mặt bằng</strong><p><span className="sw-example-avatar">NM</span> Ký hiệu nhân sự: bàn đang sử dụng</p><p><span className="sw-example-empty">○</span> Vòng tròn rỗng: bàn còn trống</p></div>
-        </aside>}
-        <div className="sw-scope-note"><span className="sw-scope-line" /><p><strong>Một phần mặt bằng Tầng 16</strong><br />Vị trí bàn, ghế và ranh giới theo bản vẽ hiện có. Nhân sự và trạng thái là dữ liệu minh họa.</p></div>
-      </div>
+    </div>
+    <div className="sw-context">
+      {desk ? <CompactInspector desk={desk} onClose={() => { onSelect(null); svgRef.current?.focus() }} onVerify={onVerify} /> : <aside className="sw-overview" aria-label={`Tổng quan · ${SPATIAL_SCOPE_LABEL}`}>
+        <p className="fp-eyebrow">{SPATIAL_SCOPE_LABEL}</p><div className="sw-capacity"><strong>{desks.size}</strong><span>chỗ ngồi</span></div>
+        <div className="sw-occupancy-bar" aria-hidden="true">{DESK_STATUSES.map((s) => <span key={s} data-status={s} style={{ flex: counts(s) }} />)}</div>
+        <h3 className="sw-empty-title">{outsideCrop ? SPATIAL_OUT_OF_SCOPE : 'Chọn một bàn trên mặt bằng'}</h3><p>{outsideCrop ? SPATIAL_OUT_OF_SCOPE_HINT : 'Xem trạng thái chỗ ngồi, nhân sự và bộ phận tại từng vị trí.'}</p>
+        {outsideCrop && <button type="button" className="fp-btn is-wide sw-verify" onClick={onVerify}>Đối chiếu trên bản vẽ <span aria-hidden="true">↗</span></button>}
+        <div className="sw-overview-note"><strong>Cách đọc mặt bằng</strong><p><span className="sw-example-avatar">NM</span> Ký hiệu nhân sự: bàn đang sử dụng</p><p><span className="sw-example-empty">○</span> Vòng tròn rỗng: bàn còn trống</p></div>
+      </aside>}
+      <div className="sw-scope-note"><span className="sw-scope-line" /><p><strong>Một phần mặt bằng Tầng 16</strong><br />Vị trí bàn, ghế và ranh giới theo bản vẽ hiện có. Nhân sự và trạng thái là dữ liệu minh họa.</p></div>
     </div>
     <p className="fp-sr-only" aria-live="polite">{desk ? `Đã chọn bàn ${desk.seat.code} · ${DESK_STATUS[desk.status].label}` : 'Chưa chọn bàn'}</p>
   </main>

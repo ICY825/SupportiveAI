@@ -443,13 +443,6 @@
 /* ---------------------------------------------------------------- workspace */
 
 .fp-workspace {
-  /*
-   * The map outranks every other surface: the inspector is sized from the
-   * viewport so it gives width back as the window narrows, and never takes
-   * more than a fifth of a wide screen.
-   */
-  --fp-inspector-w: clamp(300px, 21vw, 392px);
-
   flex: 1;
   min-height: 0;
   display: grid;

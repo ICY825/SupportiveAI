@@ -238,9 +238,30 @@ async function run() {
         ...(await truncatedPlaceholders(page)),
       ]
       check(bad.length === 0, `${view} @${width}: ${bad.join('; ')}`)
-      report.widths.push({ width, height, label, view, overflow, map })
+      const inspector = await page.evaluate(() => {
+        const el = document.querySelector('.fp-panel, .sw-context')
+        if (!el) return null
+        const r = el.getBoundingClientRect()
+        return { width: Math.round(r.width), right: Math.round(r.right), top: Math.round(r.top) }
+      })
+      report.widths.push({ width, height, label, view, overflow, map, inspector })
       if (label === 'laptop') await shot(page, view === 'workspace' ? 'spatial-laptop' : 'verification-laptop')
     }
+  }
+
+  // Both modes are one product: switching tabs must not move the inspector.
+  for (const [width] of WIDTHS) {
+    const pair = report.widths.filter((w) => w.width === width && w.inspector)
+    if (pair.length !== 2) continue
+    const [a, b] = pair
+    check(
+      a.inspector.width === b.inspector.width && a.inspector.right === b.inspector.right && a.inspector.top === b.inspector.top,
+      `@${width}: inspector moves between modes — ${a.view} ${JSON.stringify(a.inspector)} vs ${b.view} ${JSON.stringify(b.inspector)}`,
+    )
+    check(
+      a.map.canvas[0] === b.map.canvas[0],
+      `@${width}: map canvas width differs between modes — ${a.map.canvas[0]} vs ${b.map.canvas[0]}`,
+    )
   }
 
   await browser.close()

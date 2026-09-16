@@ -31,6 +31,13 @@
   --fp-control-h: 28px;
   --fp-btn-h: 32px;
 
+  /*
+   * Docked inspector, shared by both modes so the right edge never moves when
+   * the mode tabs are toggled. Sized from the viewport so it gives width back
+   * to the map as the window narrows, and never takes a fifth of a wide screen.
+   */
+  --fp-inspector-w: clamp(300px, 21vw, 392px);
+
   /* one focus treatment for the whole feature: brand ring outside, inset on maps */
   --fp-focus-inset: inset 0 0 0 2px rgba(210, 24, 31, 0.6);
 }

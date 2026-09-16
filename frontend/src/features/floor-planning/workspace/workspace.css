@@ -8,11 +8,16 @@
   --sw-muted: var(--muted);
   --sw-line: var(--line);
   --sw-selected: #245bb7;
+
+  /*
+   * Same two-column shell as the verification view (.fp-workspace): map area
+   * on the left, inspector docked flush right at the shared width. Switching
+   * modes must not move the right edge or change how the map is framed.
+   */
   flex: 1;
   min-height: 0;
-  overflow: auto;
-  padding: 22px var(--sw-gutter, 24px) 18px;
-  background: var(--canvas);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--fp-inspector-w);
   color: var(--ink);
 }
 .sw-workspace [data-status='occupied'] { --seat: #3d617f; --seat-bg: #e8eff5; }
@@ -21,29 +26,35 @@
 .sw-workspace [data-status='conflict'] { --seat: #b6443d; --seat-bg: #fbecea; }
 .sw-workspace [data-status='unavailable'] { --seat: #6d7882; --seat-bg: #edf0f2; }
 
-/* ---------------------------------------------------------------- heading */
+/* ---------------------------------------------------------------- map area */
 
-.sw-heading { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 16px; }
-.sw-breadcrumb { margin-bottom: 7px; }
+.sw-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--paper);
+}
+
+.sw-heading { display: flex; justify-content: space-between; gap: 16px; align-items: center; flex: none; padding: 14px var(--sw-gutter, 20px) 12px; border-bottom: 1px solid var(--sw-line); }
+.sw-breadcrumb { margin-bottom: 6px; }
 .sw-heading-meta { margin: 0; font-size: 12px; color: var(--sw-muted); }
 
-/* ---------------------------------------------------------------- layout */
-
-.sw-body { display: grid; grid-template-columns: minmax(0, 1fr) var(--sw-context-w, 268px); gap: 18px; align-items: start; }
-.sw-map-panel { min-width: 0; overflow: hidden; }
-.sw-map-top { display: flex; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--sw-line); font-size: var(--fp-t-small); color: var(--sw-muted); }
+/* takes whatever height the heading leaves; the scene reframes itself to fit */
+.sw-map-panel { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.sw-map-top { display: flex; justify-content: space-between; gap: 12px; flex: none; padding: 10px var(--sw-gutter, 20px); font-size: var(--fp-t-small); color: var(--sw-muted); }
 .sw-map-top > span:first-child { display: flex; align-items: center; gap: 7px; font-weight: 600; color: var(--fp-text-2); }
 .sw-map-top i { width: 9px; height: 9px; border: 1px solid #95b0c7; background: #dce7f1; border-radius: 2px; }
 .sw-map-top .sw-selected-caption { color: var(--sw-selected); font-weight: 600; }
 
 /* ---------------------------------------------------------------- scene */
 
-.sw-map-stage { position: relative; background: #f9fbfc; }
+.sw-map-stage { position: relative; flex: 1; min-height: var(--sw-stage-min, 360px); background: #f9fbfc; border-block: 1px solid var(--sw-line); }
 /*
  * The scene frames itself from its own geometry (see scene.ts fitViewBox), so
- * the stage can be any shape: taller stages simply show the floor larger.
+ * the stage can be any shape: it simply takes whatever the shell leaves.
  */
-.sw-scene { display: block; width: 100%; height: var(--sw-stage-h, clamp(440px, calc(100vh - 286px), 900px)); touch-action: none; user-select: none; cursor: grab; }
+.sw-scene { display: block; width: 100%; height: 100%; touch-action: none; user-select: none; cursor: grab; }
 .sw-scene:active { cursor: grabbing; }
 .sw-scene:focus { outline: none; }
 .sw-furniture, .sw-marker { cursor: pointer; }
@@ -62,20 +73,34 @@
 
 /* ---------------------------------------------------------------- legend */
 
-.sw-legend { display: flex; gap: 8px 18px; flex-wrap: wrap; padding: 12px 16px; border-top: 1px solid var(--sw-line); }
+.sw-legend { display: flex; gap: 8px 18px; flex-wrap: wrap; flex: none; padding: 11px var(--sw-gutter, 20px) 8px; }
 .sw-legend > div { display: flex; align-items: center; gap: 5px; font-size: var(--fp-t-micro); color: var(--fp-text-2); cursor: help; }
 .sw-legend svg, .sw-status svg { width: 17px; height: 17px; color: var(--seat); flex: none; }
 .sw-legend b { font-family: var(--mono); color: var(--ink); font-size: 10px; margin-left: 2px; }
-.sw-map-foot { display: flex; justify-content: space-between; gap: 14px; padding: 0 16px 12px; color: var(--sw-muted); font-size: 10px; }
+.sw-map-foot { display: flex; justify-content: space-between; gap: 14px; flex: none; padding: 0 var(--sw-gutter, 20px) 11px; color: var(--sw-muted); font-size: 10px; }
 .sw-boundary-key { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
 .sw-boundary-key i { width: 20px; border-top: 1.5px dashed #7c9bb6; }
 
 /* ---------------------------------------------------------------- inspector */
 
-.sw-context { min-width: 0; }
-.sw-inspector, .sw-overview { padding: var(--fp-pad-card); }
-/* ties the panel to the selected desk on the map; blue means selection, never state */
-.sw-inspector { border-top: 3px solid var(--sw-selected); padding-top: 15px; }
+/* docked, scrolls on its own, exactly like .fp-panel in the verification view */
+.sw-context {
+  min-width: 0;
+  overflow-y: auto;
+  background: var(--paper);
+  border-left: 1px solid var(--line);
+  padding: 14px var(--fp-pad-panel) 28px;
+}
+/*
+ * Ties the panel to the selected desk on the map. Blue means selection, never
+ * state, so it is one flat rule across the panel edge — no glow, no shadow.
+ */
+.sw-inspector {
+  display: block;
+  margin: -14px calc(-1 * var(--fp-pad-panel)) 0;
+  padding: 11px var(--fp-pad-panel) 0;
+  border-top: 3px solid var(--sw-selected);
+}
 .sw-status { background: var(--seat-bg); color: var(--seat); }
 .sw-person-section { padding: 20px 0 16px; border-bottom: 1px solid var(--sw-line); }
 .sw-person { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
@@ -116,26 +141,19 @@
 .sw-view-settings p { font-size: var(--fp-t-small); color: var(--sw-muted); line-height: 1.7; }
 
 /*
- * Laptop widths. The map panel is never the surface that shrinks: the gutter,
- * the context column and the page heading give up their space first.
+ * Laptop widths. The map area is never the surface that shrinks: the gutters
+ * and the page heading give up their space first, and the inspector follows
+ * the shared --fp-inspector-w so both modes narrow together.
  */
 @media (max-width: 1440px) {
-  .sw-workspace { --sw-gutter: 18px; --sw-context-w: 254px; }
-  .sw-body { gap: 14px; }
-  .sw-heading { margin-bottom: 12px; }
+  .sw-workspace { --sw-gutter: 16px; }
+  .sw-heading { padding-top: 12px; padding-bottom: 10px; }
 }
 @media (max-width: 1366px) {
-  .sw-workspace { --sw-gutter: 14px; --sw-context-w: 240px; --sw-stage-h: clamp(420px, calc(100vh - 252px), 720px); }
-  .sw-inspector, .sw-overview { --fp-pad-card: 15px; }
+  .sw-workspace { --sw-gutter: 14px; }
+  .sw-context { --fp-pad-panel: 14px; }
   .fp-page-title { font-size: 19px; }
   .sw-heading-meta { font-size: 11.5px; }
-}
-/*
- * Short screens. The scene is height-bound here, so extra panel width would be
- * empty stage: give it to the context column instead of to the map's margins.
- */
-@media (max-height: 820px) and (min-width: 1200px) {
-  .sw-workspace { --sw-context-w: 316px; }
 }
 @media (max-width: 1200px) {
   .is-spatial-page .fp-topbar { height: auto; min-height: 48px; flex-wrap: wrap; padding-top: 8px; padding-bottom: 8px; gap: 8px 12px; }
@@ -143,14 +161,20 @@
   .is-spatial-page .fp-search-slot { flex: 1; }
   .is-spatial-page .fp-search { width: 100%; }
 }
+/* Below this both modes stack the inspector under the map; see floorPlanning.css. */
 @media (max-width: 1100px) {
-  .sw-body { grid-template-columns: minmax(0, 1fr); }
-  .sw-context { display: grid; grid-template-columns: minmax(240px, 1fr) 1fr; gap: 20px; }
+  .sw-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    /* the heading, legend and foot live inside this row, so it runs taller than
+       the verification view's map row to leave the scene the same height */
+    grid-template-rows: minmax(556px, 72vh) auto;
+    overflow-y: auto;
+  }
+  .sw-context { border-left: 0; border-top: 1px solid var(--line); overflow-y: visible; }
   .sw-preview-label { display: none; }
 }
 @media (max-width: 600px) {
-  .sw-workspace { --sw-gutter: 10px; --sw-stage-h: 360px; }
-  .sw-context { display: block; }
+  .sw-workspace { --sw-gutter: 12px; --sw-stage-min: 320px; }
   .sw-map-top { flex-wrap: wrap; }
   .sw-map-foot { flex-direction: column; }
 }
