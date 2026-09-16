@@ -1,6 +1,6 @@
 # ADR 0001 — Floor Planning V1: web stack and floor data pipeline
 
-**Status:** Proposed (needs team confirmation — README §12 C3 "Frontend" is still open)
+**Status:** Accepted (confirmed for pilot frontend implementation)
 **Date:** 2026-09-15
 
 ## Context
