@@ -137,12 +137,17 @@ export const SCENE_CROP_CAPTION = 'Mặt bằng tiếp tục ngoài phạm vi hi
 export const DEMO_DATA_LABEL = 'Dữ liệu minh họa'
 export const DEMO_DATA_HINT = 'Nhân sự, chỗ ngồi và thiết bị là dữ liệu giả lập để thiết kế giao diện; chưa kết nối HR/Admin.'
 
-export const DESK_STATUS: Record<DeskStatus, { label: string; hint: string }> = {
-  occupied: { label: 'Đang sử dụng', hint: 'Có một nhân sự đang được gán vào chỗ ngồi này' },
-  available: { label: 'Còn trống', hint: 'Chưa có nhân sự được gán; có thể gán ngay' },
-  reserved: { label: 'Đã đặt trước', hint: 'Đã có lịch đặt chỗ cho nhân sự' },
-  conflict: { label: 'Xung đột phân công', hint: 'Nhiều hơn một phân công đang hiệu lực trên cùng một bàn' },
-  unavailable: { label: 'Không khả dụng', hint: 'Chỗ ngồi đang tạm ngưng sử dụng' },
+/**
+ * `short` is for dense lists (the sidebar summary and key) where the full
+ * wording would wrap. The full `label` stays on badges, tooltips and anywhere
+ * the state is stated on its own.
+ */
+export const DESK_STATUS: Record<DeskStatus, { label: string; short: string; hint: string }> = {
+  occupied: { label: 'Đang sử dụng', short: 'Đang sử dụng', hint: 'Có một nhân sự đang được gán vào chỗ ngồi này' },
+  available: { label: 'Còn trống', short: 'Còn trống', hint: 'Chưa có nhân sự được gán; có thể gán ngay' },
+  reserved: { label: 'Đã đặt trước', short: 'Đã đặt trước', hint: 'Đã có lịch đặt chỗ cho nhân sự' },
+  conflict: { label: 'Xung đột phân công', short: 'Xung đột', hint: 'Nhiều hơn một phân công đang hiệu lực trên cùng một bàn' },
+  unavailable: { label: 'Không khả dụng', short: 'Không khả dụng', hint: 'Chỗ ngồi đang tạm ngưng sử dụng' },
 }
 
 export const SEAT_TYPE: Record<SeatType, string> = {

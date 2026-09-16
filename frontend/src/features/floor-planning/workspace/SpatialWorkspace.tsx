@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { createDemoAllocation } from '../allocation/demoAllocation'
 import { FloorSearch } from '../components/FloorSearch'
 import { isTypingTarget } from '../components/keyboard'
 import { formatDate, initials } from '../components/desk-inspector/format'
-import { buildDeskIndex, DESK_STATUSES, type DeskRecord } from '../domain/desk'
+import { buildDeskIndex, DESK_STATUSES, type DeskRecord, type DeskStatus } from '../domain/desk'
 import type { BBox, EntityRef, FloorDataset, Point } from '../domain/spatial'
 import {
   DESK_STATUS,
@@ -31,6 +31,59 @@ const PAN_LIMIT = 0.3
 
 function Status({ desk }: { desk: DeskRecord }) {
   return <span className="fp-chip sw-status" data-status={desk.status}><svg viewBox="-2 -2 4 4" aria-hidden="true"><SeatSymbol status={desk.status} /></svg>{DESK_STATUS[desk.status].label}</span>
+}
+
+/** The map's own marker, at legend size, so the key teaches the map literally. */
+function LegendMark({ status }: { status: DeskStatus }) {
+  return (
+    <svg className="sw-key-mark" viewBox="-2.4 -2.4 4.8 4.8" aria-hidden="true">
+      <circle className="sw-marker-disc" r={1.85} />
+      {status === 'occupied' ? <text textAnchor="middle" y={0.48} className="sw-avatar-text">NM</text> : <SeatSymbol status={status} />}
+    </svg>
+  )
+}
+
+/**
+ * Seat counts and the map key for the current scope. Stays in the panel whether
+ * or not a desk is selected: it describes the scope, not the selection.
+ */
+function ScopeSummary({ count, counts, children }: {
+  count: number
+  counts: (status: DeskStatus) => number
+  /** empty-state prompt, shown between the counts and the key when nothing is selected */
+  children?: ReactNode
+}) {
+  return (
+    <section className="sw-summary" aria-labelledby="sw-summary-title">
+      <p className="fp-eyebrow" id="sw-summary-title">{SPATIAL_SCOPE_LABEL}</p>
+      <div className="sw-capacity"><strong>{count}</strong><span>chỗ ngồi</span></div>
+      <div className="sw-occupancy-bar" aria-hidden="true">
+        {DESK_STATUSES.map((s) => <span key={s} data-status={s} style={{ flex: counts(s) }} />)}
+      </div>
+      <dl className="sw-counts">
+        {DESK_STATUSES.map((s) => (
+          <div key={s} data-status={s} title={DESK_STATUS[s].hint}>
+            <dt>{DESK_STATUS[s].short}</dt>
+            <dd>{counts(s)}</dd>
+          </div>
+        ))}
+      </dl>
+      {children}
+      <h3 className="fp-section-title sw-key-title">Chú giải</h3>
+      <ul className="sw-key">
+        {DESK_STATUSES.map((s) => (
+          <li key={s} data-status={s}>
+            <LegendMark status={s} />
+            {DESK_STATUS[s].short}
+          </li>
+        ))}
+        <li className="sw-key-boundary">
+          <span className="sw-key-rule" aria-hidden="true" />
+          Ranh giới khu vực
+        </li>
+      </ul>
+    </section>
+  )
 }
 
 function CompactInspector({ desk, onClose, onVerify }: { desk: DeskRecord; onClose: () => void; onVerify: () => void }) {
@@ -182,18 +235,19 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
             <button type="button" title="Đưa toàn bộ khu vực vào khung nhìn" onClick={reset}>Vừa khung</button>
           </div>
         </div>
-        <div className="sw-legend" role="group" aria-label={`Trạng thái chỗ ngồi · ${SPATIAL_SCOPE_LABEL}`}>{DESK_STATUSES.map((status) => <div key={status} data-status={status} title={DESK_STATUS[status].hint}><svg viewBox="-2 -2 4 4" aria-hidden="true"><SeatSymbol status={status} /></svg><span>{DESK_STATUS[status].label}</span><b>{counts(status)}</b></div>)}</div>
-        <footer className="sw-map-foot"><span id="sw-map-help">Nhấp vào bàn để xem thông tin · Phím mũi tên để chuyển bàn</span><span className="sw-boundary-key"><i /> Ranh giới khu vực</span></footer>
       </section>
     </div>
     <div className="sw-context">
-      {desk ? <CompactInspector desk={desk} onClose={() => { onSelect(null); svgRef.current?.focus() }} onVerify={onVerify} /> : <aside className="sw-overview" aria-label={`Tổng quan · ${SPATIAL_SCOPE_LABEL}`}>
-        <p className="fp-eyebrow">{SPATIAL_SCOPE_LABEL}</p><div className="sw-capacity"><strong>{desks.size}</strong><span>chỗ ngồi</span></div>
-        <div className="sw-occupancy-bar" aria-hidden="true">{DESK_STATUSES.map((s) => <span key={s} data-status={s} style={{ flex: counts(s) }} />)}</div>
-        <h3 className="sw-empty-title">{outsideCrop ? SPATIAL_OUT_OF_SCOPE : 'Chọn một bàn trên mặt bằng'}</h3><p>{outsideCrop ? SPATIAL_OUT_OF_SCOPE_HINT : 'Xem trạng thái chỗ ngồi, nhân sự và bộ phận tại từng vị trí.'}</p>
-        {outsideCrop && <button type="button" className="fp-btn is-wide sw-verify" onClick={onVerify}>Đối chiếu trên bản vẽ <span aria-hidden="true">↗</span></button>}
-        <div className="sw-overview-note"><strong>Cách đọc mặt bằng</strong><p><span className="sw-example-avatar">NM</span> Ký hiệu nhân sự: bàn đang sử dụng</p><p><span className="sw-example-empty">○</span> Vòng tròn rỗng: bàn còn trống</p></div>
-      </aside>}
+      {desk && <CompactInspector desk={desk} onClose={() => { onSelect(null); svgRef.current?.focus() }} onVerify={onVerify} />}
+      <ScopeSummary count={desks.size} counts={counts}>
+        {!desk && (
+          <div className="sw-overview">
+            <h3 className="sw-empty-title">{outsideCrop ? SPATIAL_OUT_OF_SCOPE : 'Chọn một bàn trên mặt bằng'}</h3>
+            <p>{outsideCrop ? SPATIAL_OUT_OF_SCOPE_HINT : 'Xem trạng thái chỗ ngồi, nhân sự và bộ phận tại từng vị trí.'}</p>
+            {outsideCrop && <button type="button" className="fp-btn is-wide sw-verify" onClick={onVerify}>Đối chiếu trên bản vẽ <span aria-hidden="true">↗</span></button>}
+          </div>
+        )}
+      </ScopeSummary>
       <div className="sw-scope-note"><span className="sw-scope-line" /><p><strong>Một phần mặt bằng Tầng 16</strong><br />Vị trí bàn, ghế và ranh giới theo bản vẽ hiện có. Nhân sự và trạng thái là dữ liệu minh họa.</p></div>
     </div>
     <p className="fp-sr-only" aria-live="polite">{desk ? `Đã chọn bàn ${desk.seat.code} · ${DESK_STATUS[desk.status].label}` : 'Chưa chọn bàn'}</p>

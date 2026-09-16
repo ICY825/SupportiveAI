@@ -126,7 +126,7 @@ export function WorkspaceScene({ scene, desks, selectedId, onSelect, svgRef, vie
     { ws, kind: 'desk', depth: project(ws.center)[1] },
     ...(ws.chair ? [{ ws, kind: 'chair', depth: project(ws.chair.center)[1] }] : []),
   ]).sort((a, b) => a.depth - b.depth)
-  return <svg ref={svgRef} className="sw-scene" viewBox={viewBox} role="application" aria-label="Bố trí chỗ ngồi · 19 bàn khu Mô hình & Nền tảng AI" aria-describedby="sw-map-help" tabIndex={0}
+  return <svg ref={svgRef} className="sw-scene" viewBox={viewBox} role="application" aria-label="Bố trí chỗ ngồi · 19 bàn khu Mô hình & Nền tảng AI" tabIndex={0}
     onKeyDown={onKeyDown} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerCancel}>
     <defs><clipPath id={clipId}><rect x={SPIKE_CROP[0]} y={SPIKE_CROP[1]} width={SPIKE_CROP[2] - SPIKE_CROP[0]} height={SPIKE_CROP[3] - SPIKE_CROP[1]} /></clipPath></defs>
     <g className="sw-scene-content" transform={`translate(${pan[0]} ${pan[1]}) translate(${origin[0]} ${origin[1]}) scale(${zoom}) translate(${-origin[0]} ${-origin[1]})`}>

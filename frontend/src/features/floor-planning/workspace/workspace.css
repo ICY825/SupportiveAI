@@ -73,13 +73,7 @@
 
 /* ---------------------------------------------------------------- legend */
 
-.sw-legend { display: flex; gap: 8px 18px; flex-wrap: wrap; flex: none; padding: 11px var(--sw-gutter, 20px) 8px; }
-.sw-legend > div { display: flex; align-items: center; gap: 5px; font-size: var(--fp-t-micro); color: var(--fp-text-2); cursor: help; }
-.sw-legend svg, .sw-status svg { width: 17px; height: 17px; color: var(--seat); flex: none; }
-.sw-legend b { font-family: var(--mono); color: var(--ink); font-size: 10px; margin-left: 2px; }
-.sw-map-foot { display: flex; justify-content: space-between; gap: 14px; flex: none; padding: 0 var(--sw-gutter, 20px) 11px; color: var(--sw-muted); font-size: 10px; }
-.sw-boundary-key { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
-.sw-boundary-key i { width: 20px; border-top: 1.5px dashed #7c9bb6; }
+.sw-status svg { width: 17px; height: 17px; color: var(--seat); flex: none; }
 
 /* ---------------------------------------------------------------- inspector */
 
@@ -117,18 +111,41 @@
 
 /* ---------------------------------------------------------------- overview / empty state */
 
-.sw-capacity { display: flex; align-items: baseline; gap: 8px; margin-top: 14px; }
+/* ---------------------------------------------------------------- scope summary */
+
+/*
+ * Seat counts and the map key, moved out from under the map so the map keeps
+ * the height. Heads the panel when nothing is selected, and sits under the
+ * inspector when something is: it describes the scope, not the selection.
+ */
+.sw-summary { padding-top: 2px; }
+.sw-inspector + .sw-summary { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--sw-line); }
+
+.sw-overview { margin: 18px 0 2px; padding-top: 16px; border-top: 1px solid var(--sw-line); }
+.sw-empty-title { margin: 0 0 6px; font-size: var(--fp-t-section); font-weight: 600; }
+.sw-overview > p { font-size: var(--fp-t-small); color: var(--sw-muted); line-height: 1.7; margin: 0; }
+.sw-overview > .fp-btn { margin-top: 12px; }
+
+.sw-capacity { display: flex; align-items: baseline; gap: 8px; margin-top: 12px; }
 .sw-capacity strong { font: 500 34px var(--mono); letter-spacing: -2px; }
 .sw-capacity > span { color: var(--sw-muted); font-size: 12px; }
-.sw-occupancy-bar { display: flex; gap: 3px; height: 6px; border-radius: 3px; overflow: hidden; margin: 16px 0 24px; }
+.sw-occupancy-bar { display: flex; gap: 3px; height: 6px; border-radius: 3px; overflow: hidden; margin: 14px 0 16px; }
 .sw-occupancy-bar span { background: var(--seat); }
-.sw-empty-title { margin: 0 0 8px; font-size: var(--fp-t-section); font-weight: 600; }
-.sw-overview > p:not(.fp-eyebrow), .sw-overview-note p { font-size: var(--fp-t-small); color: var(--sw-muted); line-height: 1.7; }
-.sw-overview-note { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--sw-line); }
-.sw-overview-note > strong { font-size: var(--fp-t-small); font-weight: 600; }
-.sw-overview-note p { display: flex; align-items: center; gap: 7px; font-size: 10px; margin: 12px 0 0; }
-.sw-example-avatar { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; background: #3d617f; color: white; font-size: 8px; }
-.sw-example-empty { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; border: 1px solid #297a60; color: #297a60; background: #eef8f3; font-size: 19px; line-height: 1; }
+
+/* count first, label second; the <dl> keeps "label: count" for screen readers */
+.sw-counts { margin: 0; display: grid; gap: 1px; }
+.sw-counts > div { display: flex; align-items: baseline; gap: 10px; padding: 5px 0; cursor: help; }
+.sw-counts dd { order: -1; margin: 0; flex: none; min-width: 22px; font: 600 var(--fp-t-section) var(--mono); font-variant-numeric: tabular-nums; text-align: right; color: var(--seat); }
+.sw-counts dt { font-size: var(--fp-t-small); color: var(--fp-text-2); }
+
+.sw-key-title { margin: 18px 0 10px; padding-top: 16px; border-top: 1px solid var(--sw-line); }
+.sw-key { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.sw-key li { display: flex; align-items: center; gap: 9px; font-size: var(--fp-t-small); color: var(--fp-text-2); }
+/* same disc the map draws, including the solid fill that carries the initials */
+.sw-key-mark { width: 24px; height: 24px; flex: none; color: var(--seat); }
+.sw-key li[data-status='occupied'] .sw-marker-disc { fill: var(--seat); stroke: #fff; }
+.sw-key-rule { width: 24px; flex: none; border-top: 1.5px dashed #7c9bb6; }
+.sw-key-boundary { color: var(--sw-muted); }
 .sw-scope-note { display: flex; gap: 10px; margin: 16px 4px; }
 .sw-scope-line { flex: none; width: 2px; background: #cad7e2; }
 .sw-scope-note p { margin: 0; color: var(--sw-muted); font-size: 10px; line-height: 1.8; }
@@ -176,5 +193,4 @@
 @media (max-width: 600px) {
   .sw-workspace { --sw-gutter: 12px; --sw-stage-min: 320px; }
   .sw-map-top { flex-wrap: wrap; }
-  .sw-map-foot { flex-direction: column; }
 }
