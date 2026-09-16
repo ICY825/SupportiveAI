@@ -1,4 +1,4 @@
-import { memo, useId, useMemo, type KeyboardEvent, type RefObject } from 'react'
+import { memo, useId, useMemo, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 import type { DeskRecord, DeskStatus } from '../domain/desk'
 import type { Point, Workstation } from '../domain/spatial'
 import { DESK_STATUS, SCENE_CROP_CAPTION, SCENE_ZONE_CAPTION } from '../labels'
@@ -150,7 +150,7 @@ const Marker = memo(function Marker({
   )
 })
 
-export function WorkspaceScene({ scene, desks, selectedId, onSelect, svgRef, viewBox, origin, zoom, pan, onKeyDown, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }: {
+export function WorkspaceScene({ scene, desks, selectedId, onSelect, svgRef, viewBox, origin, zoom, pan, ground, overlay, ariaLabel, onKeyDown, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }: {
   scene: SpikeScene
   desks: ReadonlyMap<string, DeskRecord>
   selectedId?: string
@@ -162,6 +162,11 @@ export function WorkspaceScene({ scene, desks, selectedId, onSelect, svgRef, vie
   origin: Point
   zoom: number
   pan: Point
+  /** drawn under the furniture: the edit grid and the editable-area outline */
+  ground?: ReactNode
+  /** drawn over the furniture: selection box, invalid marks, rotate handle */
+  overlay?: ReactNode
+  ariaLabel?: string
   onKeyDown: (e: KeyboardEvent<SVGSVGElement>) => void
   onPointerDown: React.PointerEventHandler<SVGSVGElement>
   onPointerMove: React.PointerEventHandler<SVGSVGElement>
@@ -177,7 +182,7 @@ export function WorkspaceScene({ scene, desks, selectedId, onSelect, svgRef, vie
       className="sw-scene"
       viewBox={viewBox}
       role="application"
-      aria-label="Bố trí chỗ ngồi · 19 bàn khu Mô hình & Nền tảng AI"
+      aria-label={ariaLabel ?? 'Bố trí chỗ ngồi · 19 bàn khu Mô hình & Nền tảng AI'}
       tabIndex={0}
       onKeyDown={onKeyDown}
       onPointerDown={onPointerDown}
@@ -201,6 +206,7 @@ export function WorkspaceScene({ scene, desks, selectedId, onSelect, svgRef, vie
         }}
       >
         <Architecture scene={scene} clipId={clipId} />
+        {ground}
         {geometry.items.map((item) => {
           const desk = desks.get(item.ws.id)
           if (!desk) return null
@@ -239,6 +245,7 @@ export function WorkspaceScene({ scene, desks, selectedId, onSelect, svgRef, vie
           <text>{SCENE_ZONE_CAPTION}</text>
           <path d="M0 1.2v2.9" stroke="#7c9bb6" strokeWidth={0.2} />
         </g>
+        {overlay}
         <text aria-hidden="true" x={geometry.cropCaptionPos[0]} y={geometry.cropCaptionPos[1] + CROP_LABEL_OFFSET} className="sw-crop-label" textAnchor="middle">
           {SCENE_CROP_CAPTION}
         </text>

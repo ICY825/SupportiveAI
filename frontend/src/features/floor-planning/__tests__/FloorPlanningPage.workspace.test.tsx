@@ -51,6 +51,7 @@ describe('desk selection → workspace inspector', () => {
     clickDesk(OCCUPIED)
     const inspector = await screen.findByRole('complementary', { name: /^F16-.-065$/ })
     expect(within(inspector).getByText('Nguyễn Văn Minh')).toBeTruthy()
+    expect(within(inspector).getByText('Thông tin chỗ ngồi').closest('details')?.hasAttribute('open')).toBe(true)
     expect(deskMarker(OCCUPIED).getAttribute('aria-pressed')).toBe('true')
     expect(document.querySelector('.sw-selection')).not.toBeNull()
     expect(window.location.hash).toContain(`select=workstation%3A${OCCUPIED}`)
@@ -192,4 +193,29 @@ describe('desk selection → workspace inspector', () => {
     expect(screen.getByRole('complementary', { name: /^F16-/ })).toBeTruthy()
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Trợ giúp và phím tắt' }))
   }, 30000)
+})
+
+describe('unsaved layout changes guard the page', () => {
+  it('asks before switching view mode and applies the switch only after discarding', async () => {
+    await openWorkspace()
+    fireEvent.click(screen.getByRole('radio', { name: 'Chỉnh sửa bố trí' }))
+    clickDesk(OCCUPIED)
+    fireEvent.keyDown(document.querySelector('.sw-scene')!, { key: 'ArrowUp' })
+    expect(screen.getByRole('button', { name: 'Lưu bố trí' })).toHaveProperty('disabled', false)
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Xác minh mặt bằng' }))
+    expect(screen.getByRole('alertdialog')).toBeTruthy()
+    // still in the spatial view, draft intact
+    expect(screen.getByRole('application')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục chỉnh sửa' }))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(screen.getByRole('radio', { name: 'Bố trí chỗ ngồi' })).toHaveProperty('ariaChecked', 'true')
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Xác minh mặt bằng' }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Hủy thay đổi' }))
+    })
+    expect(screen.getByRole('radio', { name: 'Xác minh mặt bằng' })).toHaveProperty('ariaChecked', 'true')
+  })
 })

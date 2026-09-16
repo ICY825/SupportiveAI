@@ -1,4 +1,7 @@
-import type { BaseLayer, BBox, FloorDataset, Point, Workstation } from '../domain/spatial'
+import { rectangle } from '../domain/geometry'
+import type { BaseLayer, BBox, FloorDataset, Point, Room, Workstation, Zone } from '../domain/spatial'
+
+export { rectangle }
 
 /** Camera crop, NOT a room or floor outline. Only these three complete source clusters are in the spike. */
 export const SPIKE_CLUSTER_IDS = ['cluster-16-13', 'cluster-16-17', 'cluster-16-18']
@@ -17,6 +20,21 @@ export function project([x, y]: Point, z = 0): Point {
   return [C * dx - S * dy, E * (S * dx + C * dy) - Math.cos(ELEVATION) * z]
 }
 
+/**
+ * Inverse of project()'s linear part: a displacement in scene units back to a
+ * displacement in floor coordinates. Pointer drags are deltas, so this is the
+ * conversion the editor actually uses; it needs no element measurement.
+ */
+export function unprojectDelta([dx, dy]: Point): Point {
+  return [C * dx + (S / E) * dy, -S * dx + (C / E) * dy]
+}
+
+/** Inverse of project(). Floor point that lands at `scenePoint` on plane `z`. */
+export function unproject([px, py]: Point, z = 0): Point {
+  const [dx, dy] = unprojectDelta([px, py + Math.cos(ELEVATION) * z])
+  return [dx + SPIKE_CROP[0], dy + SPIKE_CROP[1]]
+}
+
 /** The same projection as project(), for unmodified source SVG paths. */
 export function planeTransform(z = 0): string {
   const [x, y] = project([0, 0], z)
@@ -25,7 +43,6 @@ export function planeTransform(z = 0): string {
 
 export const points = (polygon: Point[]) => polygon.map((p) => p.join(',')).join(' ')
 export const projectedPoints = (polygon: Point[], z = 0) => points(polygon.map((p) => project(p, z)))
-export const rectangle = ([x0, y0, x1, y1]: BBox): Point[] => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
 
 const intersects = (a: BBox, b: BBox) => a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1]
 
@@ -44,7 +61,16 @@ export function cropSourcePath(d: string, crop: BBox): string {
   }).join('')
 }
 
-export function buildSpikeScene(dataset: FloorDataset) {
+export interface SpikeScene {
+  workstations: Workstation[]
+  layers: BaseLayer[]
+  zones: Zone[]
+  rooms: Room[]
+  deskHeight: number
+  chairHeight: number
+}
+
+export function buildSpikeScene(dataset: FloorDataset): SpikeScene {
   const clusterIds = new Set(dataset.layout.floor.id === 'floor-16' ? SPIKE_CLUSTER_IDS : [])
   const workstations = dataset.workstations.filter((w) => clusterIds.has(w.clusterId))
   const layers: BaseLayer[] = dataset.layout.layers
@@ -60,8 +86,6 @@ export function buildSpikeScene(dataset: FloorDataset) {
     chairHeight: 450 / dataset.layout.floor.mmPerPt,
   }
 }
-
-export type SpikeScene = ReturnType<typeof buildSpikeScene>
 
 /** Where the marker discs sit above the chair seat, and how wide they are. */
 export const MARKER_ELEVATION = 5

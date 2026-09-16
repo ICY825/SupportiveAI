@@ -4,6 +4,7 @@ import { createDemoAllocation } from '../allocation/demoAllocation'
 import { FloorDetailsPanel } from '../components/FloorDetailsPanel'
 import { FloorMap } from '../components/FloorMap'
 import { SpatialWorkspace } from '../workspace/SpatialWorkspace'
+import { UnsavedChangesDialog } from '../workspace/EditPanel'
 import { FloorMapControls, ViewControls } from '../components/FloorMapControls'
 import { FloorSearch } from '../components/FloorSearch'
 import { FloorSelector } from '../components/FloorSelector'
@@ -41,6 +42,10 @@ export function FloorPlanningPage({ settingsOpen = false, onSettingsOpenChange }
   const [view, setView] = useState<ViewMode>(initial.view)
   const [state, setState] = useState<{ id: string; dataset?: FloorDataset; error?: string } | null>(null)
   const [searchSlot, setSearchSlot] = useState<HTMLDivElement | null>(null)
+  // An open layout draft lives inside SpatialWorkspace and dies with it, so the
+  // page has to ask before it unmounts or replaces that component.
+  const [layoutDirty, setLayoutDirty] = useState(false)
+  const [pendingNav, setPendingNav] = useState<{ floorId?: string; view?: ViewMode } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -73,10 +78,31 @@ export function FloorPlanningPage({ settingsOpen = false, onSettingsOpenChange }
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
-  const changeFloor = (id: string) => {
-    setSelected(null)
-    setFloorId(id)
+  useEffect(() => {
+    if (!layoutDirty) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => e.preventDefault()
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [layoutDirty])
+
+  const applyNav = (next: { floorId?: string; view?: ViewMode }) => {
+    if (next.floorId !== undefined) {
+      setSelected(null)
+      setFloorId(next.floorId)
+    }
+    if (next.view !== undefined) setView(next.view)
   }
+
+  /** Every route out of an open draft funnels through one confirmation. */
+  const navigate = (next: { floorId?: string; view?: ViewMode }) => {
+    if (layoutDirty) {
+      setPendingNav(next)
+      return
+    }
+    applyNav(next)
+  }
+
+  const changeFloor = (id: string) => navigate({ floorId: id })
 
   const current = state?.id === floorId ? state : null
   const floorLabel = findFloor(floorId)?.label
@@ -97,7 +123,7 @@ export function FloorPlanningPage({ settingsOpen = false, onSettingsOpenChange }
               role="radio"
               aria-checked={view === m.id}
               className={view === m.id ? 'is-active' : ''}
-              onClick={() => setView(m.id)}
+              onClick={() => navigate({ view: m.id })}
             >
               {m.label}
             </button>
@@ -131,10 +157,11 @@ export function FloorPlanningPage({ settingsOpen = false, onSettingsOpenChange }
           dataset={current.dataset}
           selected={selected}
           onSelect={setSelected}
-          onVerify={() => setView('verification')}
+          onVerify={() => navigate({ view: 'verification' })}
           searchSlot={searchSlot}
           settingsOpen={settingsOpen}
           onCloseSettings={() => onSettingsOpenChange?.(false)}
+          onDirtyChange={setLayoutDirty}
         />
       )}
       {current?.dataset && view === 'verification' && (
@@ -144,10 +171,21 @@ export function FloorPlanningPage({ settingsOpen = false, onSettingsOpenChange }
           selected={selected}
           onSelect={setSelected}
           view={view}
-          onViewChange={setView}
+          onViewChange={(next) => navigate({ view: next })}
           searchSlot={searchSlot}
           settingsOpen={settingsOpen}
           onCloseSettings={() => onSettingsOpenChange?.(false)}
+        />
+      )}
+      {pendingNav && (
+        <UnsavedChangesDialog
+          onStay={() => setPendingNav(null)}
+          onDiscard={() => {
+            const next = pendingNav
+            setPendingNav(null)
+            setLayoutDirty(false)
+            applyNav(next)
+          }}
         />
       )}
     </div>

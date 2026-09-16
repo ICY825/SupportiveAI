@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-16T05:58:07.112Z",
+  "generatedAt": "2026-09-16T06:34:28.876Z",
   "states": [
     {
       "name": "spatial-overview",
@@ -48,6 +48,51 @@
     },
     {
       "name": "spatial-conflict",
+      "map": {
+        "canvas": [
+          928,
+          739
+        ],
+        "drawn": [
+          588,
+          402
+        ],
+        "fillX": 0.634,
+        "fillY": 0.544
+      }
+    },
+    {
+      "name": "spatial-edit-grid",
+      "map": {
+        "canvas": [
+          928,
+          739
+        ],
+        "drawn": [
+          588,
+          402
+        ],
+        "fillX": 0.634,
+        "fillY": 0.544
+      }
+    },
+    {
+      "name": "spatial-edit-selected",
+      "map": {
+        "canvas": [
+          928,
+          739
+        ],
+        "drawn": [
+          588,
+          402
+        ],
+        "fillX": 0.634,
+        "fillY": 0.544
+      }
+    },
+    {
+      "name": "spatial-edit-invalid",
       "map": {
         "canvas": [
           928,

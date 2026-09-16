@@ -2,7 +2,8 @@ import type { Point } from '../domain/spatial'
 
 export type Direction = 'up' | 'down' | 'left' | 'right'
 
-const VECTORS: Record<Direction, Point> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }
+/** Unit step per direction, in the plane the caller works in. */
+export const DIRECTION_VECTOR: Record<Direction, Point> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }
 
 export const ARROW_DIRECTION: Record<string, Direction> = {
   ArrowUp: 'up',
@@ -22,7 +23,7 @@ export function nearestInDirection<T extends { id: string; center: Point }>(
   candidates: T[],
   excludeId?: string,
 ): T | undefined {
-  const [dx, dy] = VECTORS[direction]
+  const [dx, dy] = DIRECTION_VECTOR[direction]
   let best: T | undefined
   let bestScore = Infinity
   for (const c of candidates) {

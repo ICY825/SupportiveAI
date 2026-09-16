@@ -151,6 +151,87 @@
 .sw-view-settings > .fp-icon-btn { float: right; margin: -6px -6px 0 0; }
 .sw-view-settings p { font-size: var(--fp-t-small); color: var(--sw-muted); line-height: 1.7; }
 
+/* ------------------------------------------------- layout editor (edit mode) */
+
+/*
+ * Edit mode is a different task, not a different product. It adds a grid, a
+ * selection box and two buttons; it does not restyle the map. Everything in
+ * this block is scoped to .is-editing so view mode renders exactly as before.
+ */
+.sw-workspace { --sw-edit: #245bb7; --sw-invalid: #b6443d; }
+
+.sw-heading-actions { display: flex; align-items: center; gap: 12px; flex: none; }
+.sw-mode-switch { flex: none; }
+
+.sw-edit-toolbar { display: flex; align-items: center; gap: 8px; }
+.sw-edit-state { margin: 0; font-size: var(--fp-t-small); color: var(--sw-muted); white-space: nowrap; }
+/* the page title must keep its line whatever the toolbar is saying */
+.sw-heading > div:first-child { min-width: 0; }
+.sw-edit-state[data-blocked='invalid'] { color: var(--sw-invalid); font-weight: 600; }
+
+/* the scene itself: pressing an object moves it, pressing the floor still pans */
+.is-editing .sw-scene { cursor: default; }
+.is-editing .sw-furniture, .is-editing .sw-marker { cursor: move; }
+
+/* Planning aid, not a floor finish: dots only, well under the wall linework. */
+.sw-edit-grid circle { fill: #7d92a4; opacity: 0.38; }
+.sw-edit-boundary { fill: none; stroke: var(--sw-edit); stroke-width: 0.35; stroke-dasharray: 2.2 1.6; opacity: 0.55; }
+
+.sw-edit-footprint { fill: rgba(36, 91, 183, 0.1); stroke: var(--sw-edit); stroke-width: 0.3; stroke-dasharray: 1.6 1.2; }
+.sw-edit-box { fill: none; stroke: var(--sw-edit); stroke-width: 0.5; stroke-linejoin: round; }
+.sw-edit-invalid polygon:last-child { fill: none; stroke: var(--sw-invalid); stroke-width: 0.55; stroke-linejoin: round; }
+
+.sw-edit-handle { cursor: pointer; }
+.sw-edit-handle circle { fill: var(--paper); stroke: var(--sw-edit); stroke-width: 0.3; }
+.sw-edit-handle path { fill: none; stroke: var(--sw-edit); stroke-width: 0.42; stroke-linecap: round; }
+.sw-edit-handle .sw-edit-handle-tip { fill: var(--sw-edit); stroke: none; }
+.sw-edit-handle:hover circle { fill: #eef3fb; }
+
+.sw-edit-caption { display: inline-flex; align-items: center; gap: 4px; color: var(--sw-muted); }
+
+/* ------------------------------------------------- placement status */
+
+.sw-placement-status { display: flex; align-items: center; gap: 6px; margin: 6px 0 0; font-size: var(--fp-t-small); font-weight: 600; color: #297a60; }
+.sw-placement-status[data-valid='false'] { color: var(--sw-invalid); }
+.sw-placement-status.is-inline { margin: 0; display: inline-flex; }
+
+/* ------------------------------------------------- edit inspector */
+
+.sw-edit-inspector, .sw-edit-empty {
+  display: block;
+  margin: -14px calc(-1 * var(--fp-pad-panel)) 0;
+  padding: 11px var(--fp-pad-panel) 16px;
+  border-top: 3px solid var(--sw-edit);
+  border-bottom: 1px solid var(--sw-line);
+}
+.sw-edit-inspector .fp-card-title { margin: 2px 0 12px; }
+.sw-edit-facts { margin: 0 0 14px; }
+.sw-edit-coords { font: var(--fp-t-micro) var(--mono); color: var(--sw-muted); }
+.sw-edit-status-label { margin-top: 2px; }
+.sw-edit-rotate { margin-top: 14px; }
+.sw-edit-rotate kbd { font: 10px var(--mono); border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px; color: var(--sw-muted); }
+.sw-edit-hint { margin: 12px 0 0; font-size: 10px; line-height: 1.7; color: var(--sw-muted); }
+.sw-edit-empty-body { margin: 8px 0 0; font-size: var(--fp-t-small); color: var(--fp-text-2); }
+.sw-edit-inspector + .sw-inspector.is-secondary, .sw-edit-empty + .sw-inspector.is-secondary { margin-top: 18px; padding-top: 0; border-top: 0; }
+.sw-edit-note { margin: 16px 0 0; font-size: 10px; line-height: 1.7; color: var(--sw-muted); }
+
+/* ------------------------------------------------- unsaved changes */
+
+.sw-dirty-backdrop { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: rgba(28, 27, 26, 0.28); }
+.sw-dirty-dialog { width: min(400px, calc(100vw - 32px)); padding: 20px; }
+.sw-dirty-dialog h2 { margin: 0; font-size: var(--fp-t-section); font-weight: 600; }
+.sw-dirty-dialog p { margin: 8px 0 0; font-size: var(--fp-t-small); color: var(--sw-muted); line-height: 1.7; }
+.sw-dirty-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+@media (max-width: 1366px) {
+  .sw-heading-actions { gap: 8px; }
+  .sw-edit-state { display: none; }
+}
+@media (max-width: 1100px) {
+  .sw-heading { flex-wrap: wrap; }
+  .sw-heading-actions { flex-wrap: wrap; }
+}
+
 /*
  * Laptop widths. The map area is never the surface that shrinks: the gutters
  * and the page heading give up their space first, and the inspector follows

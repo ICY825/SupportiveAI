@@ -126,6 +126,21 @@
   background: #33312e;
 }
 
+/* A refused action must look refused: Save is blocked on an invalid layout. */
+.fp-btn:disabled,
+.fp-btn:disabled:hover {
+  opacity: 0.4;
+  cursor: default;
+  border-color: var(--line-strong);
+  background: var(--paper);
+}
+
+.fp-btn.is-primary:disabled,
+.fp-btn.is-primary:disabled:hover {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
 /* full-width action at the foot of an inspector */
 .fp-btn.is-wide {
   display: flex;

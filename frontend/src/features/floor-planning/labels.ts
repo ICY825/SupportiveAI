@@ -5,6 +5,7 @@
  * language. Domain constants (SOURCE_VERIFIED, WORKSTATION, …) stay in code and
  * are translated here only for display.
  */
+import type { PlacementIssue } from './domain/placement'
 import type { BaseLayerId, Classification, VerificationState } from './domain/spatial'
 import type { AssignmentType, DeviceType, Presence, SeatType } from './domain/allocation'
 import type { DeskStatus } from './domain/desk'
@@ -176,4 +177,53 @@ export const DEVICE_TYPE: Record<DeviceType, string> = {
   monitor: 'Màn hình',
   dock: 'Dock sạc',
   other: 'Thiết bị khác',
+}
+
+/* --------------------------------------------- layout editor (spatial view) */
+
+/**
+ * Wording for the layout editor. The product is an administrative tool, so the
+ * mode is named after the task ("chỉnh sửa bố trí"), never after the borrowed
+ * interaction model.
+ */
+export const LAYOUT_MODES = [
+  { id: 'view', label: 'Xem mặt bằng', hint: 'Xem và tra cứu bố trí hiện tại' },
+  { id: 'edit', label: 'Chỉnh sửa bố trí', hint: 'Di chuyển và xoay bàn làm việc' },
+] as const
+
+export const LAYOUT_EDIT = {
+  selectedTitle: 'Bàn đang chọn',
+  position: 'Vị trí',
+  rotation: 'Góc xoay',
+  placementStatus: 'Trạng thái bố trí',
+  valid: 'Vị trí hợp lệ',
+  rotate: 'Xoay 90°',
+  save: 'Lưu bố trí',
+  cancel: 'Hủy',
+  saving: 'Đang lưu…',
+  noSelection: 'Chọn một bàn trên mặt bằng để di chuyển hoặc xoay.',
+  hint: 'Kéo bàn để di chuyển · Phím mũi tên để dịch từng ô · R để xoay · Esc để bỏ chọn',
+  changed: (n: number) => `${n} bàn đã đổi`,
+  noChange: 'Chưa có thay đổi',
+  invalidSummary: (n: number) => `${n} bàn chưa hợp lệ`,
+  gridLabel: (mm: number) => `Lưới ${mm} mm`,
+  /** Said plainly: a committed layout does not survive a reload yet. */
+  persistenceNote: 'Bố trí đã lưu chỉ tồn tại trong phiên làm việc này; chưa kết nối máy chủ.',
+  boundaryNote:
+    'Phạm vi bố trí lấy theo ranh giới khu vực được đánh dấu trên bản vẽ nguồn, không phải ranh giới tường thực tế.',
+  dirtyTitle: 'Bố trí hiện tại có thay đổi chưa được lưu.',
+  dirtyBody: 'Nếu rời khỏi chế độ chỉnh sửa, các thay đổi sẽ bị bỏ.',
+  dirtyStay: 'Tiếp tục chỉnh sửa',
+  dirtyDiscard: 'Hủy thay đổi',
+} as const
+
+/** Placement problems, phrased for the person moving the desk. */
+export const PLACEMENT_ISSUE = {
+  overlap: (code: string) => `Chồng lấn bàn ${code}`,
+  outsideBoundary: 'Ngoài phạm vi bố trí',
+} as const
+
+/** Geometry reports issues as data; the wording is chosen here. */
+export function placementIssueText(issue: PlacementIssue, codeOf: (entityId: string) => string): string {
+  return issue.type === 'overlap' ? PLACEMENT_ISSUE.overlap(codeOf(issue.entityId)) : PLACEMENT_ISSUE.outsideBoundary
 }

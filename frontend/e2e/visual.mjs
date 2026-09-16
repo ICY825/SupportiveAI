@@ -173,11 +173,62 @@ async function run() {
   }
   await page.getByRole('application').press('Escape')
 
+  // ------------------------------------------------------- layout editor
+  // Edit mode adds a grid, a selection box and two buttons. None of it may
+  // appear in view mode, and none of it may push the map around.
+  await page.goto(url('view=workspace'))
+  await page.getByRole('application').waitFor()
+  check((await page.locator('.sw-edit-grid').count()) === 0, 'view mode: edit grid is drawn before entering edit mode')
+  const viewMap = await measure(page, 'workspace')
+
+  await page.getByRole('radio', { name: 'Chỉnh sửa bố trí' }).click()
+  await page.locator('.sw-edit-grid').waitFor()
+  check((await page.locator('.sw-edit-grid circle').count()) > 50, 'edit: grid has too few points to read as a grid')
+  check((await page.locator('.sw-edit-boundary').count()) === 1, 'edit: editable-area outline missing')
+  const editMap = await measure(page, 'workspace')
+  check(
+    editMap.canvas[0] === viewMap.canvas[0] && editMap.canvas[1] === viewMap.canvas[1],
+    `edit: entering edit mode resized the map — ${viewMap.canvas.join('x')} vs ${editMap.canvas.join('x')}`,
+  )
+  report.states.push({ name: 'spatial-edit-grid', map: editMap })
+  await shot(page, 'spatial-edit-grid')
+
+  await page.getByRole('button', { name: 'Bàn F16-D-065 · Đang sử dụng', exact: true }).click()
+  await page.locator('.sw-edit-inspector').waitFor()
+  check((await page.locator('.sw-edit-box').count()) === 1, 'edit: selection box missing')
+  check((await page.locator('.sw-edit-handle').count()) === 1, 'edit: rotate handle missing')
+  const editHits = await overlaps(page, ['.sw-map-panel', '.sw-context', '.sw-edit-toolbar'])
+  check(editHits.length === 0, `spatial-edit-selected: overlap ${editHits.join(', ')}`)
+  report.states.push({ name: 'spatial-edit-selected', map: await measure(page, 'workspace') })
+  await shot(page, 'spatial-edit-selected')
+
+  // an invalid placement must be visible on the object, not only in the panel
+  await page.locator('.sw-scene').press('ArrowRight')
+  await page.locator('.sw-placement-status[data-valid="false"]').first().waitFor()
+  check((await page.locator('.sw-edit-invalid').count()) > 0, 'edit: invalid placement is not marked on the map')
+  check(await page.getByRole('button', { name: 'Lưu bố trí' }).isDisabled(), 'edit: Save is offered for an invalid layout')
+  // the toolbar reports placement problems; it must not reflow the page while
+  // doing it, or the map jumps every time a desk crosses another one
+  const invalidMap = await measure(page, 'workspace')
+  check(
+    invalidMap.canvas[0] === editMap.canvas[0] && invalidMap.canvas[1] === editMap.canvas[1],
+    `edit: an invalid placement resized the map — ${editMap.canvas.join('x')} vs ${invalidMap.canvas.join('x')}`,
+  )
+  report.states.push({ name: 'spatial-edit-invalid', map: invalidMap })
+  await shot(page, 'spatial-edit-invalid')
+
+  await page.getByRole('button', { name: 'Hủy', exact: true }).click()
+  check((await page.locator('.sw-edit-grid').count()) === 0, 'edit: grid survives Hủy')
+  await page.getByRole('application').press('Escape')
+
   // keyboard selection must stay usable and visibly focused in both modes
   for (const [view, mapSelector] of [['workspace', '.sw-scene'], ['verification', '.fp-svg']]) {
     await page.goto(url(`view=${view}`))
     await page.locator(mapSelector).waitFor()
     await page.locator(mapSelector).focus()
+    // the ring is :focus-visible, so the check must not depend on whether an
+    // earlier step in this file happened to end on a click or on a key
+    await page.locator(mapSelector).press('Shift')
     const ring = await page.evaluate((sel) => getComputedStyle(document.querySelector(sel)).boxShadow, mapSelector)
     check(ring !== 'none', `${view}: focused map has no visible focus ring`)
     await page.locator(mapSelector).press('ArrowRight')
@@ -247,7 +298,7 @@ async function run() {
       check(overflow <= width, `${view} @${width}: horizontal overflow (${overflow}px)`)
       const map = await measure(page, view)
       const bad = [
-        ...(await clipped(page, ['.fp-topbar h1', '.fp-segmented button', '.fp-page-title', '.sw-heading-meta'])),
+        ...(await clipped(page, ['.fp-topbar h1', '.fp-segmented button', '.fp-page-title', '.sw-heading-meta', '.sw-edit-state'])),
         ...(await truncatedPlaceholders(page)),
       ]
       check(bad.length === 0, `${view} @${width}: ${bad.join('; ')}`)
