@@ -1,6 +1,7 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import type { LockerItem, LockerStats } from '../types'
 import { STATUS_META } from '../lockersData'
+import { DeskStatusBadge } from '../../floor-planning/components/desk-inspector/DeskStatusBadge'
 
 interface LockerInspectorProps {
   locker: LockerItem | null
@@ -10,6 +11,46 @@ interface LockerInspectorProps {
   onRemindLocker: (lockerId: string) => void
   onSelectCompartment?: (compartmentId: string) => void
   onClose: () => void
+}
+
+const DESK_STATUS_MAP: Record<LockerItem['status'], 'occupied' | 'available' | 'conflict' | 'unavailable'> = {
+  in_use: 'occupied',
+  available: 'available',
+  recall: 'conflict',
+  broken: 'unavailable',
+}
+
+function LockerLegend({ stats }: { stats?: LockerStats }) {
+  const inUse = stats?.inUse ?? 13
+  const available = stats?.available ?? 3
+  const recall = stats?.recall ?? 1
+  const broken = stats?.broken ?? 1
+
+  return (
+    <details className="fp-section" open>
+      <summary>
+        <h3>Chú giải</h3>
+      </summary>
+      <ul className="fp-key">
+        <li title="Ngăn tủ đang được nhân sự sử dụng">
+          <span className="status-dot in_use" aria-hidden="true" />
+          <span>Đang dùng ({inUse})</span>
+        </li>
+        <li title="Ngăn tủ còn trống, sẵn sàng cấp phát">
+          <span className="status-dot available" aria-hidden="true" />
+          <span>Còn trống ({available})</span>
+        </li>
+        <li title="Ngăn tủ hết hạn hoặc cần thu hồi">
+          <span className="status-dot recall" aria-hidden="true" />
+          <span>Cần thu hồi ({recall})</span>
+        </li>
+        <li title="Ngăn tủ đang báo hỏng, cần kỹ thuật xử lý">
+          <span className="status-dot broken" aria-hidden="true" />
+          <span>Hỏng ({broken})</span>
+        </li>
+      </ul>
+    </details>
+  )
 }
 
 export function LockerInspector({
@@ -22,12 +63,13 @@ export function LockerInspector({
   onClose,
 }: LockerInspectorProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const [collapsed, setCollapsed] = useState(false)
 
   useEffect(() => {
     scrollRef.current?.scrollTo?.({ top: 0 })
   }, [locker?.id])
 
-  // When no locker is selected: render FloorDetailsPanel style overview
+  // When no locker is selected: render FloorDetailsPanel splitting image overview
   if (!locker) {
     const total = stats?.total ?? 18
     const inUse = stats?.inUse ?? 13
@@ -39,78 +81,71 @@ export function LockerInspector({
       <aside className="fp-panel" aria-label="Tổng quan tủ locker">
         <header className="fp-panel-head">
           <h2>Quản lý tủ locker</h2>
-          <p className="fp-sub">Tầng 16 · Tòa nhà Technopark</p>
+          <p className="fp-head-meta">Tòa nhà: Technopark · Tầng 16</p>
         </header>
 
-        <div className="fp-panel-scroll">
-          <section className="fp-panel-section">
-            <h3>Chỉ số vận hành</h3>
-            <div className="fp-stat-grid">
-              <div className="fp-stat">
-                <span className="fp-stat-val">{total}</span>
-                <span className="fp-stat-lbl">Tổng số ngăn</span>
-              </div>
-              <div className="fp-stat">
-                <span className="fp-stat-val" style={{ color: '#3d617f' }}>
-                  {inUse}
-                </span>
-                <span className="fp-stat-lbl">Đang dùng</span>
-              </div>
-              <div className="fp-stat">
-                <span className="fp-stat-val" style={{ color: '#297a60' }}>
-                  {available}
-                </span>
-                <span className="fp-stat-lbl">Còn trống</span>
-              </div>
-              <div className="fp-stat">
-                <span className="fp-stat-val" style={{ color: '#8a6f20' }}>
-                  {recall}
-                </span>
-                <span className="fp-stat-lbl">Cần thu hồi</span>
-              </div>
-              <div className="fp-stat">
-                <span className="fp-stat-val" style={{ color: '#b3161d' }}>
-                  {broken}
-                </span>
-                <span className="fp-stat-lbl">Hỏng</span>
-              </div>
-            </div>
-          </section>
+        <dl className="fp-stats">
+          <div>
+            <dt>Tổng số ngăn</dt>
+            <dd>{total}</dd>
+          </div>
+          <div>
+            <dt>Đang dùng</dt>
+            <dd>{inUse}</dd>
+          </div>
+          <div>
+            <dt>Còn trống</dt>
+            <dd>{available}</dd>
+          </div>
+          <div>
+            <dt>Cần thu hồi / Hỏng</dt>
+            <dd>{recall + broken}</dd>
+          </div>
+        </dl>
 
-          <section className="fp-panel-section">
+        <details className="fp-section" open>
+          <summary>
             <h3>Phân bổ theo khu vực</h3>
+          </summary>
+          <dl>
             <div className="fp-row">
-              <dt>Khu L1 · Sảnh Tây & BĐS</dt>
-              <dd>4 ngăn (1 cần thu hồi, 1 trống)</dd>
+              <dt>Khu L1</dt>
+              <dd>Sảnh Tây & BĐS (4 ngăn)</dd>
             </div>
             <div className="fp-row">
-              <dt>Khu L2 · Sảnh Thang máy</dt>
-              <dd>6 ngăn (1 hỏng, 1 trống)</dd>
+              <dt>Khu L2</dt>
+              <dd>Sảnh Thang máy (6 ngăn)</dd>
             </div>
             <div className="fp-row">
-              <dt>Khu L3 · Hành lang AI</dt>
-              <dd>7 ngăn (1 trống)</dd>
+              <dt>Khu L3</dt>
+              <dd>Hành lang AI (7 ngăn)</dd>
             </div>
             <div className="fp-row">
-              <dt>Khu L4 · Khu Pantry</dt>
-              <dd>1 ngăn (đang dùng)</dd>
+              <dt>Khu L4</dt>
+              <dd>Khu Pantry (1 ngăn)</dd>
             </div>
-          </section>
+          </dl>
+        </details>
 
-          <section className="fp-panel-section">
-            <p className="fp-hint">
-              Nhấp vào một tủ trên sơ đồ mặt bằng, ô chi tiết hoặc danh sách để xem thông tin và thao tác.
-            </p>
-          </section>
-        </div>
+        <p className="fp-callout" style={{ marginTop: '14px' }}>
+          Nhấp vào tủ trên sơ đồ mặt bằng, ô chi tiết hoặc danh sách để xem thông tin và thao tác.
+        </p>
+
+        {/* Collapsible status legend near the footer of the right sidebar */}
+        <LockerLegend stats={stats} />
       </aside>
     )
   }
 
-  const meta = STATUS_META[locker.status]
+  const mappedStatus = DESK_STATUS_MAP[locker.status]
 
   return (
-    <aside className="fp-desk-inspector" aria-label={`Chi tiết tủ ${locker.code}`}>
+    <aside
+      className="fp-desk-inspector"
+      aria-label={`Chi tiết tủ ${locker.code}`}
+      data-desk-status={mappedStatus}
+      data-collapsed={collapsed || undefined}
+    >
       {/* Header matching DeskInspector */}
       <header className="fp-di-head">
         <div className="fp-di-head-main">
@@ -118,23 +153,21 @@ export function LockerInspector({
             {locker.isCombined ? 'Cụm tủ locker' : 'Tủ locker'} · {locker.zoneGroupName.split('·')[0].trim()}
           </p>
           <h2 className="fp-mono-title">{locker.code}</h2>
-          <span
-            className="fp-desk-badge is-md"
-            data-desk-status={
-              locker.status === 'in_use'
-                ? 'occupied'
-                : locker.status === 'recall'
-                  ? 'conflict'
-                  : locker.status === 'broken'
-                    ? 'unavailable'
-                    : 'available'
-            }
-          >
-            {meta.label}
-          </span>
+          <DeskStatusBadge status={mappedStatus} />
         </div>
 
         <div className="fp-di-head-tools">
+          <button
+            type="button"
+            className="fp-icon-btn fp-di-collapse"
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? 'Mở rộng bảng thông tin' : 'Thu gọn bảng thông tin'}
+            onClick={() => setCollapsed((c) => !c)}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path d={collapsed ? 'M4 10l4-4 4 4' : 'M4 6l4 4 4-4'} fill="none" stroke="currentColor" strokeWidth="1.6" />
+            </svg>
+          </button>
           <button
             type="button"
             className="fp-icon-btn"
@@ -152,7 +185,7 @@ export function LockerInspector({
       {/* Scrollable Body matching DeskInspector */}
       <div className="fp-di-scroll" ref={scrollRef}>
         <div className="fp-di-body" key={locker.id}>
-          {/* If combined cabinet, show sub-compartments */}
+          {/* If combined cabinet, show sub-compartments with clean neutral styling */}
           {locker.compartments && locker.compartments.length > 0 && (
             <div className="fp-di-section">
               <h3 className="fp-di-heading">Danh sách ngăn trong cụm ({locker.compartments.length} ngăn)</h3>
@@ -168,8 +201,8 @@ export function LockerInspector({
                       style={{
                         padding: '6px',
                         borderRadius: '5px',
-                        border: isCur ? '1.5px solid var(--vsf-red, #d2181f)' : '1px solid var(--line, #e2ded7)',
-                        background: isCur ? '#fdf5f5' : '#ffffff',
+                        border: isCur ? '1.5px solid var(--ink, #1c1b1a)' : '1px solid var(--line, #e2ded7)',
+                        background: isCur ? 'var(--canvas-2, #f6f4f1)' : '#ffffff',
                         textAlign: 'center',
                         cursor: 'pointer',
                         display: 'flex',
@@ -186,7 +219,7 @@ export function LockerInspector({
                         className={`status-dot ${comp.status}`}
                         style={{ width: '6px', height: '8px' }}
                       />
-                      <span style={{ fontSize: '9px', color: compMeta.color }}>
+                      <span style={{ fontSize: '9px', color: 'var(--fp-text-2, #57524b)' }}>
                         {compMeta.label}
                       </span>
                     </button>
@@ -196,24 +229,24 @@ export function LockerInspector({
             </div>
           )}
 
-          {/* Employee summary if assigned */}
+          {/* Employee summary using authentic fp-di-person */}
           {locker.employeeName ? (
             <div className="fp-di-section">
               <h3 className="fp-di-heading">Nhân sự sử dụng</h3>
-              <div className="locker-person-card">
-                <div className="locker-person-avatar">
+              <div className="fp-di-person">
+                <span className="fp-avatar is-lg" aria-hidden="true">
                   {locker.employeeName.charAt(0)}
-                </div>
-                <div className="locker-person-info">
-                  <div className="locker-person-name">{locker.employeeName}</div>
-                  <div className="locker-person-dept">{locker.department}</div>
+                </span>
+                <div className="fp-di-person-text">
+                  <p className="fp-di-person-name">{locker.employeeName}</p>
+                  <p className="fp-di-person-org">{locker.department}</p>
                 </div>
               </div>
             </div>
           ) : (
             <div className="fp-di-section">
               <h3 className="fp-di-heading">Tình trạng sử dụng</h3>
-              <p className="fp-muted" style={{ margin: 0 }}>
+              <p className="fp-di-muted" style={{ margin: 0 }}>
                 {locker.status === 'broken'
                   ? 'Tủ đang báo hỏng, tạm ngừng sử dụng để kỹ thuật xử lý.'
                   : 'Tủ chưa được gán nhân sự, sẵn sàng cấp phát.'}
@@ -221,30 +254,32 @@ export function LockerInspector({
             </div>
           )}
 
-          {/* Properties Section */}
+          {/* Properties Section using authentic fp-di-props */}
           <div className="fp-di-section">
             <h3 className="fp-di-heading">Thông tin vị trí & ngày cấp</h3>
-            <div className="fp-row">
-              <dt>Vị trí vật lý</dt>
-              <dd>{locker.physicalLocation}</dd>
-            </div>
-            {locker.recallDueDate ? (
-              <div className="fp-row">
-                <dt>Hạn thu hồi</dt>
-                <dd style={{ color: 'var(--vsf-red)', fontWeight: 600 }}>{locker.recallDueDate}</dd>
+            <dl className="fp-di-props">
+              <div>
+                <dt>Vị trí vật lý</dt>
+                <dd><span className="fp-mono">{locker.physicalLocation}</span></dd>
               </div>
-            ) : locker.assignedDate ? (
-              <div className="fp-row">
-                <dt>Ngày cấp phát</dt>
-                <dd>{locker.assignedDate}</dd>
-              </div>
-            ) : null}
-            {locker.notes && (
-              <div className="fp-row">
-                <dt>Ghi chú</dt>
-                <dd style={{ color: '#b3161d' }}>{locker.notes}</dd>
-              </div>
-            )}
+              {locker.recallDueDate ? (
+                <div>
+                  <dt>Hạn thu hồi</dt>
+                  <dd style={{ fontWeight: 600 }}>{locker.recallDueDate}</dd>
+                </div>
+              ) : locker.assignedDate ? (
+                <div>
+                  <dt>Ngày cấp phát</dt>
+                  <dd>{locker.assignedDate}</dd>
+                </div>
+              ) : null}
+              {locker.notes && (
+                <div>
+                  <dt>Ghi chú</dt>
+                  <dd>{locker.notes}</dd>
+                </div>
+              )}
+            </dl>
           </div>
 
           {/* SupportiveAI Recommendation */}
@@ -259,13 +294,16 @@ export function LockerInspector({
               <div className="locker-ai-box">{locker.aiSuggestion}</div>
             </div>
           )}
+
+          {/* Collapsible status legend near the footer of the right sidebar */}
+          <LockerLegend stats={stats} />
         </div>
       </div>
 
       {/* Action footer matching DeskInspector */}
       <footer className="fp-di-actions">
         {locker.status === 'recall' ? (
-          <>
+          <div className="fp-di-actions-row">
             <button
               type="button"
               className="fp-btn is-primary"
@@ -276,35 +314,39 @@ export function LockerInspector({
             </button>
             <button
               type="button"
-              className="fp-btn is-secondary"
+              className="fp-btn"
               onClick={() => onRemindLocker(locker.id)}
             >
               Nhắc trả
             </button>
-          </>
+          </div>
         ) : locker.status === 'available' ? (
-          <button
-            type="button"
-            className="fp-btn is-primary"
-            style={{ width: '100%', justifyContent: 'center' }}
-            onClick={() => onAssignLocker(locker.id)}
-          >
-            + Cấp phát tủ này
-          </button>
-        ) : locker.status === 'broken' ? (
-          <button
-            type="button"
-            className="fp-btn is-primary"
-            style={{ width: '100%', justifyContent: 'center' }}
-            onClick={() => onRecallLocker(locker.id)}
-          >
-            Xác nhận sửa xong
-          </button>
-        ) : (
-          <>
+          <div className="fp-di-actions-row">
             <button
               type="button"
-              className="fp-btn is-secondary"
+              className="fp-btn is-primary"
+              style={{ width: '100%', justifyContent: 'center' }}
+              onClick={() => onAssignLocker(locker.id)}
+            >
+              + Cấp phát tủ này
+            </button>
+          </div>
+        ) : locker.status === 'broken' ? (
+          <div className="fp-di-actions-row">
+            <button
+              type="button"
+              className="fp-btn is-primary"
+              style={{ width: '100%', justifyContent: 'center' }}
+              onClick={() => onRecallLocker(locker.id)}
+            >
+              Xác nhận sửa xong
+            </button>
+          </div>
+        ) : (
+          <div className="fp-di-actions-row">
+            <button
+              type="button"
+              className="fp-btn is-primary"
               style={{ flex: 1, justifyContent: 'center' }}
               onClick={() => onRecallLocker(locker.id)}
             >
@@ -312,12 +354,12 @@ export function LockerInspector({
             </button>
             <button
               type="button"
-              className="fp-btn is-secondary"
+              className="fp-btn"
               onClick={() => onRemindLocker(locker.id)}
             >
               Nhắc nhở
             </button>
-          </>
+          </div>
         )}
       </footer>
     </aside>

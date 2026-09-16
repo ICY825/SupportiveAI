@@ -114,4 +114,34 @@ describe('LockerManagementPage', () => {
     // Status updates to available, toast shows
     expect(screen.getByText(/Đã thu hồi tủ L1-04 thành công/)).toBeTruthy()
   })
+
+  it('renders collapsible Chú giải status legend in the right sidebar near the footer, without floating map legend', () => {
+    render(<LockerManagementPage />)
+
+    // Ensure floating legend is NOT present on map canvas
+    expect(document.querySelector('.locker-map-legend')).toBeNull()
+
+    // Sidebar has collapsible Chú giải section
+    const legendHeading = screen.getByRole('heading', { level: 3, name: 'Chú giải' })
+    expect(legendHeading).toBeTruthy()
+
+    // Legend items are present in sidebar
+    expect(screen.getAllByText(/Đang dùng/).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText(/Còn trống/).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText(/Cần thu hồi/).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText(/Hỏng/).length).toBeGreaterThanOrEqual(1)
+
+    // Close the inspector to view floor overview panel
+    const closeBtn = screen.getByRole('button', { name: 'Đóng bảng thông tin' })
+    fireEvent.click(closeBtn)
+
+    // Overview panel renders identical to FloorDetailsPanel
+    expect(screen.getByRole('complementary', { name: 'Tổng quan tủ locker' })).toBeTruthy()
+    expect(screen.getByText('Tòa nhà: Technopark · Tầng 16')).toBeTruthy()
+    expect(screen.getByText('Tổng số ngăn')).toBeTruthy()
+
+    // Legend is also present in overview panel near footer
+    expect(screen.getByRole('heading', { level: 3, name: 'Chú giải' })).toBeTruthy()
+  })
 })
+

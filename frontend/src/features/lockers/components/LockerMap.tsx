@@ -281,26 +281,6 @@ export function LockerMap({ lockers, selectedLocker, onSelectLocker }: LockerMap
           onFocusSelection={selectedLocker ? () => focusOnLocker(selectedLocker) : undefined}
         />
       </div>
-
-      {/* Floating Locker Status Legend (bottom-left) */}
-      <div className="locker-map-legend" role="complementary" aria-label="Chú thích trạng thái tủ">
-        <div className="locker-legend-item">
-          <span className="status-dot in_use" />
-          <span>Đang dùng (14)</span>
-        </div>
-        <div className="locker-legend-item">
-          <span className="status-dot available" />
-          <span>Còn trống (4)</span>
-        </div>
-        <div className="locker-legend-item">
-          <span className="status-dot recall" />
-          <span>Cần thu hồi (1)</span>
-        </div>
-        <div className="locker-legend-item">
-          <span className="status-dot broken" />
-          <span>Hỏng (1)</span>
-        </div>
-      </div>
     </div>
   )
 }
