@@ -15,6 +15,7 @@ import {
   objectName,
 } from '../labels'
 import { DeskStatusBadge } from './desk-inspector/DeskStatusBadge'
+import { MapLegend } from './MapLegend'
 import { VerificationStatus } from './VerificationStatus'
 
 interface FloorDetailsPanelProps {
@@ -40,12 +41,32 @@ function Row({ label, children, hint }: { label: string; children: ReactNode; hi
   )
 }
 
-function Section({ title, children, className }: { title: string; children: ReactNode; className?: string }) {
+/**
+ * A collapsible block of the details panel. Every section in this panel is one,
+ * so the whole panel folds the same way "Chi tiết kỹ thuật" always has.
+ *
+ * Collapsed by default, and re-collapsed whenever the selection changes (see
+ * the keyed wrapper below): the panel opens as a short index of what is known
+ * about the entity, and the reader expands only the part they came for.
+ */
+function Section({
+  title,
+  children,
+  className,
+  open = false,
+}: {
+  title: string
+  children: ReactNode
+  className?: string
+  open?: boolean
+}) {
   return (
-    <section className={`fp-section${className ? ` ${className}` : ''}`}>
-      <h3>{title}</h3>
+    <details className={`fp-section${className ? ` ${className}` : ''}`} open={open}>
+      <summary>
+        <h3>{title}</h3>
+      </summary>
       {children}
-    </section>
+    </details>
   )
 }
 
@@ -566,7 +587,10 @@ export function FloorDetailsPanel({ dataset, selected, onSelect, debug, issues, 
           </button>
         </div>
       )}
-      {body}
+      {/* remounts on every selection, so sections always start collapsed */}
+      <div key={selected ? `${selected.kind}:${selected.id}` : 'floor'}>{body}</div>
+      {/* the map's key belongs beside the map, not floating over the drawing */}
+      <MapLegend />
       {debug && (
         <details className="fp-raw" open={selIssues.length > 0}>
           <summary>

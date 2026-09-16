@@ -41,3 +41,6 @@ build/
 docs/references/number.png
 docs/references/Copy of 260814*
 *.xlsx
+
+# Multi-agent teamwork scratch & handoffs
+.agents/

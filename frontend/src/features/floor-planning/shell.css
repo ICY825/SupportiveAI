@@ -243,6 +243,89 @@
   white-space: nowrap;
 }
 
+/*
+ * Every block of either side panel is a disclosure. One rule set drives the
+ * heading, the chevron and the open/closed state, so a section added later
+ * cannot end up looking different from "Chi tiết kỹ thuật".
+ */
+.fp-section > summary,
+.fp-technical summary,
+.fp-raw summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+  border-radius: 2px;
+  font-size: var(--fp-t-small);
+  font-weight: 600;
+  color: var(--fp-text-2);
+  cursor: pointer;
+  list-style: none;
+}
+
+.fp-section > summary::-webkit-details-marker,
+.fp-technical summary::-webkit-details-marker,
+.fp-raw summary::-webkit-details-marker {
+  display: none;
+}
+
+.fp-section > summary::before,
+.fp-technical summary::before,
+.fp-raw summary::before {
+  content: '▸';
+  flex: none;
+  font-size: 10px;
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+
+.fp-section[open] > summary::before,
+.fp-technical[open] summary::before,
+.fp-raw[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.fp-section > summary:hover,
+.fp-technical summary:hover,
+.fp-raw summary:hover {
+  color: var(--ink);
+}
+
+/* the heading keeps its semantics inside the summary */
+.fp-section > summary h3 {
+  margin: 0;
+  font: inherit;
+  color: inherit;
+}
+
+/* ---------------------------------------------------------------- map key */
+
+/*
+ * Vertical key for a map, in that map's side panel. Both modes use it, each
+ * with its own swatch: the operational view shows seat markers, the technical
+ * view shows extraction-state outlines.
+ */
+.fp-key,
+.sw-key {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.fp-key li,
+.sw-key li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: var(--fp-t-small);
+  color: var(--fp-text-2);
+  cursor: help;
+}
+
 /* ---------------------------------------------------------------- metadata */
 
 /* Label/value list shared by both inspectors' metadata sections. */

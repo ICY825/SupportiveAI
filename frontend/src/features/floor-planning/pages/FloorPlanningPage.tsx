@@ -9,13 +9,11 @@ import { FloorSearch } from '../components/FloorSearch'
 import { FloorSelector } from '../components/FloorSelector'
 import { HelpPopover } from '../components/HelpPopover'
 import { isTypingTarget } from '../components/keyboard'
-import { MapLegend } from '../components/MapLegend'
 import { DeskInspector } from '../components/desk-inspector/DeskInspector'
 import { DeskStatusIcon } from '../components/desk-inspector/DeskStatusBadge'
-import { DeskStatusLegend } from '../components/desk-inspector/DeskStatusLegend'
 import { FLOORS, findFloor } from '../data/registry'
 import { validateFloorDataset } from '../data/validateFloorDataset'
-import { buildDeskIndex, DESK_STATUSES, type DeskStatus } from '../domain/desk'
+import { buildDeskIndex } from '../domain/desk'
 import type { BBox, EntityRef, FloorDataset } from '../domain/spatial'
 import { DESK_STATUS, UNLABELED_ZONE, VIEW_MODES, objectName } from '../labels'
 import { ARROW_DIRECTION, nearestInDirection } from '../map/deskNavigation'
@@ -195,12 +193,6 @@ function FloorWorkspace({
     () => (workspace ? new Map([...desks].map(([id, d]) => [id, d.status] as const)) : undefined),
     [workspace, desks],
   )
-  const deskCounts = useMemo(() => {
-    const counts = Object.fromEntries(DESK_STATUSES.map((s) => [s, 0])) as Record<DeskStatus, number>
-    for (const d of desks.values()) counts[d.status]++
-    return counts
-  }, [desks])
-
   const selectedDesk = workspace && selected?.kind === 'workstation' ? desks.get(selected.id) : undefined
 
   const bboxOf = useCallback(
@@ -365,7 +357,6 @@ function FloorWorkspace({
               <span className="fp-source-note-extra">· ảnh raster, gồm chú thích của người rà soát</span>
             </p>
           )}
-          {workspace ? <DeskStatusLegend counts={deskCounts} demo={allocation?.source.kind === 'demo'} /> : <MapLegend />}
         </div>
       </main>
       {selectedDesk && allocation ? (

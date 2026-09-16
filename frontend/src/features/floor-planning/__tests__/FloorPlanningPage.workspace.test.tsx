@@ -123,6 +123,22 @@ describe('desk selection → workspace inspector', () => {
     expect(screen.getByText('Nguyễn Văn Minh')).toBeTruthy()
   }, 30000)
 
+  /*
+   * The seat count and scope belong to the side panel's summary. They were
+   * duplicated under the page title and removed; this keeps them removed.
+   */
+  it('states the seat count once, in the side panel and not under the page title', async () => {
+    await openWorkspace()
+    const heading = document.querySelector('.sw-heading')!
+    expect(heading.textContent).not.toMatch(/cụm bàn/)
+    expect(heading.textContent).not.toMatch(/chỗ ngồi/)
+    expect(document.querySelector('.sw-heading-meta')).toBeNull()
+    // still stated exactly once, in the summary
+    const summary = document.querySelector('.sw-summary')!
+    expect(summary.textContent).toMatch(/19/)
+    expect(summary.textContent).toMatch(/chỗ ngồi/)
+  }, 30000)
+
   it('explains out-of-crop deep links instead of silently expanding the spike', async () => {
     window.location.hash = '#/floor-planning?floor=floor-16&view=workspace&select=workstation:ws-16-001'
     render(<FloorPlanningPage />)
