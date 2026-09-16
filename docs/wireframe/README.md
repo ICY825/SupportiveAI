@@ -1,5 +1,10 @@
 # Wireframe — Trung tâm Hành chính Vinsmart Future (V1, tầng 19)
 
+> ⚠️ **Bản tham chiếu thị giác, không phải đặc tả.** Wireframe dựng sớm hơn các tài liệu
+> trong `docs/architecture/`. Chỗ nào lệch nhau thì theo tài liệu kiến trúc.
+> Riêng Đề 3, các điểm lệch đã liệt kê ở mục 16 của
+> [`../architecture/mail-tracking.md`](../architecture/mail-tracking.md).
+
 Wireframe màn hình quản trị cho 4 đề bài của pilot, xuất từ dự án Claude Design
 [Vinsmart Admin Wireframes](https://claude.ai/design/p/3b7f6062-3d5e-4b47-90cf-f780fba3ad1a?file=Vinsmart+Admin+Wireframes.dc.html).
 

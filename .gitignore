@@ -2,34 +2,107 @@
 __pycache__/
 *.py[cod]
 *.pyo
+*.pyd
 .venv/
 venv/
+ENV/
+env/
+.python-version
+
+# Env / Secrets - BẮT BUỘC ignore, chứa SECRET_KEY, DATABASE_URL, SMTP_PASSWORD
 .env
 .env.*
+!.env.example
+
+# Chứng chỉ & khóa riêng - không bao giờ đưa lên repo
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.jks
 
 # FastAPI / Backend
 *.log
+logs/
 *.sqlite
+*.sqlite3
 *.db
+*.db-journal
 
-# AI / Models
-models/
+# AI / Models - chỉ ignore thư mục models ở root, tránh đè lên source code
+/models/
 *.bin
 *.onnx
 *.pt
+*.pth
+*.ckpt
+*.safetensors
 
-# Storage
-storage/
-uploads/
-minio_data/
+# Storage - chỉ ignore dữ liệu runtime, KHÔNG ignore source package backend/app/platform/storage
+/var/
+/storage/
+/uploads/
+/minio_data/
+backend/var/
+# Đảm bảo source code không bị ignore do rule storage/ cũ (nếu từng dùng storage/ không có /)
+!backend/app/platform/storage/
+!backend/app/platform/storage/**
+
+# Test / build / cache
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.dmypy.json
+.pyright/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+*.egg-info/
+*.egg
+*.whl
+dist/
+build/
+eggs/
+sdist/
+wheels/
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*~
+*.swp
+*.swo
 
 # IDE
 .vscode/
 .idea/
-*.swp
-.DS_Store
+.cursor/
+*.code-workspace
 
 # Node / Frontend
 node_modules/
-dist/
-build/
+coverage/
+.eslintcache
+*.tsbuildinfo
+.parcel-cache/
+.vite/
+.next/
+out/
+.turbo/
+
+# Tools
+.opencode/
+.claude/settings.local.json
+.tox/
+.nox/
+
+# Dữ liệu thật (danh sách nhân sự, file mẫu chấm KPI) - chỉ giữ .gitkeep
+/data/
+docs/kpi/ground-truth/*
+!docs/kpi/ground-truth/.gitkeep
