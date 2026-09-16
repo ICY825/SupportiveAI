@@ -189,6 +189,8 @@ async function run() {
   // ---------------------------------------------------------- verification
   await page.goto(url('view=verification'))
   await page.locator('.fp-svg').waitFor()
+  // the keyboard check above left the map focused; canonical shots show the resting state
+  await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur())
   await page.waitForTimeout(400)
   report.states.push({ name: 'verification-overview', map: await measure(page, 'verification') })
   await shot(page, 'verification-overview')
@@ -218,6 +220,17 @@ async function run() {
     ...(await overlaps(page, ['.fp-hover', '.fp-map-foot', '.fp-coords'])),
   ]
   check(vHits.length === 0, `verification-selected: overlap ${vHits.join(', ')}`)
+
+  // every block of the details panel folds the same way
+  const blocks = await page.evaluate(() => {
+    const all = [...document.querySelectorAll('.fp-panel .fp-section, .fp-panel .fp-technical, .fp-panel .fp-raw')]
+    return {
+      total: all.length,
+      notDisclosures: all.filter((el) => el.tagName !== 'DETAILS' || !el.querySelector(':scope > summary')).length,
+    }
+  })
+  check(blocks.total > 0, 'verification-selected: no panel sections found')
+  check(blocks.notDisclosures === 0, `verification-selected: ${blocks.notDisclosures} panel section(s) are not collapsible`)
   await shot(page, 'verification-selected')
 
   // ---------------------------------------------------------------- widths
