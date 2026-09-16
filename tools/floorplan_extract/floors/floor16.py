@@ -146,3 +146,22 @@ WORKSTATION_RULE = {
     "chairLateralFraction": 0.3,  # chair centre within +-30% of desk length from desk centre
     "clusterTouchPt": 0.8,
 }
+
+# Concrete core wall extraction parameters (from KT-Hatch)
+CORE_WALL_RULE = {
+    "hatchLayer": "KT-Hatch",
+    "hTolPt": 1.5,
+    "minLines": 1000,
+    "names": [
+        "Lõi bê tông Tây 01 (Thang máy & Thang bộ)",
+        "Lõi bê tông Tây 02 (Cụm thang máy trung tâm)",
+        "Lõi bê tông Đông 01 (Cụm thang máy Bắc)",
+        "Lõi bê tông Đông 02 (Cụm thang máy & Thang bộ Nam)",
+    ],
+    # Safe coordinate boundaries (prevent bleeding beyond structural face into flush desks)
+    "safeBounds": {
+        "wall-16-02": {"maxX": 507.17, "maxY": 366.35},
+        "wall-16-03": {"minY": 370.58},
+        "wall-16-04": {"maxY": 632.37},
+    },
+}

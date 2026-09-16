@@ -36,6 +36,11 @@ const FLOOR_HEIGHT = layout.floor.height // 841.89
 const MIN_SCALE = 0.35
 const MAX_SCALE = 5.0
 
+const PLATE_BBOX: [number, number, number, number] = [112.8, 141.55, 1050.96, 709.3]
+const PLATE_WIDTH = PLATE_BBOX[2] - PLATE_BBOX[0]
+const PLATE_HEIGHT = PLATE_BBOX[3] - PLATE_BBOX[1]
+const FIT_PADDING = 28
+
 export function LockerMap({ lockers, selectedLocker, onSelectLocker }: LockerMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
@@ -44,21 +49,35 @@ export function LockerMap({ lockers, selectedLocker, onSelectLocker }: LockerMap
   const dragRef = useRef<{ id: number; startX: number; startY: number; moved: boolean } | null>(null)
 
   const [viewport, setViewport] = useState<Viewport>(() => ({
-    scale: 0.85,
-    x: 20,
-    y: 10,
+    scale: 1,
+    x: 0,
+    y: 0,
   }))
 
-  // Fit viewport to container dimensions
+  // Fit viewport to building plate (matching FloorPlanningPage default size)
   const fitToContainer = useCallback(() => {
     const el = containerRef.current
     if (!el) return
     const rect = el.getBoundingClientRect()
     if (rect.width <= 0 || rect.height <= 0) return
 
-    const pad = 24
-    const availW = rect.width - pad * 2
-    const availH = rect.height - pad * 2
+    const availW = Math.max(1, rect.width - FIT_PADDING * 2)
+    const availH = Math.max(1, rect.height - FIT_PADDING * 2)
+    const scale = Math.min(availW / PLATE_WIDTH, availH / PLATE_HEIGHT)
+    const x = (rect.width - PLATE_WIDTH * scale) / 2 - PLATE_BBOX[0] * scale
+    const y = (rect.height - PLATE_HEIGHT * scale) / 2 - PLATE_BBOX[1] * scale
+    setViewport({ scale, x, y })
+  }, [])
+
+  // Reset to full sheet (Toàn tờ)
+  const resetToSheet = useCallback(() => {
+    const el = containerRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return
+
+    const availW = Math.max(1, rect.width - FIT_PADDING * 2)
+    const availH = Math.max(1, rect.height - FIT_PADDING * 2)
     const scale = Math.min(availW / FLOOR_WIDTH, availH / FLOOR_HEIGHT)
     const x = (rect.width - FLOOR_WIDTH * scale) / 2
     const y = (rect.height - FLOOR_HEIGHT * scale) / 2
@@ -277,8 +296,7 @@ export function LockerMap({ lockers, selectedLocker, onSelectLocker }: LockerMap
           onZoomIn={() => handleZoom(1.35)}
           onZoomOut={() => handleZoom(1 / 1.35)}
           onFit={fitToContainer}
-          onReset={fitToContainer}
-          onFocusSelection={selectedLocker ? () => focusOnLocker(selectedLocker) : undefined}
+          onReset={resetToSheet}
         />
       </div>
     </div>

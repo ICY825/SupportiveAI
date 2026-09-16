@@ -127,10 +127,6 @@ export function LockerInspector({
           </dl>
         </details>
 
-        <p className="fp-callout" style={{ marginTop: '14px' }}>
-          Nhấp vào tủ trên sơ đồ mặt bằng, ô chi tiết hoặc danh sách để xem thông tin và thao tác.
-        </p>
-
         {/* Collapsible status legend near the footer of the right sidebar */}
         <LockerLegend stats={stats} />
       </aside>

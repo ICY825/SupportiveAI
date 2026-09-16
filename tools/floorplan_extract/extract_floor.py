@@ -810,6 +810,116 @@ def extract(cfg, pdf_path: Path, out_dir: Path, public_dir: Path):
             "notes": [],
         })
 
+    # --- concrete core walls from KT-Hatch
+    core_wall_rule = getattr(cfg, "CORE_WALL_RULE", {
+        "hatchLayer": "KT-Hatch",
+        "hTolPt": 1.5,
+        "minLines": 1000,
+        "names": [
+            "Lõi bê tông Tây 01 (Thang máy & Thang bộ)",
+            "Lõi bê tông Tây 02 (Cụm thang máy trung tâm)",
+            "Lõi bê tông Đông 01 (Cụm thang máy Bắc)",
+            "Lõi bê tông Đông 02 (Cụm thang máy & Thang bộ Nam)",
+        ],
+        "safeBounds": {
+            f"wall-{lvl}-02": {"maxX": 507.17, "maxY": 366.35},
+            f"wall-{lvl}-03": {"minY": 370.58},
+            f"wall-{lvl}-04": {"maxY": 632.37},
+        },
+    })
+    hatch_layer = core_wall_rule.get("hatchLayer", "KT-Hatch")
+    h_tol = core_wall_rule.get("hTolPt", 1.5)
+    min_lines = core_wall_rule.get("minLines", 1000)
+    core_names = core_wall_rule.get("names", [])
+    safe_bounds = core_wall_rule.get("safeBounds", {})
+
+    hatch_lines = []
+    for d in drawings:
+        if layer_key(d.get("layer")) == hatch_layer:
+            for it in d["items"]:
+                if it[0] == "l":
+                    p1, p2 = it[1], it[2]
+                    hatch_lines.append(((p1.x, p1.y), (p2.x, p2.y)))
+
+    n_hatch = len(hatch_lines)
+    h_parent = list(range(n_hatch))
+
+    def h_find(i):
+        while h_parent[i] != i:
+            h_parent[i] = h_parent[h_parent[i]]
+            i = h_parent[i]
+        return i
+
+    h_grid = collections.defaultdict(list)
+    h_boxes = [(min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)) for (x1, y1), (x2, y2) in hatch_lines]
+    for i, b in enumerate(h_boxes):
+        gx0, gx1 = int(b[0] // h_tol), int(b[2] // h_tol)
+        gy0, gy1 = int(b[1] // h_tol), int(b[3] // h_tol)
+        for gx in range(gx0 - 1, gx1 + 2):
+            for gy in range(gy0 - 1, gy1 + 2):
+                for j in h_grid[(gx, gy)]:
+                    bj = h_boxes[j]
+                    if not (b[2] < bj[0] - h_tol or b[0] > bj[2] + h_tol or b[3] < bj[1] - h_tol or b[1] > bj[3] + h_tol):
+                        ri, rj = h_find(i), h_find(j)
+                        if ri != rj:
+                            h_parent[ri] = rj
+        for gx in range(gx0, gx1 + 1):
+            for gy in range(gy0, gy1 + 1):
+                h_grid[(gx, gy)].append(i)
+
+    h_comps = collections.defaultdict(list)
+    for i in range(n_hatch):
+        h_comps[h_find(i)].append(i)
+
+    core_raw = []
+    for members in h_comps.values():
+        if len(members) < min_lines:
+            continue
+        minx = min(h_boxes[i][0] for i in members)
+        miny = min(h_boxes[i][1] for i in members)
+        maxx = max(h_boxes[i][2] for i in members)
+        maxy = max(h_boxes[i][3] for i in members)
+        cx, cy = (minx + maxx) / 2, (miny + maxy) / 2
+        core_raw.append({"bbox": [minx, miny, maxx, maxy], "c": (cx, cy)})
+
+    core_raw.sort(key=lambda col: reading_order(col["c"]))
+
+    walls_out = []
+    for idx, wall in enumerate(core_raw, 1):
+        minx, miny, maxx, maxy = wall["bbox"]
+        wid = f"wall-{lvl}-{idx:02d}"
+        limits = safe_bounds.get(wid, {})
+        if "minX" in limits:
+            minx = max(minx, limits["minX"])
+        if "maxX" in limits:
+            maxx = min(maxx, limits["maxX"])
+        if "minY" in limits:
+            miny = max(miny, limits["minY"])
+        if "maxY" in limits:
+            maxy = min(maxy, limits["maxY"])
+        minx, miny, maxx, maxy = r2(minx), r2(miny), r2(maxx), r2(maxy)
+        cx, cy = (minx + maxx) / 2, (miny + maxy) / 2
+        gr = grid_ref((cx, cy), columns, rows)
+        name = core_names[idx - 1] if idx <= len(core_names) else f"Lõi bê tông {idx:02d}"
+        poly = [[minx, miny], [maxx, miny], [maxx, maxy], [minx, maxy]]
+        walls_out.append({
+            "id": wid,
+            "floorId": fid,
+            "kind": "wall",
+            "category": "solid",
+            "name": f"{name} ({gr})",
+            "verification": "EXTRACTED",
+            "polygon": poly,
+            "bbox": [minx, miny, maxx, maxy],
+            "center": [r2(cx), r2(cy)],
+            "gridRef": gr,
+            "source": {
+                "kind": "pdf-vector",
+                "geometry": f"clustered core wall hatching from {hatch_layer} CAD layer",
+            },
+            "notes": [],
+        })
+
     # --- door swing clearance sectors from A-DOOR and KT-Cua
     door_layers = {"A-DOOR", "KT-Cua"}
     door_curves = []
@@ -875,7 +985,7 @@ def extract(cfg, pdf_path: Path, out_dir: Path, public_dir: Path):
             "notes": [],
         })
 
-    obstacles_out = columns_out + doors_out
+    obstacles_out = columns_out + walls_out + doors_out
 
     # --- write
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -936,6 +1046,7 @@ def extract(cfg, pdf_path: Path, out_dir: Path, public_dir: Path):
         "objects": dict(obj_counter),
         "obstacles": {
             "columns": len(columns_out),
+            "walls": len(walls_out),
             "doorClearances": len(doors_out),
             "total": len(obstacles_out),
         },
