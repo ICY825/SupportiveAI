@@ -13,20 +13,21 @@
  * The dataset is never written to. Editing produces placements; the renderer
  * derives geometry from them. Nothing in this file touches React or the DOM.
  */
-import { bboxOfPoints, clipPolygonToBBox } from '../domain/geometry'
+import { bboxOfPoints, clipPolygonToBBox, pointInPolygon } from '../domain/geometry'
 import {
   normalizeRotation,
   placementBounds,
   placementsEqual,
   placementTransform,
   transformBBox,
-  validateAll,
+  validatePlacement,
   type PlacementBoundary,
   type PlacementValidation,
+  type QuarterRotation,
   type SpatialGrid,
   type SpatialPlacement,
 } from '../domain/placement'
-import type { BBox, FloorDataset, Point, Workstation } from '../domain/spatial'
+import type { BBox, FloorDataset, FloorObstacle, Point, Workstation } from '../domain/spatial'
 import { SPIKE_CROP, type SpikeScene } from './scene'
 
 /** Planning module for the edit grid. One desk depth; a desk is two cells wide. */
@@ -48,6 +49,23 @@ export interface LayoutDraft {
 /* ------------------------------------------------------- base placements */
 
 /**
+ * Disambiguates a workstation's canonical 4-way quarter rotation (0°, 90°, 180°, 270°)
+ * from its paired chair position relative to desk center.
+ */
+export function determineWorkstationRotation(ws: Workstation): QuarterRotation {
+  if (ws.chair) {
+    const dx = ws.chair.center[0] - ws.center[0]
+    const dy = ws.chair.center[1] - ws.center[1]
+    if (Math.abs(dx) > Math.abs(dy)) {
+      return dx > 0 ? 270 : 90
+    } else {
+      return dy > 0 ? 0 : 180
+    }
+  }
+  return normalizeRotation(ws.rotationDeg)
+}
+
+/**
  * A workstation's placement as the source drawing has it.
  *
  * `width`/`depth` are the footprint at rotation 0, so the stored bbox is read
@@ -62,14 +80,16 @@ export interface LayoutDraft {
  */
 export function placementFromWorkstation(ws: Workstation): SpatialPlacement {
   const [x0, y0, x1, y1] = ws.bbox
-  const turned = normalizeRotation(ws.rotationDeg) % 180 !== 0
+  const rotation = normalizeRotation(ws.rotationDeg)
+  const turned = rotation % 180 !== 0
   return {
     entityId: ws.id,
     x: x0 + (x1 - x0) / 2,
     y: y0 + (y1 - y0) / 2,
     width: turned ? y1 - y0 : x1 - x0,
     depth: turned ? x1 - x0 : y1 - y0,
-    rotation: normalizeRotation(ws.rotationDeg),
+    rotation,
+    chair: ws.chair ? { center: ws.chair.center, bbox: ws.chair.bbox } : null,
   }
 }
 
@@ -121,11 +141,37 @@ export function changedIds(draft: LayoutDraft, base: Record<string, SpatialPlace
 export const isDraftDirty = (draft: LayoutDraft, base: Record<string, SpatialPlacement>) =>
   changedIds(draft, base).length > 0
 
-export const validateDraft = (
+export function validateDraft(
   draft: LayoutDraft,
-  boundary: PlacementBoundary | null,
+  boundaryOrArea: EditableArea | PlacementBoundary | null,
   tolerance?: number,
-): Map<string, PlacementValidation> => validateAll(draftList(draft), boundary, tolerance)
+): Map<string, PlacementValidation> {
+  const isArea = boundaryOrArea && 'grid' in boundaryOrArea
+  const boundary = isArea ? boundaryOrArea.boundary : boundaryOrArea
+  const roomBoundary = isArea ? boundaryOrArea.roomBoundary : null
+  const departmentZone = isArea ? boundaryOrArea.departmentZone : null
+  const obstacles = isArea ? boundaryOrArea.obstacles : (boundaryOrArea as any)?.obstacles ?? []
+  const effectiveTol = isArea ? boundaryOrArea.tolerance : tolerance
+  const chairTileSize = isArea ? boundaryOrArea.chairTileSize : undefined
+
+  const placements = draftList(draft)
+  const result = new Map<string, PlacementValidation>()
+  for (const p of placements) {
+    result.set(
+      p.entityId,
+      validatePlacement(p, {
+        others: placements,
+        boundary,
+        roomBoundary,
+        departmentZone,
+        obstacles,
+        tolerance: effectiveTol,
+        chairTileSize,
+      }),
+    )
+  }
+  return result
+}
 
 export const draftIsValid = (validation: ReadonlyMap<string, PlacementValidation>) =>
   [...validation.values()].every((v) => v.valid)
@@ -134,45 +180,82 @@ export const draftIsValid = (validation: ReadonlyMap<string, PlacementValidation
 
 export interface EditableArea {
   boundary: PlacementBoundary
+  roomBoundary?: PlacementBoundary | null
+  departmentZone?: PlacementBoundary | null
+  obstacles: FloorObstacle[]
   grid: SpatialGrid
   /** see PLACEMENT_TOLERANCE_MM */
   tolerance: number
+  chairTileSize?: number
 }
 
 /**
  * Where layout editing is allowed, and the grid it snaps to.
  *
- * LIMITATION — this is NOT a surveyed floor boundary. The polygon is the
- * department zone a reviewer drew on the source PDF as an annotation, clipped
- * to the camera crop the spatial scene currently shows. It states which area a
- * department owns; it does not encode walls, doors, columns, circulation or
- * clearance. The extraction pipeline does not yet produce a room polygon
- * derived from wall geometry, so `outside-boundary` here means "outside the
- * department area on the drawing", nothing stronger.
- *
- * Falls back to the crop alone (`kind: 'scene-scope'`) when the scene's
- * workstations carry no zone, which is a camera limit and not a real rule.
+ * Populates hierarchical roomBoundary, departmentZone, extracted obstacles,
+ * and chairTileSize for full multi-layer collision validation.
  */
 export function deriveEditableArea(dataset: FloorDataset, scene: SpikeScene): EditableArea {
   const zoneId = scene.workstations.find((w) => w.zoneId)?.zoneId ?? null
   const zone = zoneId ? dataset.zones.find((z) => z.id === zoneId) : undefined
-  const clipped = zone ? clipPolygonToBBox(zone.polygon, SPIKE_CROP) : []
-  const polygon: Point[] = clipped.length >= 3 ? clipped : clipPolygonToBBox(rectPoints(SPIKE_CROP), SPIKE_CROP)
-  const bbox = bboxOfPoints(polygon)
+  const clippedZone = zone ? clipPolygonToBBox(zone.polygon, SPIKE_CROP) : []
+
+  const roomId = (scene.workstations.find((w) => (w as unknown as { roomId?: string }).roomId) as unknown as { roomId?: string } | undefined)?.roomId ?? null
+  let room = roomId ? dataset.rooms.find((r) => r.id === roomId) : undefined
+  if (!room && dataset.rooms && scene.workstations.length > 0) {
+    const firstWsCenter = scene.workstations[0].center
+    room = dataset.rooms.find((r) => pointInPolygon(firstWsCenter, r.polygon))
+  }
+  const clippedRoom = room ? clipPolygonToBBox(room.polygon, SPIKE_CROP) : []
+
+  const departmentZone: PlacementBoundary | null =
+    clippedZone.length >= 3
+      ? {
+          polygon: clippedZone,
+          bbox: bboxOfPoints(clippedZone),
+          kind: 'department-zone',
+          sourceId: zone?.id ?? null,
+          name: zone?.name ?? null,
+        }
+      : null
+
+  const roomBoundary: PlacementBoundary | null =
+    clippedRoom.length >= 3
+      ? {
+          polygon: clippedRoom,
+          bbox: bboxOfPoints(clippedRoom),
+          kind: 'room-boundary',
+          sourceId: room?.id ?? null,
+          name: room?.name ?? null,
+        }
+      : null
+
+  const fallbackPolygon: Point[] =
+    departmentZone ? departmentZone.polygon : clipPolygonToBBox(rectPoints(SPIKE_CROP), SPIKE_CROP)
+
+  const chairTileSize = GRID_CELL_MM / dataset.layout.floor.mmPerPt
+  const tolerance = PLACEMENT_TOLERANCE_MM / dataset.layout.floor.mmPerPt
+
+  const boundary: PlacementBoundary = {
+    polygon: fallbackPolygon,
+    bbox: bboxOfPoints(fallbackPolygon),
+    kind: departmentZone ? 'zone-annotation' : 'scene-scope',
+    sourceId: departmentZone ? (zone?.id ?? null) : null,
+    name: departmentZone ? (zone?.name ?? null) : null,
+    obstacles: dataset.obstacles,
+    roomBoundary,
+    departmentZone,
+    chairTileSize,
+  }
 
   return {
-    boundary: {
-      polygon,
-      bbox,
-      kind: clipped.length >= 3 ? 'zone-annotation' : 'scene-scope',
-      sourceId: clipped.length >= 3 ? (zone?.id ?? null) : null,
-    },
-    tolerance: PLACEMENT_TOLERANCE_MM / dataset.layout.floor.mmPerPt,
+    boundary,
+    departmentZone,
+    roomBoundary,
+    obstacles: dataset.obstacles,
+    tolerance,
+    chairTileSize,
     grid: {
-      // Anchored on the existing layout's leading corner so the first desk is
-      // already on-grid. The extracted desks are not on a regular module, so
-      // the others do shift when they are first moved: that is snapping, and
-      // it is what makes an edited layout regular.
       origin: gridOrigin(scene),
       cellSize: GRID_CELL_MM / dataset.layout.floor.mmPerPt,
     },

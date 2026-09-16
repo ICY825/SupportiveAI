@@ -182,15 +182,16 @@ export const DEVICE_TYPE: Record<DeviceType, string> = {
 
 /**
  * Wording for the layout editor. The product is an administrative tool, so the
- * mode is named after the task ("chỉnh sửa bố trí"), never after the borrowed
- * interaction model.
+ * task names the control ("chỉnh sửa bố trí"), never the borrowed interaction
+ * model.
+ *
+ * Editing is entered as an ACTION, not chosen as a peer view: the top bar's
+ * view switch is the only segmented control on the page, so nothing competes
+ * with it for the same meaning.
  */
-export const LAYOUT_MODES = [
-  { id: 'view', label: 'Xem mặt bằng', hint: 'Xem và tra cứu bố trí hiện tại' },
-  { id: 'edit', label: 'Chỉnh sửa bố trí', hint: 'Di chuyển và xoay bàn làm việc' },
-] as const
-
 export const LAYOUT_EDIT = {
+  enter: 'Chỉnh sửa bố trí',
+  enterHint: 'Di chuyển và xoay bàn làm việc trên mặt bằng',
   selectedTitle: 'Bàn đang chọn',
   position: 'Vị trí',
   rotation: 'Góc xoay',
@@ -220,11 +221,45 @@ export const LAYOUT_EDIT = {
 
 /** Placement problems, phrased for the person moving the desk. */
 export const PLACEMENT_ISSUE = {
-  overlap: (code: string) => `Chồng lấn bàn ${code}`,
+  overlap: (code: string, target?: 'desk' | 'chair') =>
+    target === 'chair' ? `Không gian ghế chồng lấn bàn ${code}` : `Chồng lấn bàn ${code}`,
   outsideBoundary: 'Ngoài phạm vi bố trí',
+  outsideRoomBoundary: (roomName?: string, target?: 'desk' | 'chair') => {
+    const base = roomName ? `Ngoài ranh giới phòng ${roomName}` : 'Ngoài ranh giới phòng'
+    return target === 'chair' ? `Không gian ghế ${base.toLowerCase()}` : base
+  },
+  outsideDepartmentZone: (zoneName?: string, target?: 'desk' | 'chair') => {
+    const base = zoneName ? `Ngoài phạm vi khu vực ${zoneName}` : 'Ngoài phạm vi khu vực'
+    return target === 'chair' ? `Không gian ghế ${base.toLowerCase()}` : base
+  },
+  obstacleCollision: (obstacleName?: string, obstacleKind?: 'column' | 'wall', target?: 'desk' | 'chair') => {
+    const kindText = obstacleKind === 'column' ? 'cột kết cấu' : 'tường bê tông'
+    const nameText = obstacleName ? ` (${obstacleName})` : ` ${kindText}`
+    return target === 'chair' ? `Không gian ghế va chạm${nameText}` : `Va chạm${nameText}`
+  },
+  clearanceConflict: (obstacleName?: string, target?: 'desk' | 'chair') => {
+    const nameText = obstacleName ? ` (${obstacleName})` : ''
+    return target === 'chair'
+      ? `Không gian ghế xung đột khoảng mở cửa${nameText}`
+      : `Xung đột khoảng mở cửa${nameText}`
+  },
 } as const
 
 /** Geometry reports issues as data; the wording is chosen here. */
 export function placementIssueText(issue: PlacementIssue, codeOf: (entityId: string) => string): string {
-  return issue.type === 'overlap' ? PLACEMENT_ISSUE.overlap(codeOf(issue.entityId)) : PLACEMENT_ISSUE.outsideBoundary
+  switch (issue.type) {
+    case 'overlap':
+      return PLACEMENT_ISSUE.overlap(codeOf(issue.entityId), issue.target)
+    case 'outside-boundary':
+      return issue.target === 'chair' ? 'Không gian ghế ngoài phạm vi bố trí' : PLACEMENT_ISSUE.outsideBoundary
+    case 'outside-room-boundary':
+      return PLACEMENT_ISSUE.outsideRoomBoundary(issue.roomName, issue.target)
+    case 'outside-department-zone':
+      return PLACEMENT_ISSUE.outsideDepartmentZone(issue.zoneName, issue.target)
+    case 'obstacle-collision':
+      return PLACEMENT_ISSUE.obstacleCollision(issue.obstacleName, issue.obstacleKind, issue.target)
+    case 'clearance-conflict':
+      return PLACEMENT_ISSUE.clearanceConflict(issue.obstacleName, issue.target)
+  }
 }
+

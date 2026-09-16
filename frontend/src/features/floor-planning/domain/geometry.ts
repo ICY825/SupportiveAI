@@ -131,6 +131,19 @@ export function clipPolygonToBBox(polygon: readonly Point[], clip: BBox): Point[
 }
 
 /**
+ * Planar polygon area using Gauss's Shoelace formula.
+ * Used to evaluate obstacle interpenetration area after polygon clipping.
+ */
+export function polygonArea(points: readonly Point[]): number {
+  if (points.length < 3) return 0
+  let area = 0
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    area += points[j][0] * points[i][1] - points[i][0] * points[j][1]
+  }
+  return Math.abs(area) / 2
+}
+
+/**
  * Quarter turns only, applied as exact coordinate swaps. Going through
  * sin/cos would leave 1e-16 residue that snapping then rounds inconsistently.
  */

@@ -1,8 +1,7 @@
 import type { PlacementValidation, SpatialPlacement } from '../domain/placement'
 import { placementBounds } from '../domain/placement'
-import { LAYOUT_EDIT, LAYOUT_MODES, placementIssueText } from '../labels'
+import { LAYOUT_EDIT, placementIssueText } from '../labels'
 import type { EditableArea } from './layoutDraft'
-import type { WorkspaceMode } from './useLayoutEditor'
 
 /** Vietnamese decimal separator; these are readings, not inputs. */
 const metres = (points: number, mmPerPt: number) => (Math.abs((points * mmPerPt) / 1000) + 0.0001).toFixed(1).replace('.', ',')
@@ -27,24 +26,20 @@ export function PlacementStatus({
   )
 }
 
-/** Mode control. Two plain states; nothing about it announces a new product. */
-export function LayoutModeSwitch({ mode, onChange }: { mode: WorkspaceMode; onChange: (mode: WorkspaceMode) => void }) {
+/**
+ * Entry point to editing. A single action, not a second segmented control: the
+ * page already has one of those in the top bar for choosing a view, and two
+ * lookalike switches a few rows apart read as four peer modes rather than as a
+ * view and a task. In edit mode this button is replaced by EditToolbar.
+ */
+export function EnterEditButton({ onClick }: { onClick: () => void }) {
   return (
-    <div className="fp-segmented sw-mode-switch" role="radiogroup" aria-label="Chế độ bố trí">
-      {LAYOUT_MODES.map((m) => (
-        <button
-          key={m.id}
-          type="button"
-          role="radio"
-          aria-checked={mode === m.id}
-          title={m.hint}
-          className={mode === m.id ? 'is-active' : ''}
-          onClick={() => onChange(m.id)}
-        >
-          {m.label}
-        </button>
-      ))}
-    </div>
+    <button type="button" className="fp-btn sw-enter-edit" onClick={onClick} title={LAYOUT_EDIT.enterHint}>
+      <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+        <path d="M10.6 2.4l3 3L6 13H3v-3z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+      </svg>
+      {LAYOUT_EDIT.enter}
+    </button>
   )
 }
 

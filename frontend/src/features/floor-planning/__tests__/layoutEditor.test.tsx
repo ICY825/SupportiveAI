@@ -101,8 +101,10 @@ const deskNode = (container: HTMLElement, id = DESK) =>
   container.querySelector<SVGGElement>(`.sw-furniture[data-workstation-id="${id}"]`)!
 
 const saveButton = () => screen.getByRole('button', { name: /Lưu bố trí|Đang lưu/ }) as HTMLButtonElement
-const enterEdit = () => fireEvent.click(screen.getByRole('radio', { name: 'Chỉnh sửa bố trí' }))
-const leaveEdit = () => fireEvent.click(screen.getByRole('radio', { name: 'Xem mặt bằng' }))
+const enterEdit = () => fireEvent.click(screen.getByRole('button', { name: /Chỉnh sửa bố trí/ }))
+/** Hủy is the only way out of edit mode; it confirms when there is work to lose. */
+const leaveEdit = () => fireEvent.click(screen.getByRole('button', { name: 'Hủy' }))
+const inViewMode = () => screen.queryAllByRole('button', { name: /Chỉnh sửa bố trí/ }).length === 1
 
 function clickDesk(container: HTMLElement, id = DESK) {
   const node = deskNode(container, id)
@@ -128,7 +130,9 @@ function dragBy(container: HTMLElement, from: Element, dx: number, dy: number) {
 describe('view mode is unchanged by the editor', () => {
   it('starts in view mode with no grid, no boundary and no selection box', () => {
     const { container } = setup()
-    expect(screen.getByRole('radio', { name: 'Xem mặt bằng' })).toHaveProperty('ariaChecked', 'true')
+    expect(inViewMode()).toBe(true)
+    // one segmented control on the page, and it is not this one
+    expect(screen.queryByRole('radiogroup', { name: 'Chế độ bố trí' })).toBeNull()
     expect(container.querySelector('.sw-edit-grid')).toBeNull()
     expect(container.querySelector('.sw-edit-boundary')).toBeNull()
     expect(container.querySelector('.sw-edit-layer')).toBeNull()
@@ -293,7 +297,7 @@ describe('edit mode', () => {
       fireEvent.keyDown(window, { key: 'Escape' })
     })
     expect(deskTop(container)).toBe(before)
-    expect(screen.getByRole('radio', { name: 'Chỉnh sửa bố trí' })).toHaveProperty('ariaChecked', 'true')
+    expect(inViewMode()).toBe(false)
   })
 })
 
@@ -311,9 +315,20 @@ describe('draft, save and cancel', () => {
     nudgeUp(container)
     expect(deskTop(container)).not.toBe(original)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Hủy' }))
+    // discarding real work asks first
+    leaveEdit()
+    fireEvent.click(screen.getByRole('button', { name: 'Hủy thay đổi' }))
     expect(deskTop(container)).toBe(original)
-    expect(screen.getByRole('radio', { name: 'Xem mặt bằng' })).toHaveProperty('ariaChecked', 'true')
+    expect(inViewMode()).toBe(true)
+  })
+
+  it('leaves edit mode without asking when nothing has changed', () => {
+    const { container } = setup()
+    enterEdit()
+    leaveEdit()
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(inViewMode()).toBe(true)
+    expect(container.querySelector('.sw-edit-grid')).toBeNull()
   })
 
   it('asks before leaving edit mode with unsaved changes, and keeps the draft on "stay"', () => {
@@ -326,7 +341,8 @@ describe('draft, save and cancel', () => {
     expect(screen.getByRole('alertdialog')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục chỉnh sửa' }))
     expect(deskTop(container)).toBe(moved)
-    expect(screen.getByRole('radio', { name: 'Chỉnh sửa bố trí' })).toHaveProperty('ariaChecked', 'true')
+    expect(inViewMode()).toBe(false)
+    expect(saveButton()).toBeTruthy()
   })
 
   it('Save commits the draft to the store and returns to view mode', async () => {
@@ -356,7 +372,7 @@ describe('draft, save and cancel', () => {
     // committed, not reverted
     expect(deskTop(container)).toBe(moved)
     expect(deskTop(container)).not.toBe(original)
-    expect(screen.getByRole('radio', { name: 'Xem mặt bằng' })).toHaveProperty('ariaChecked', 'true')
+    expect(inViewMode()).toBe(true)
   })
 
   it('restores a previously saved layout when the workspace is remounted', async () => {

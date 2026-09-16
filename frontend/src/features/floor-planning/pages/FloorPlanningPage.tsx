@@ -129,12 +129,6 @@ export function FloorPlanningPage({ settingsOpen = false, onSettingsOpenChange }
             </button>
           ))}
         </div>
-        {view === 'workspace' && (
-          <p className="fp-scope is-demo" title="Nhân sự, chỗ ngồi và thiết bị là dữ liệu giả lập; chưa kết nối HR/Admin.">
-            <span className="fp-scope-dot" aria-hidden="true" />
-            Dữ liệu bố trí minh họa
-          </p>
-        )}
         <div className="fp-topbar-actions">
           <div className="fp-search-slot" ref={setSearchSlot} />
           <HelpPopover />

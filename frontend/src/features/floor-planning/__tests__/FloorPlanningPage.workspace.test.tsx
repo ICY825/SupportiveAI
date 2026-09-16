@@ -198,7 +198,7 @@ describe('desk selection → workspace inspector', () => {
 describe('unsaved layout changes guard the page', () => {
   it('asks before switching view mode and applies the switch only after discarding', async () => {
     await openWorkspace()
-    fireEvent.click(screen.getByRole('radio', { name: 'Chỉnh sửa bố trí' }))
+    fireEvent.click(screen.getByRole('button', { name: /Chỉnh sửa bố trí/ }))
     clickDesk(OCCUPIED)
     fireEvent.keyDown(document.querySelector('.sw-scene')!, { key: 'ArrowUp' })
     expect(screen.getByRole('button', { name: 'Lưu bố trí' })).toHaveProperty('disabled', false)

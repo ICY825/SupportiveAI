@@ -181,7 +181,7 @@ async function run() {
   check((await page.locator('.sw-edit-grid').count()) === 0, 'view mode: edit grid is drawn before entering edit mode')
   const viewMap = await measure(page, 'workspace')
 
-  await page.getByRole('radio', { name: 'Chỉnh sửa bố trí' }).click()
+  await page.getByRole('button', { name: 'Chỉnh sửa bố trí' }).click()
   await page.locator('.sw-edit-grid').waitFor()
   check((await page.locator('.sw-edit-grid circle').count()) > 50, 'edit: grid has too few points to read as a grid')
   check((await page.locator('.sw-edit-boundary').count()) === 1, 'edit: editable-area outline missing')
@@ -232,8 +232,15 @@ async function run() {
   report.states.push({ name: 'spatial-edit-invalid', map: invalidMap })
   await shot(page, 'spatial-edit-invalid')
 
+  // Hủy throws away a session's work, so with unsaved changes it confirms first
   await page.getByRole('button', { name: 'Hủy', exact: true }).click()
+  check((await page.getByRole('alertdialog').count()) === 1, 'edit: Hủy discarded unsaved changes without asking')
+  await page.getByRole('button', { name: 'Hủy thay đổi' }).click()
   check((await page.locator('.sw-edit-grid').count()) === 0, 'edit: grid survives Hủy')
+  check(
+    (await page.getByRole('button', { name: 'Chỉnh sửa bố trí' }).count()) === 1,
+    'edit: the way back into editing is missing after Hủy',
+  )
   await page.getByRole('application').press('Escape')
 
   // keyboard selection must stay usable and visibly focused in both modes

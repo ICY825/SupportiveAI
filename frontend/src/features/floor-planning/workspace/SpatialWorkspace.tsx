@@ -21,7 +21,7 @@ import { ARROW_DIRECTION, DIRECTION_VECTOR, nearestInDirection } from '../map/de
 import { normalizeWheelZoom } from '../map/viewport'
 import { buildSearchIndex } from '../search/searchIndex'
 import { EditAffordances, EditGround } from './EditLayer'
-import { EditInspector, EditToolbar, LayoutModeSwitch, PlacementStatus, UnsavedChangesDialog } from './EditPanel'
+import { EditInspector, EditToolbar, EnterEditButton, PlacementStatus, UnsavedChangesDialog } from './EditPanel'
 import {
   applyPlacements,
   basePlacements as deriveBasePlacements,
@@ -127,7 +127,6 @@ function CompactInspector({ desk, onClose, onVerify, showHeader = true }: { desk
       <dl className="fp-facts"><div><dt>Khu vực</dt><dd>{desk.zone?.name ?? 'Chưa có nhãn'}</dd></div><div><dt>Bộ phận</dt><dd>{desk.department?.name ?? 'Chưa có dữ liệu'}</dd></div><div><dt>Loại chỗ ngồi</dt><dd>{SEAT_TYPE[desk.seat.seatType]}</dd></div></dl>
     </details>
     <button type="button" className="fp-btn is-wide sw-verify" onClick={onVerify}>Đối chiếu trên bản vẽ <span aria-hidden="true">↗</span></button>
-    <p className="sw-inspector-note">Thông tin bố trí minh họa · Chỉ xem</p>
   </aside>
 }
 
@@ -534,19 +533,20 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
           <h2 className="fp-page-title">Mô hình &amp; Nền tảng AI</h2>
         </div>
         <div className="sw-heading-actions">
-          <LayoutModeSwitch mode={editor.mode} onChange={changeMode} />
-          {/* Nothing names the mode a third time: the top bar already says
-              which view this is and the switch above says which mode. */}
-          {editing && (
+          {editing ? (
             <EditToolbar
               dirty={editor.dirty}
               valid={editor.valid}
               saving={editor.saving}
               changedCount={editor.changedCount}
               invalidCount={invalidCount}
-              onCancel={editor.cancel}
+              /* Hủy throws away a session's work, so it asks first when there
+                 is work to lose — the same confirmation the page uses. */
+              onCancel={() => changeMode('view')}
               onSave={() => { void editor.save() }}
             />
+          ) : (
+            <EnterEditButton onClick={() => changeMode('edit')} />
           )}
         </div>
       </header>
