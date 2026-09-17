@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { AllocationSource } from '../domain/allocation'
 import { DESK_STATUSES, type DeskRecord } from '../domain/desk'
-import type { EntityRef, FloorDataset, Point, VerificationState } from '../domain/spatial'
+import type { EntityRef, FloorDataset, Point, VerificationState, Zone } from '../domain/spatial'
+import { polygonCentroid } from '../domain/zoneCustomization'
 import type { ValidationIssue } from '../data/validateFloorDataset'
 import {
   CLASSIFICATION,
@@ -20,6 +21,7 @@ import { VerificationStatus } from './VerificationStatus'
 
 interface FloorDetailsPanelProps {
   dataset: FloorDataset
+  baseDataset?: FloorDataset
   selected: EntityRef | null
   onSelect: (ref: EntityRef | null) => void
   debug: boolean
@@ -27,6 +29,16 @@ interface FloorDetailsPanelProps {
   /** workspace view: desks derived from attached allocation data (demo or API) */
   desks?: ReadonlyMap<string, DeskRecord>
   allocationSource?: AllocationSource
+  onZoneUpdate?: (update: {
+    zoneId: string
+    name?: string | null
+    labelAnchor?: Point
+    sourceColor?: string | null
+    verification?: VerificationState
+    type?: 'WORKSPACE_ZONE' | 'UNKNOWN'
+  }) => void
+  onResetZone?: (zoneId: string) => void
+  onResetAllZones?: () => void
 }
 
 const DASH = '—'
@@ -188,7 +200,318 @@ function Technical({ children }: { children: ReactNode }) {
   )
 }
 
-export function FloorDetailsPanel({ dataset, selected, onSelect, debug, issues, desks, allocationSource }: FloorDetailsPanelProps) {
+function ZoneDepartmentEditor({
+  zone,
+  baseDataset,
+  onZoneUpdate,
+  onResetZone,
+}: {
+  zone: Zone
+  baseDataset?: FloorDataset
+  onZoneUpdate?: (update: {
+    zoneId: string
+    name?: string | null
+    labelAnchor?: Point
+    sourceColor?: string | null
+    verification?: VerificationState
+    type?: 'WORKSPACE_ZONE' | 'UNKNOWN'
+  }) => void
+  onResetZone?: (zoneId: string) => void
+}) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [nameInput, setNameInput] = useState(zone.name ?? '')
+  const [selectedColor, setSelectedColor] = useState(zone.sourceColor ?? '#c3d6f8')
+
+  const baseZone = baseDataset?.zones.find((z) => z.id === zone.id)
+  const isModified =
+    baseZone &&
+    (baseZone.name !== zone.name ||
+      baseZone.sourceColor !== zone.sourceColor ||
+      baseZone.labelAnchor[0] !== zone.labelAnchor[0] ||
+      baseZone.labelAnchor[1] !== zone.labelAnchor[1] ||
+      baseZone.verification !== zone.verification)
+
+  const colorPalette = [
+    { label: 'Xanh AI', value: '#c3d6f8' },
+    { label: 'Xanh Smart City', value: '#8de7ed' },
+    { label: 'Vàng GSM', value: '#fffbe1' },
+    { label: 'Hồng VinFast', value: '#fbcecc' },
+    { label: 'Tím nhạt', value: '#dadef8' },
+    { label: 'Xanh lá pastel', value: '#d4f0d0' },
+  ]
+
+  const handleSave = () => {
+    const trimmed = nameInput.trim()
+    if (trimmed) {
+      onZoneUpdate?.({
+        zoneId: zone.id,
+        name: trimmed,
+        verification: 'SOURCE_VERIFIED',
+        type: 'WORKSPACE_ZONE',
+        sourceColor: selectedColor,
+      })
+    } else {
+      onZoneUpdate?.({
+        zoneId: zone.id,
+        name: null,
+        verification: 'UNKNOWN',
+        type: 'UNKNOWN',
+        sourceColor: null,
+      })
+    }
+    setIsEditing(false)
+  }
+
+  const handleUnassign = () => {
+    onZoneUpdate?.({
+      zoneId: zone.id,
+      name: null,
+      verification: 'UNKNOWN',
+      type: 'UNKNOWN',
+      sourceColor: null,
+    })
+    setNameInput('')
+    setIsEditing(false)
+  }
+
+  if (isEditing) {
+    return (
+      <div className="fp-zone-edit-box">
+        <div className="fp-form-group">
+          <label className="fp-form-label" htmlFor="dept-name-input">
+            Tên phòng ban:
+          </label>
+          <input
+            id="dept-name-input"
+            type="text"
+            className="fp-input"
+            value={nameInput}
+            onChange={(e) => setNameInput(e.target.value)}
+            placeholder="Nhập tên phòng ban..."
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleSave()
+              if (e.key === 'Escape') setIsEditing(false)
+            }}
+          />
+        </div>
+
+        <div className="fp-form-group">
+          <span className="fp-form-label">Màu nhận diện khu vực:</span>
+          <div className="fp-color-palette">
+            {colorPalette.map((c) => (
+              <button
+                key={c.value}
+                type="button"
+                className={`fp-color-dot${selectedColor === c.value ? ' is-active' : ''}`}
+                style={{ backgroundColor: c.value }}
+                title={c.label}
+                onClick={() => setSelectedColor(c.value)}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="fp-zone-form-actions">
+          <div className="fp-zone-form-primary-actions">
+            <button type="button" className="fp-btn is-primary fp-btn-sm" onClick={handleSave}>
+              Lưu thay đổi
+            </button>
+            <button
+              type="button"
+              className="fp-btn fp-btn-sm"
+              onClick={() => {
+                setNameInput(zone.name ?? '')
+                setIsEditing(false)
+              }}
+            >
+              Hủy
+            </button>
+          </div>
+          {zone.name && (
+            <button type="button" className="fp-btn fp-btn-sm is-danger" onClick={handleUnassign}>
+              Xóa phòng ban
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="fp-zone-actions-wrap">
+      {!zone.name ? (
+        <p className="fp-callout" data-verification="UNKNOWN">
+          <span aria-hidden="true">? </span>
+          <span>Chưa có phòng ban</span>
+          <span className="fp-sub"> ({UNLABELED_ZONE})</span>
+        </p>
+      ) : (
+        <span className="fp-sr-only">Đã gán phòng ban</span>
+      )}
+      <div className="fp-zone-actions">
+        <button
+          type="button"
+          className={`fp-action-btn${!zone.name ? ' is-primary' : ''}`}
+          onClick={() => {
+            setNameInput(zone.name ?? '')
+            setSelectedColor(zone.sourceColor ?? '#c3d6f8')
+            setIsEditing(true)
+          }}
+        >
+          {zone.name ? 'Đổi tên phòng ban' : '+ Gán tên phòng ban'}
+        </button>
+        {zone.name && (
+          <button type="button" className="fp-action-btn is-danger" onClick={handleUnassign}>
+            Xóa phòng ban
+          </button>
+        )}
+        {isModified && (
+          <button
+            type="button"
+            className="fp-action-btn"
+            title="Khôi phục thông tin phòng ban và vị trí theo bản vẽ gốc"
+            onClick={() => onResetZone?.(zone.id)}
+          >
+            ↺ Khôi phục gốc
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ZoneLabelSection({
+  zone,
+  baseDataset,
+  onZoneUpdate,
+}: {
+  zone: Zone
+  baseDataset?: FloorDataset
+  onZoneUpdate?: (update: {
+    zoneId: string
+    labelAnchor?: Point
+  }) => void
+}) {
+  const baseZone = baseDataset?.zones.find((z) => z.id === zone.id)
+  const isPositionModified =
+    baseZone &&
+    (baseZone.labelAnchor[0] !== zone.labelAnchor[0] || baseZone.labelAnchor[1] !== zone.labelAnchor[1])
+
+  const handleCenterLabel = () => {
+    const centroid = polygonCentroid(zone.polygon)
+    onZoneUpdate?.({
+      zoneId: zone.id,
+      labelAnchor: centroid,
+    })
+  }
+
+  const handleResetPosition = () => {
+    if (baseZone) {
+      onZoneUpdate?.({
+        zoneId: zone.id,
+        labelAnchor: [...baseZone.labelAnchor],
+      })
+    }
+  }
+
+  const handleNudge = (dx: number, dy: number) => {
+    const newX = Number((zone.labelAnchor[0] + dx).toFixed(1))
+    const newY = Number((zone.labelAnchor[1] + dy).toFixed(1))
+    onZoneUpdate?.({
+      zoneId: zone.id,
+      labelAnchor: [newX, newY],
+    })
+  }
+
+  return (
+    <Section title="Vị trí nhãn">
+      <dl>
+        <Row label="Tọa độ nhãn (pt)" hint="Tọa độ điểm neo của chữ trên bản vẽ gốc">
+          <span className="fp-mono">{fmtPt(zone.labelAnchor)}</span>
+        </Row>
+        <Row label="Dịch chuyển" hint="Dịch vị trí nhãn 10pt theo từng hướng">
+          <div className="fp-nudge-group">
+            <button
+              type="button"
+              className="fp-nudge-btn"
+              onClick={() => handleNudge(-10, 0)}
+              title="Dịch trái 10pt"
+            >
+              ← Trái
+            </button>
+            <button
+              type="button"
+              className="fp-nudge-btn"
+              onClick={() => handleNudge(10, 0)}
+              title="Dịch phải 10pt"
+            >
+              Phải →
+            </button>
+            <button
+              type="button"
+              className="fp-nudge-btn"
+              onClick={() => handleNudge(0, -10)}
+              title="Dịch lên 10pt"
+            >
+              ↑ Lên
+            </button>
+            <button
+              type="button"
+              className="fp-nudge-btn"
+              onClick={() => handleNudge(0, 10)}
+              title="Dịch xuống 10pt"
+            >
+              ↓ Xuống
+            </button>
+          </div>
+        </Row>
+        <Row label="Căn chỉnh">
+          <div className="fp-inline-actions">
+            <button
+              type="button"
+              className="fp-link"
+              onClick={handleCenterLabel}
+              title="Căn giữa tiêu đề theo trọng tâm khu vực"
+            >
+              Căn giữa khu vực
+            </button>
+            {isPositionModified && (
+              <>
+                <span className="fp-sep">·</span>
+                <button
+                  type="button"
+                  className="fp-link"
+                  onClick={handleResetPosition}
+                  title="Khôi phục vị trí tiêu đề về mặc định bản vẽ gốc"
+                >
+                  Đặt lại vị trí
+                </button>
+              </>
+            )}
+          </div>
+        </Row>
+      </dl>
+      <p className="fp-panel-hint">
+        💡 Kéo trực tiếp nhãn trên bản đồ để di chuyển tự do như công cụ PDF.
+      </p>
+    </Section>
+  )
+}
+
+export function FloorDetailsPanel({
+  dataset,
+  baseDataset,
+  selected,
+  onSelect,
+  debug,
+  issues,
+  desks,
+  allocationSource,
+  onZoneUpdate,
+  onResetZone,
+  onResetAllZones,
+}: FloorDetailsPanelProps) {
   const { layout } = dataset
   const floor = layout.floor
   const zoneName = (id: string | null) => {
@@ -259,25 +582,34 @@ export function FloorDetailsPanel({ dataset, selected, onSelect, debug, issues, 
           </p>
         )}
 
-        <Section title="Khu vực">
+        <Section title="Khu vực" open>
           <ul className="fp-list">
             {dataset.zones.map((z) => {
-              const count = dataset.workstations.filter((w) => w.zoneId === z.id).length
               return (
                 <li key={z.id}>
                   <Link to={{ kind: 'zone', id: z.id }} onSelect={onSelect}>
                     {z.name ?? <span className="fp-unknown">{UNLABELED_ZONE}</span>}
                   </Link>
-                  <span className="fp-list-meta">
-                    <span className="fp-count" title="Số vị trí làm việc vật lý có tâm nằm trong khu vực">
-                      {count} vị trí
-                    </span>
-                    <VerificationStatus state={z.verification} compact />
-                  </span>
                 </li>
               )
             })}
           </ul>
+          {onResetAllZones && baseDataset && (
+            <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="fp-btn-sm"
+                title="Khôi phục toàn bộ phòng ban trên tầng này về bản vẽ gốc"
+                onClick={() => {
+                  if (window.confirm('Bạn có chắc muốn khôi phục toàn bộ phòng ban và vị trí nhãn về mặc định bản vẽ gốc?')) {
+                    onResetAllZones()
+                  }
+                }}
+              >
+                ↺ Đặt lại tất cả khu vực
+              </button>
+            </div>
+          )}
         </Section>
 
         <OperationalData
@@ -324,6 +656,12 @@ export function FloorDetailsPanel({ dataset, selected, onSelect, debug, issues, 
             title={z.name ?? <span className="fp-unknown">{UNLABELED_ZONE}</span>}
             state={z.verification}
           />
+          <ZoneDepartmentEditor
+            zone={z}
+            baseDataset={baseDataset}
+            onZoneUpdate={onZoneUpdate}
+            onResetZone={onResetZone}
+          />
           <dl>
             <Row label="Vị trí làm việc vật lý" hint="Bàn có ký hiệu ghế, tâm nằm trong đường viền khu vực">
               {ws.length}
@@ -335,6 +673,12 @@ export function FloorDetailsPanel({ dataset, selected, onSelect, debug, issues, 
             <Row label="Lưới trục">{z.gridRef}</Row>
           </dl>
           <Notes notes={z.notes} />
+
+          <ZoneLabelSection
+            zone={z}
+            baseDataset={baseDataset}
+            onZoneUpdate={onZoneUpdate}
+          />
 
           {objects.length > 0 && (
             <Section title="Tiện ích & thiết bị">
@@ -364,7 +708,7 @@ export function FloorDetailsPanel({ dataset, selected, onSelect, debug, issues, 
               <Row label="Nhãn trên bản vẽ">{z.sourceLabel ?? <span className="fp-unknown">Không có nhãn</span>}</Row>
               {z.sourceLabelFigure !== null && (
                 <Row label="Số trên nhãn">
-                  ({z.sourceLabelFigure})<span className="fp-sub">Bản vẽ không nêu ý nghĩa; không dùng làm sức chứa</span>
+                  ({z.sourceLabelFigure})<span className="fp-sub">Sức chứa cũ do người vẽ CAD ghi, đã hết hiệu lực — Facilities xác nhận. Số chỗ ngồi lấy theo bàn đếm được trên bản vẽ.</span>
                 </Row>
               )}
               <Row label="Loại chú thích">{generated(z.source.annotationType) ?? DASH}</Row>

@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import type { DeskStatus } from '../domain/desk'
 import type { BaseLayer, EntityKind, EntityRef, FloorDataset, Point } from '../domain/spatial'
+import { zoneDisplayPolygon } from '../domain/zoneGeometry'
 import { gridRefAt } from '../map/grid'
 import { isSheetAnnotation } from '../map/sheetLabels'
 import { UNLABELED_ZONE, objectName } from '../labels'
@@ -22,6 +23,8 @@ interface FloorMapProps {
   deskStatuses?: ReadonlyMap<string, DeskStatus>
   /** makes the map focusable and receives keyboard navigation */
   onKeyDown?: (e: ReactKeyboardEvent<SVGSVGElement>) => void
+  /** callback when a zone label is dragged/repositioned or updated */
+  onZoneUpdate?: (update: { zoneId: string; labelAnchor?: Point; name?: string | null }) => void
 }
 
 const DRAG_THRESHOLD_PX = 4
@@ -49,10 +52,21 @@ export function FloorMap({
   assetBase,
   deskStatuses,
   onKeyDown,
+  onZoneUpdate,
 }: FloorMapProps) {
   const svgRef = useRef<SVGSVGElement | null>(null)
   const drag = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null)
   const [cursor, setCursor] = useState<Point | null>(null)
+  const [draggedLabel, setDraggedLabel] = useState<{ zoneId: string; anchor: Point } | null>(null)
+  const labelDrag = useRef<{
+    pointerId: number
+    zoneId: string
+    startX: number
+    startY: number
+    startAnchor: Point
+    currentAnchor: Point
+    moved: boolean
+  } | null>(null)
   const [panning, setPanning] = useState(false)
   const lastHover = useRef<string | null>(null)
   const { layout } = dataset
@@ -135,6 +149,15 @@ export function FloorMap({
   // Window blur cleans up any active drag to prevent stuck pointer lockouts
   useEffect(() => {
     const onBlur = () => {
+      if (labelDrag.current) {
+        try {
+          if (svgRef.current?.hasPointerCapture?.(labelDrag.current.pointerId)) {
+            svgRef.current.releasePointerCapture(labelDrag.current.pointerId)
+          }
+        } catch {}
+        labelDrag.current = null
+        setDraggedLabel(null)
+      }
       const d = drag.current
       if (d) {
         drag.current = null
@@ -193,6 +216,30 @@ export function FloorMap({
   const onPointerDown = (e: ReactPointerEvent<SVGSVGElement>) => {
     if (e.button !== 0) return
     if (!Number.isFinite(e.clientX) || !Number.isFinite(e.clientY)) return
+
+    // PDF tool affordance: dragging or clicking a zone title/label
+    const labelEl = (e.target as Element | null)?.closest?.('[data-zone-label="true"]')
+    if (labelEl) {
+      const zoneId = labelEl.getAttribute('data-entity-id')
+      const zone = dataset.zones.find((z) => z.id === zoneId)
+      if (zone) {
+        updateCachedRect()
+        labelDrag.current = {
+          pointerId: e.pointerId,
+          zoneId: zone.id,
+          startX: e.clientX,
+          startY: e.clientY,
+          startAnchor: [zone.labelAnchor[0], zone.labelAnchor[1]],
+          currentAnchor: [zone.labelAnchor[0], zone.labelAnchor[1]],
+          moved: false,
+        }
+        try {
+          svgRef.current?.setPointerCapture(e.pointerId)
+        } catch {}
+        return
+      }
+    }
+
     if (drag.current !== null) {
       if (e.pointerType === 'mouse') {
         if (drag.current.moved) {
@@ -208,6 +255,24 @@ export function FloorMap({
   }
 
   const onPointerMove = (e: ReactPointerEvent<SVGSVGElement>) => {
+    const ld = labelDrag.current
+    if (ld && ld.pointerId === e.pointerId) {
+      const dx = e.clientX - ld.startX
+      const dy = e.clientY - ld.startY
+      if (!ld.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD_PX) {
+        ld.moved = true
+      }
+      if (ld.moved) {
+        const nextAnchor: Point = [
+          Math.round((ld.startAnchor[0] + dx / viewport.scale) * 10) / 10,
+          Math.round((ld.startAnchor[1] + dy / viewport.scale) * 10) / 10,
+        ]
+        ld.currentAnchor = nextAnchor
+        setDraggedLabel({ zoneId: ld.zoneId, anchor: nextAnchor })
+      }
+      return
+    }
+
     const d = drag.current
     if (d && d.id === e.pointerId) {
       const dx = e.clientX - d.x
@@ -250,6 +315,28 @@ export function FloorMap({
   }
 
   const onPointerUp = (e: ReactPointerEvent<SVGSVGElement>) => {
+    const ld = labelDrag.current
+    if (ld && ld.pointerId === e.pointerId) {
+      labelDrag.current = null
+      setDraggedLabel(null)
+      try {
+        if (svgRef.current?.hasPointerCapture?.(e.pointerId)) {
+          svgRef.current.releasePointerCapture(e.pointerId)
+        }
+      } catch {}
+
+      if (ld.moved) {
+        onZoneUpdate?.({
+          zoneId: ld.zoneId,
+          labelAnchor: ld.currentAnchor,
+        })
+        onSelect({ kind: 'zone', id: ld.zoneId })
+      } else {
+        onSelect({ kind: 'zone', id: ld.zoneId })
+      }
+      return
+    }
+
     const d = drag.current
     if (!d || d.id !== e.pointerId) return
     drag.current = null
@@ -270,6 +357,18 @@ export function FloorMap({
   }
 
   const onPointerCancel = (e: ReactPointerEvent<SVGSVGElement>) => {
+    const ld = labelDrag.current
+    if (ld && ld.pointerId === e.pointerId) {
+      try {
+        if (svgRef.current?.hasPointerCapture?.(e.pointerId)) {
+          svgRef.current.releasePointerCapture(e.pointerId)
+        }
+      } catch {}
+      labelDrag.current = null
+      setDraggedLabel(null)
+      return
+    }
+
     const d = drag.current
     if (!d || d.id !== e.pointerId) return
     drag.current = null
@@ -356,7 +455,13 @@ export function FloorMap({
 
           <EntityLayer dataset={dataset} />
 
-          {settings.labels && showDigital && <Labels dataset={dataset} />}
+          {settings.labels && showDigital && (
+            <Labels
+              dataset={dataset}
+              selectedZoneId={selected?.kind === 'zone' ? selected.id : null}
+              draggedLabel={draggedLabel}
+            />
+          )}
 
           <Selection dataset={dataset} selected={selected} />
 
@@ -424,7 +529,7 @@ const ZoneFills = memo(function ZoneFills({ dataset }: { dataset: FloorDataset }
       {dataset.zones.map((z) => (
         <polygon
           key={z.id}
-          points={points(z.polygon)}
+          points={points(zoneDisplayPolygon(z))}
           fill={z.verification === 'UNKNOWN' ? 'url(#fp-hatch-unknown)' : (z.sourceColor ?? 'transparent')}
           className="fp-zone-fill"
         />
@@ -442,7 +547,8 @@ const EntityLayer = memo(function EntityLayer({ dataset }: { dataset: FloorDatas
           <polygon
             key={z.id}
             className="fp-zone"
-            points={points(z.polygon)}
+            /* The tidied outline, so the zone is clicked where it is drawn. */
+            points={points(zoneDisplayPolygon(z))}
             data-entity-kind="zone"
             data-entity-id={z.id}
             data-verification={z.verification}
@@ -542,10 +648,18 @@ const SelectedDesk = memo(function SelectedDesk({ dataset, id, status }: { datas
   )
 })
 
-const Labels = memo(function Labels({ dataset }: { dataset: FloorDataset }) {
+const Labels = memo(function Labels({
+  dataset,
+  selectedZoneId,
+  draggedLabel,
+}: {
+  dataset: FloorDataset
+  selectedZoneId?: string | null
+  draggedLabel?: { zoneId: string; anchor: Point } | null
+}) {
   const { layout, zones } = dataset
   return (
-    <g className="fp-labels" aria-hidden="true">
+    <g className="fp-labels">
       {layout.labels.filter((l) => !isSheetAnnotation(l)).map((l, i) => (
         <text
           key={i}
@@ -554,21 +668,59 @@ const Labels = memo(function Labels({ dataset }: { dataset: FloorDataset }) {
           y={l.y}
           fontSize={l.size}
           transform={l.angle ? `rotate(${l.angle} ${l.x} ${l.y})` : undefined}
+          aria-hidden="true"
         >
           {l.text}
         </text>
       ))}
-      {zones.map((z) => (
-        <text
-          key={z.id}
-          className={`fp-zone-label${z.name ? '' : ' is-unknown'}`}
-          x={z.labelAnchor[0]}
-          y={z.labelAnchor[1]}
-        >
-          {z.name ?? UNLABELED_ZONE.toUpperCase()}
-          {z.sourceLabelFigure !== null ? ` (${z.sourceLabelFigure})` : ''}
-        </text>
-      ))}
+      {zones.map((z) => {
+        const isDragged = draggedLabel?.zoneId === z.id
+        const anchor = isDragged ? draggedLabel.anchor : z.labelAnchor
+        const isSelected = selectedZoneId === z.id
+        // The drawing's figure stays out of the map label. It reads as capacity
+        // next to a department name and is not one — Facilities has confirmed it
+        // as a superseded CAD total. The raw label, figure and all, is still on
+        // the zone's "Nhãn trên bản vẽ" row, and dropping it here makes this map
+        // agree with the 2.5D workspace, which has always drawn the name alone.
+        const text = z.name ?? UNLABELED_ZONE.toUpperCase()
+        const zoneCentroid: Point = [(z.bbox[0] + z.bbox[2]) / 2, (z.bbox[1] + z.bbox[3]) / 2]
+        const distFromCentroid = Math.hypot(anchor[0] - zoneCentroid[0], anchor[1] - zoneCentroid[1])
+
+        return (
+          <g
+            key={z.id}
+            className={`fp-zone-label-group${isSelected ? ' is-selected' : ''}${isDragged ? ' is-dragging' : ''}`}
+            data-entity-kind="zone"
+            data-entity-id={z.id}
+            data-zone-label="true"
+          >
+            {(isDragged || (isSelected && distFromCentroid > 45)) && (
+              <line
+                x1={zoneCentroid[0]}
+                y1={zoneCentroid[1]}
+                x2={anchor[0]}
+                y2={anchor[1]}
+                className="fp-zone-label-leader"
+              />
+            )}
+            {isSelected && (
+              <circle
+                cx={anchor[0]}
+                cy={anchor[1]}
+                r={3.5}
+                className="fp-zone-label-handle"
+              />
+            )}
+            <text
+              className={`fp-zone-label${z.name ? '' : ' is-unknown'}${isSelected ? ' is-selected' : ''}${isDragged ? ' is-dragging' : ''}`}
+              x={anchor[0]}
+              y={anchor[1]}
+            >
+              {text}
+            </text>
+          </g>
+        )
+      })}
     </g>
   )
 })

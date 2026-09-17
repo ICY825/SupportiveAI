@@ -1005,6 +1005,9 @@
   stroke: var(--zone-color);
   stroke-width: 0.7;
   stroke-opacity: 0.9;
+  /* Annotation outlines are hand-drawn; rounded joins stop each corner from
+     reading as a spike against the orthogonal CAD linework beneath. */
+  stroke-linejoin: round;
   cursor: pointer;
   pointer-events: all;
 }
@@ -1104,22 +1107,330 @@
   pointer-events: none;
 }
 
+.fp-zone-label-group {
+  cursor: grab;
+}
+
+.fp-zone-label-group.is-dragging {
+  cursor: grabbing;
+}
+
 .fp-zone-label {
   font: 700 11px var(--font);
   fill: #1c1b1a;
-  fill-opacity: 0.8;
+  fill-opacity: 0.85;
   text-anchor: middle;
   dominant-baseline: central;
   paint-order: stroke;
   stroke: #fff;
-  stroke-width: 2.4;
-  stroke-opacity: 0.85;
-  pointer-events: none;
+  stroke-width: 2.6;
+  stroke-opacity: 0.9;
+  pointer-events: auto;
+  cursor: grab;
+  user-select: none;
+  transition: fill 0.15s ease;
+}
+
+.fp-zone-label:hover {
+  fill: #004fb6;
+  cursor: grab;
+}
+
+.fp-zone-label.is-selected {
+  fill: #00367f;
+  stroke-width: 3.2;
+}
+
+.fp-zone-label.is-dragging {
+  cursor: grabbing;
+  fill: #002255;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.35));
 }
 
 .fp-zone-label.is-unknown {
   fill: var(--fp-unknown-text);
-  font-size: 7px;
+  font-size: 7.5px;
+}
+
+.fp-zone-label-leader {
+  stroke: #0056b3;
+  stroke-width: 1.2;
+  stroke-dasharray: 3 3;
+  pointer-events: none;
+  opacity: 0.75;
+}
+
+.fp-zone-label-handle {
+  fill: #0056b3;
+  stroke: #fff;
+  stroke-width: 1.2;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------- department manager & PDF title controls */
+
+.fp-zone-actions-wrap {
+  margin: 8px 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fp-zone-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.fp-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  font-size: var(--fp-t-small);
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--fp-r-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.fp-action-btn:hover {
+  background: var(--canvas-2);
+  border-color: #b9b2a8;
+}
+
+.fp-action-btn.is-primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+.fp-action-btn.is-primary:hover {
+  background: #33312e;
+}
+
+.fp-action-btn.is-danger {
+  color: var(--vsf-red);
+  border-color: rgba(210, 24, 31, 0.35);
+  background: transparent;
+}
+
+.fp-action-btn.is-danger:hover {
+  background: rgba(210, 24, 31, 0.06);
+  border-color: var(--vsf-red);
+}
+
+.fp-btn-sm {
+  height: 26px;
+  padding: 0 10px;
+  font-size: var(--fp-t-small);
+  font-weight: 500;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--fp-r-sm);
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.12s ease;
+}
+
+.fp-btn-sm:hover {
+  background: var(--canvas-2);
+  border-color: #b9b2a8;
+}
+
+.fp-btn-sm.is-primary {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+
+.fp-btn-sm.is-primary:hover {
+  background: #33312e;
+}
+
+.fp-btn-sm.is-danger {
+  color: var(--vsf-red);
+  border-color: rgba(210, 24, 31, 0.35);
+  background: transparent;
+}
+
+.fp-btn-sm.is-danger:hover {
+  background: rgba(210, 24, 31, 0.06);
+  border-color: var(--vsf-red);
+}
+
+.fp-btn.is-danger {
+  color: var(--vsf-red);
+  border-color: rgba(210, 24, 31, 0.35);
+  background: transparent;
+}
+
+.fp-btn.is-danger:hover {
+  background: rgba(210, 24, 31, 0.06);
+  border-color: var(--vsf-red);
+}
+
+.fp-zone-edit-box {
+  margin: 8px 0 14px;
+  padding: 12px;
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  border-radius: var(--fp-r);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.fp-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.fp-form-label {
+  font-size: var(--fp-t-micro);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.fp-input {
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  font-size: var(--fp-t-body);
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--fp-r-sm);
+  box-sizing: border-box;
+  outline: none;
+}
+
+.fp-input:focus {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 2px rgba(28, 27, 26, 0.12);
+}
+
+
+.fp-color-palette {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.fp-color-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  padding: 0;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  transition: transform 0.12s ease;
+}
+
+.fp-color-dot:hover {
+  transform: scale(1.15);
+}
+
+.fp-color-dot.is-active {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.fp-zone-form-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.fp-zone-form-primary-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.fp-zone-form-actions .is-danger {
+  align-self: flex-start;
+}
+
+.fp-nudge-group {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--fp-r-sm);
+  overflow: hidden;
+  background: var(--paper);
+}
+
+.fp-nudge-btn {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11.5px;
+  font-weight: 500;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s ease;
+}
+
+.fp-nudge-btn:last-child {
+  border-right: 0;
+}
+
+.fp-nudge-btn:hover {
+  background: var(--canvas-2);
+}
+
+.fp-nudge-btn:active {
+  background: var(--canvas);
+}
+
+.fp-inline-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fp-t-small);
+}
+
+.fp-inline-actions .fp-sep {
+  color: var(--line-strong);
+  user-select: none;
+}
+
+.fp-panel-hint {
+  margin: 8px 0 0;
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+  background: var(--canvas);
+  border-radius: var(--fp-r-sm);
+  border-left: 2px solid var(--line-strong);
 }
 
 /* ---------------------------------------------------------------- workspace view: desks */

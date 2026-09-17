@@ -117,12 +117,6 @@ ROOMS = [
         "name": "Phòng CBLĐ",
         "wallBbox": [339.41, 415.65, 381.17, 469.79],
     },
-    {
-        "id": "room-16-acoustic-01",
-        "name": "Phòng cách âm",
-        "wallBbox": [117.07, 184.39, 210.10, 240.98],
-        "sourceText": "PHÒNG CÁCH ÂM TƯỜNG TRẦN SÀN",
-    },
 ]
 
 # CAD text labels that denote facility / infrastructure objects.

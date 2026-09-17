@@ -70,6 +70,6 @@ render group/classification map, the facility label list, and rule thresholds.
    in base geometry but not modelled as Room entities; names are not on the drawing.
 6. Meaning of layers `PHUONG-AN-2`, `KT-Others`, `KT-Kyhieu`, `A-GENM`, `KT-Netthay`.
 7. Whether lounge / meeting-table chairs are ever assignable.
-8. Whether `ws-16-030` in the soundproof room is an assignable desk.
+8. Note: "PHÒNG CÁCH ÂM" is a CAD acoustic treatment specification, not an enclosed room entity.
 9. The hidden annotation polygons: drafts or intended zones?
 10. Revision status: file dated 260710, annotations modified 2026-07-15 — is this the current layout?

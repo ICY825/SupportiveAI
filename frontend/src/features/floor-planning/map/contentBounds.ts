@@ -29,7 +29,9 @@ const ZONE_LABEL_SIZE_PT = 11
 const ZONE_LABEL_WIDTH_RATIO = 0.66
 
 function zoneLabelBounds(zone: FloorDataset['zones'][number]): BBox {
-  const text = (zone.name ?? UNLABELED_ZONE) + (zone.sourceLabelFigure !== null ? ` (${zone.sourceLabelFigure})` : '')
+  // Must stay the same string FloorMap draws, or the reservation stops bounding
+  // the label it is measuring.
+  const text = zone.name ?? UNLABELED_ZONE
   const halfWidth = (text.length * ZONE_LABEL_SIZE_PT * ZONE_LABEL_WIDTH_RATIO) / 2
   const halfHeight = ZONE_LABEL_SIZE_PT / 2
   const [x, y] = zone.labelAnchor
