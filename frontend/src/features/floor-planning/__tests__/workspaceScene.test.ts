@@ -23,7 +23,7 @@ import {
   project,
   sceneBounds,
 } from '../workspace/scene'
-import { buildWorkspaceDisplayAreas, DISPLAY_CONTEXT_PADDING_PT } from '../workspace/displayAreas'
+import { buildWorkspaceDisplayAreas, buildWorkspaceDisplayAreasForScope, DISPLAY_CONTEXT_PADDING_PT } from '../workspace/displayAreas'
 import { defaultWorkspaceScope, resolveWorkspaceScope, type WorkspaceScope } from '../workspace/scope'
 
 let dataset: FloorDataset
@@ -65,6 +65,13 @@ describe('workspace scope selection', () => {
     const resolved = resolveWorkspaceScope(dataset, departmentScope)
     expect(resolved.zoneIds).toEqual(['zone-16-ai-platform'])
     expect(resolved.bbox).toEqual([806.91, 234.72, 1009.27, 665.58])
+  })
+
+  it('supports another department through the same zone-backed display-area builder', () => {
+    const areas = buildWorkspaceDisplayAreasForScope(dataset, { kind: 'department', departmentId: 'dept-smart-city' })
+    expect(areas).toHaveLength(1)
+    expect(areas[0].workstationIds.length).toBeGreaterThan(0)
+    expect(areas[0].scope).toEqual({ kind: 'zone', zoneId: 'zone-16-bds-smart-city' })
   })
 
   it('partitions the accepted department into six disjoint display areas', () => {

@@ -48,12 +48,21 @@ const expandAndClamp = (bbox: BBox, padding: number, bounds: BBox): BBox => [
 const workstationBounds = (workstations: readonly Workstation[]): BBox =>
   bboxOfPoints(workstations.flatMap((workstation) => workstation.polygon))
 
-/**
- * Builds six navigable AI display areas from canonical cluster/workstation
- * membership. Returns no areas for floors without an explicit display map.
- */
+/** Removes source capacity figures from labels used as spatial UI names. */
+const cleanAreaLabel = (label: string | null | undefined, fallback: string) =>
+  label?.replace(/\s*\(\s*\d+\s*\)\s*$/, '').trim() || fallback
+
+/** Builds the default display scopes from canonical cluster/workstation membership. */
 export function buildWorkspaceDisplayAreas(dataset: FloorDataset): WorkspaceDisplayArea[] {
-  const departmentScope = defaultWorkspaceScope(dataset)
+  return buildWorkspaceDisplayAreasForScope(dataset, defaultWorkspaceScope(dataset))
+}
+
+/**
+ * Builds UI view scopes for any canonical workspace scope. AI keeps its six
+ * curated display areas; other departments fall back to one area per physical
+ * zone, without inventing new workstation membership.
+ */
+export function buildWorkspaceDisplayAreasForScope(dataset: FloorDataset, departmentScope: WorkspaceScope): WorkspaceDisplayArea[] {
   if (departmentScope.kind !== 'department') return []
   const resolved = resolveWorkspaceScope(dataset, departmentScope)
   const accepted = dataset.workstations.filter((workstation) => workstationInScope(workstation, resolved))
@@ -65,19 +74,31 @@ export function buildWorkspaceDisplayAreas(dataset: FloorDataset): WorkspaceDisp
   }
   const bounds = floorBounds(dataset)
 
-  return AI_AREA_DEFINITIONS.flatMap((definition) => {
+  const definitions = departmentScope.departmentId === 'dept-ai-data'
+    ? AI_AREA_DEFINITIONS
+    : resolved.zoneIds.map((zoneId, index) => ({
+        id: `zone-area-${zoneId}`,
+        label: cleanAreaLabel(dataset.zones.find((zone) => zone.id === zoneId)?.name, `Khu vực ${index + 1}`),
+        short: String(index + 1),
+        clusterIds: dataset.clusters.filter((cluster) => cluster.zoneId === zoneId).map((cluster) => cluster.id),
+      }))
+
+  return definitions.flatMap((definition) => {
     const workstations = definition.clusterIds.flatMap((clusterId) => byCluster.get(clusterId) ?? [])
     if (workstations.length === 0) return []
     const targetBBox = workstationBounds(workstations)
+    const zoneId = definition.id.startsWith('zone-area-') ? definition.id.slice('zone-area-'.length) : null
     return [{
       id: definition.id,
-      label: `${definition.label} · ${workstations.length} chỗ`,
+      // Keep the selector a stable spatial label. Live seat totals belong in
+      // the scope summary, not in a display name that can become stale.
+      label: definition.label,
       short: definition.short,
       clusterIds: definition.clusterIds,
       workstationIds: workstations.map((workstation) => workstation.id),
       targetBBox,
       contextBBox: expandAndClamp(targetBBox, DISPLAY_CONTEXT_PADDING_PT, bounds),
-      scope: { kind: 'bbox', bbox: targetBBox } as WorkspaceScope,
+      scope: zoneId ? { kind: 'zone', zoneId } : { kind: 'bbox', bbox: targetBBox },
     }]
   })
 }

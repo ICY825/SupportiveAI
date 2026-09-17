@@ -42,6 +42,21 @@ export const GRID_CELL_MM = 600
  */
 export const PLACEMENT_TOLERANCE_MM = 40
 
+/**
+ * How far an object may sit outside a zone or room outline before it counts.
+ *
+ * Those outlines are PDF annotations drawn by hand over the CAD sheet, not
+ * measured geometry — Floor 16's own zone edges are up to 2° off the axis they
+ * were aimed at. Judged at furniture tolerance, the extraction contradicts
+ * itself: the chairs of `ws-16-367` and `ws-16-369` sit 79 mm and 44 mm past
+ * the AI zone line, so Area F opened with two desks already invalid and Save
+ * blocked, before anyone had moved anything.
+ *
+ * 100 mm clears the worst observed drafting error with margin and is a sixth of
+ * a desk depth, so nothing can drift out of its zone behind it.
+ */
+export const ANNOTATION_TOLERANCE_MM = 100
+
 export interface LayoutDraft {
   placements: Record<string, SpatialPlacement>
 }
@@ -153,6 +168,7 @@ export function validateDraft(
   const obstacles = isArea ? boundaryOrArea.obstacles : (boundaryOrArea as any)?.obstacles ?? []
   const contextPlacements = isArea ? boundaryOrArea.contextPlacements ?? [] : []
   const effectiveTol = isArea ? boundaryOrArea.tolerance : tolerance
+  const boundaryTolerance = isArea ? boundaryOrArea.boundaryTolerance : undefined
   const chairTileSize = isArea ? boundaryOrArea.chairTileSize : undefined
 
   const placements = draftList(draft)
@@ -171,6 +187,7 @@ export function validateDraft(
         departmentZone,
         obstacles,
         tolerance: effectiveTol,
+        boundaryTolerance,
         chairTileSize,
       }),
     )
@@ -199,6 +216,8 @@ export interface EditableArea {
   grid: SpatialGrid
   /** see PLACEMENT_TOLERANCE_MM */
   tolerance: number
+  /** see ANNOTATION_TOLERANCE_MM */
+  boundaryTolerance?: number
   chairTileSize?: number
 }
 
@@ -280,6 +299,7 @@ export function deriveEditableArea(dataset: FloorDataset, scene: WorkspaceSceneM
     obstacles: dataset.obstacles,
     displayObstacles: scene.obstacles,
     tolerance,
+    boundaryTolerance: ANNOTATION_TOLERANCE_MM / dataset.layout.floor.mmPerPt,
     chairTileSize,
     grid: {
       origin: gridOrigin(scene),

@@ -116,6 +116,17 @@ export interface PlacementContext {
    */
   tolerance?: number
   /**
+   * How far an object may sit outside a containing boundary before it counts,
+   * in floor units. Defaults to `tolerance`.
+   *
+   * Zone and room outlines are PDF annotations somebody drew over the sheet,
+   * not measured geometry, so they carry the drafting error of a hand — Floor
+   * 16's own zone edges are up to 2° off the axis they were aimed at. Judging
+   * containment at furniture tolerance makes the extraction disagree with
+   * itself: two chairs on that floor sit 44 mm and 79 mm past the line.
+   */
+  boundaryTolerance?: number
+  /**
    * Tile size in floor units for occupant chair space calculation (e.g. 600 mm / mmPerPt).
    */
   chairTileSize?: number
@@ -356,6 +367,7 @@ export function validatePlacement(candidate: SpatialPlacement, context: Placemen
   const reasons: PlacementIssue[] = []
   const deskBounds = placementBounds(candidate)
   const tolerance = context.tolerance ?? GEOMETRY_EPSILON
+  const boundaryTolerance = context.boundaryTolerance ?? tolerance
   const chairBounds = getChairBounds(candidate, context.chairTileSize)
 
   const checkContainment = (
@@ -363,9 +375,9 @@ export function validatePlacement(candidate: SpatialPlacement, context: Placemen
     onDeskOutside: () => void,
     onChairOutside: () => void,
   ) => {
-    if (!polygonContainsBBox(polygon, deskBounds, tolerance)) {
+    if (!polygonContainsBBox(polygon, deskBounds, boundaryTolerance)) {
       onDeskOutside()
-    } else if (chairBounds && !polygonContainsBBox(polygon, chairBounds, tolerance)) {
+    } else if (chairBounds && !polygonContainsBBox(polygon, chairBounds, boundaryTolerance)) {
       onChairOutside()
     }
   }

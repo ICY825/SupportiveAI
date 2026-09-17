@@ -32,6 +32,7 @@ beforeAll(() => {
 afterEach(() => {
   cleanup()
   window.location.hash = ''
+  localStorage.clear()
 })
 
 // the AI zone's first desks carry the demo showcase states
@@ -120,29 +121,21 @@ describe('desk selection → workspace inspector', () => {
 
   it('offers six display areas and renders canonical context without expanding the target count', async () => {
     await openWorkspace()
-    const stage = document.querySelector('.sw-map-stage')
-    expect(stage?.querySelector('.sw-minimap')).not.toBeNull()
-    expect(stage?.querySelector('.sw-map-controls')).not.toBeNull()
-    expect(document.querySelector('.sw-context .sw-minimap')).toBeNull()
-    expect(document.querySelector('.sw-minimap-plan')).not.toBeNull()
-    expect(document.querySelector('.sw-minimap-locator')).toBeNull()
-    expect(screen.queryByText('Vị trí trên mặt bằng')).toBeNull()
-    expect(screen.queryByText('Toàn bộ bộ phận')).toBeNull()
+    expect(document.querySelector('.sw-map-stage .sw-map-controls')).not.toBeNull()
     const picker = screen.getByRole('combobox', { name: 'Tập trung khu vực' }) as HTMLSelectElement
     expect(picker.options).toHaveLength(7)
     expect([...picker.options].slice(1).map((option) => option.textContent)).toEqual([
-      'Khu vực A · 28 chỗ',
-      'Khu vực B · 21 chỗ',
-      'Khu vực C · 15 chỗ',
-      'Khu vực D · 14 chỗ',
-      'Khu vực E · 22 chỗ',
-      'Khu vực F · 16 chỗ',
+      'Khu vực A',
+      'Khu vực B',
+      'Khu vực C',
+      'Khu vực D',
+      'Khu vực E',
+      'Khu vực F',
     ])
     const editButton = screen.getByRole('button', { name: /Chỉnh sửa bố trí/ })
     expect(editButton).not.toHaveProperty('disabled', true)
     await userEvent.setup().click(editButton)
     expect(screen.getByText('Chọn khu vực trước khi chỉnh sửa bố trí.')).toBeTruthy()
-    expect(document.querySelector('.sw-minimap[data-prompt="true"]')).not.toBeNull()
 
     await userEvent.setup().selectOptions(picker, picker.options[1])
     const map = screen.getByRole('application')
@@ -154,9 +147,6 @@ describe('desk selection → workspace inspector', () => {
     expect(map.querySelector('.sw-context-furniture[data-workstation-id]')).toBeNull()
     expect(screen.getByRole('button', { name: /Chỉnh sửa bố trí/ })).toHaveProperty('disabled', false)
     expect(screen.getByText('28')).toBeTruthy()
-    expect(document.querySelectorAll('.sw-minimap-area')).toHaveLength(6)
-    expect(document.querySelector('.sw-minimap-area.is-active')?.getAttribute('data-area-id')).toBe('ai-area-a')
-    expect(document.querySelectorAll('.sw-minimap-area[role="button"]')).toHaveLength(0)
   }, 30000)
 
   it('enters edit mode for the currently focused area instead of a fixed first cluster', async () => {
@@ -166,8 +156,6 @@ describe('desk selection → workspace inspector', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: /Chỉnh sửa bố trí/ }))
     const map = screen.getByRole('application')
     expect(map.getAttribute('data-rendered-workstations')).toBe('21')
-    expect(document.querySelector('.sw-minimap-area.is-active')?.getAttribute('data-area-id')).toBe('ai-area-b')
-    expect(document.querySelectorAll('.sw-minimap-area[role="button"]')).toHaveLength(0)
     const target = document.querySelector<SVGGElement>('.sw-furniture[data-workstation-id="ws-16-085"]')!
     fireEvent.pointerDown(target, { button: 0, pointerId: 1, clientX: 10, clientY: 10 })
     fireEvent.pointerUp(target, { button: 0, pointerId: 1, clientX: 10, clientY: 10 })
@@ -221,6 +209,7 @@ describe('desk selection → workspace inspector', () => {
     expect(document.querySelector('.sw-heading-meta')).toBeNull()
     // still stated exactly once, in the summary
     const summary = document.querySelector('.sw-summary')!
+    expect(summary.textContent).toMatch(/Zone B/)
     expect(summary.textContent).toMatch(/116/)
     expect(summary.textContent).toMatch(/chỗ ngồi/)
   }, 30000)
@@ -284,12 +273,10 @@ describe('desk selection → workspace inspector', () => {
     await user.type(box, 'ws-16-065')
     await user.keyboard('{Enter}')
     expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('28')
-    expect(document.querySelector('.sw-minimap-area.is-active')?.getAttribute('data-area-id')).toBe('ai-area-a')
 
     await user.type(box, 'ws-16-382')
     await user.keyboard('{Enter}')
     expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('116')
-    expect(document.querySelector('.sw-minimap-area.is-active')?.getAttribute('data-area-id')).toBe('ai-area-f')
   }, 30000)
 
   it('search: shows an empty state and Escape clears the query without closing the inspector', async () => {

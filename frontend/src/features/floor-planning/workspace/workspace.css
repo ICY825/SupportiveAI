@@ -41,13 +41,13 @@
 
 /* takes whatever height the heading leaves; the scene reframes itself to fit */
 .sw-map-panel { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
-.sw-map-top { display: flex; justify-content: space-between; gap: 12px; flex: none; padding: 10px var(--sw-gutter, 20px); font-size: var(--fp-t-small); color: var(--sw-muted); }
+.sw-map-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex: none; padding: 10px var(--sw-gutter, 20px); font-size: var(--fp-t-small); color: var(--sw-muted); }
 .sw-scope-nav { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .sw-scope-nav .fp-btn { min-height: 27px; padding: 4px 9px; }
 .sw-scope-nav .fp-btn[aria-pressed='true'] { border-color: #9bb4ca; background: #edf3f8; color: var(--sw-selected); }
 .sw-scope-nav select { max-width: 230px; height: 27px; border: 1px solid var(--sw-line); border-radius: 4px; background: var(--paper); color: var(--fp-text-2); font: inherit; padding: 0 24px 0 8px; }
 .sw-scope-nav :disabled { opacity: 0.58; cursor: not-allowed; }
-.sw-map-top .sw-selected-caption { color: var(--sw-selected); font-weight: 600; }
+.sw-map-top .sw-selected-caption { display: inline-flex; align-items: center; min-height: 27px; line-height: 1; color: var(--sw-selected); font-weight: 600; }
 
 /* ---------------------------------------------------------------- scene */
 
@@ -63,25 +63,6 @@
 .sw-furniture, .sw-marker { cursor: pointer; }
 .sw-context-furniture { opacity: 0.24; cursor: default; }
 
-/* ------------------------------------------------------------ locator map */
-/* The locator is a stage affordance, not inspector content. Keep it pinned to
- * the left corner so it remains available while the inspector changes. */
-.sw-minimap { position: absolute; z-index: 3; bottom: 14px; left: 14px; width: clamp(132px, 22%, 190px); margin: 0; padding: 0; background: transparent; border: 0; border-radius: 50%; box-shadow: none; pointer-events: none; }
-.sw-minimap-plan { display: block; width: 100%; height: auto; aspect-ratio: 1; background: #b9d7eb; border: 0; border-radius: 50%; box-shadow: 0 0 0 4px #182e40, 0 0 0 6px #8da8ba; }
-.sw-minimap-radar-sky { opacity: 0.98; }
-.sw-minimap-radar-grid line, .sw-minimap-radar-grid circle { fill: none; stroke: #c85c55; stroke-width: 1.15; stroke-opacity: 0.58; }
-.sw-minimap-zone { fill: #8eaebd; fill-opacity: 0.42; stroke: #65899d; stroke-width: 1.5; }
-.sw-minimap-dept { fill: #4f8198; fill-opacity: 0.32; stroke: #2f6179; stroke-width: 2; }
-.sw-minimap-area rect { fill: #eaf4fb; fill-opacity: 0.7; stroke: #527f9b; stroke-width: 1.5; }
-.sw-minimap-area text { fill: #24465d; font-size: 13px; font-weight: 700; paint-order: stroke; stroke: #eaf4fb; stroke-width: 2px; stroke-opacity: 0.75; }
-.sw-minimap-area { cursor: default; pointer-events: none; }
-.sw-minimap-area.is-active rect { fill: #3f8cc0; fill-opacity: 1; stroke: #fff; stroke-width: 2.5; }
-.sw-minimap-area.is-active text { fill: #fff; stroke: #245b83; stroke-width: 2.4px; }
-.sw-minimap-radar-ring { fill: none; stroke: #182e40; stroke-width: 8; pointer-events: none; }
-.sw-minimap-center { pointer-events: none; }
-.sw-minimap-center-ring { fill: #d95c56; fill-opacity: 0.2; stroke: #fff; stroke-width: 1.2; }
-.sw-minimap-center-dot { fill: #d95c56; stroke: #fff; stroke-width: 0.8; }
-.sw-minimap[data-prompt='true'] .sw-minimap-plan { box-shadow: 0 0 0 4px var(--sw-selected), 0 0 0 6px #cfe0f2; }
 .sw-key-context-mark { display: inline-block; width: 18px; height: 10px; border: 1px solid var(--sw-line); background: #eef2f4; opacity: 0.6; }
 .sw-furniture:hover .sw-desktop > g > polygon:last-child { stroke: #527795; stroke-width: 0.3; }
 .sw-desk-code { fill: #334c60; font: 600 1.6px var(--mono); pointer-events: none; }
@@ -120,6 +101,20 @@
   padding: 11px var(--fp-pad-panel) 0;
   border-top: 3px solid var(--sw-selected);
 }
+.sw-inspector-actions { display: flex; align-items: center; gap: 4px; }
+.sw-assignment-editor { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--sw-line); }
+.fp-btn.sw-assignment-edit {
+  min-height: 36px;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+  font-weight: 650;
+}
+.fp-btn.sw-assignment-edit:hover { border-color: #33312e; background: #33312e; color: #fff; }
+.fp-btn.sw-assignment-edit:focus-visible { outline: 2px solid #aaa39a; outline-offset: 2px; }
+.sw-assignment-cancel { margin-top: 8px; }
+.sw-assignment-notice { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0 0; color: var(--sw-muted); font-size: var(--fp-t-small); }
+.sw-assignment-notice .fp-link { flex: none; font-size: inherit; }
 .sw-status { background: var(--seat-bg); color: var(--seat); }
 .sw-person-section { margin-top: 18px; padding-bottom: 16px; border-bottom: 1px solid var(--sw-line); }
 .sw-person { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
@@ -131,8 +126,8 @@
 .sw-vacant strong { color: #297a60; }
 .sw-vacant p, .sw-unavailable p, .sw-detail-note, .sw-conflict-note { font-size: var(--fp-t-small); margin: 7px 0 0; color: var(--sw-muted); }
 .sw-conflict-note { color: #b6443d; }
+.sw-verify { margin-top: 16px; }
 .sw-verify:hover { background: #faf9f7; }
-.sw-inspector-note { color: var(--sw-muted); font-size: 9.5px; margin: 10px 0 0; text-align: center; }
 
 /* ---------------------------------------------------------------- overview / empty state */
 
@@ -143,25 +138,13 @@
  * the height. Heads the panel when nothing is selected, and sits under the
  * inspector when something is: it describes the scope, not the selection.
  */
-.sw-summary { padding-top: 2px; }
+.sw-summary { padding-top: 0; }
 .sw-inspector + .sw-summary { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--sw-line); }
 
 .sw-overview { margin: 18px 0 2px; padding-top: 16px; border-top: 1px solid var(--sw-line); }
 .sw-empty-title { margin: 0 0 6px; font-size: var(--fp-t-section); font-weight: 600; }
 .sw-overview > p { font-size: var(--fp-t-small); color: var(--sw-muted); line-height: 1.7; margin: 0; }
 .sw-overview > .fp-btn { margin-top: 12px; }
-
-.sw-capacity { display: flex; align-items: baseline; gap: 8px; margin-top: 12px; }
-.sw-capacity strong { font: 500 34px var(--mono); letter-spacing: -2px; }
-.sw-capacity > span { color: var(--sw-muted); font-size: 12px; }
-.sw-occupancy-bar { display: flex; gap: 3px; height: 6px; border-radius: 3px; overflow: hidden; margin: 14px 0 16px; }
-.sw-occupancy-bar span { background: var(--seat); }
-
-/* count first, label second; the <dl> keeps "label: count" for screen readers */
-.sw-counts { margin: 0; display: grid; gap: 1px; }
-.sw-counts > div { display: flex; align-items: baseline; gap: 10px; padding: 5px 0; cursor: help; }
-.sw-counts dd { order: -1; margin: 0; flex: none; min-width: 22px; font: 600 var(--fp-t-section) var(--mono); font-variant-numeric: tabular-nums; text-align: right; color: var(--seat); }
-.sw-counts dt { font-size: var(--fp-t-small); color: var(--fp-text-2); }
 
 .sw-key-block { margin-top: 18px; }
 /* same disc the map draws, including the solid fill that carries the initials */
@@ -257,7 +240,7 @@
 .sw-edit-handle .sw-edit-handle-tip { fill: var(--sw-edit); stroke: none; }
 .sw-edit-handle:hover circle { fill: #eef3fb; }
 
-.sw-edit-caption { display: inline-flex; align-items: center; gap: 4px; color: var(--sw-muted); }
+.sw-edit-caption { display: inline-flex; align-items: center; min-height: 27px; line-height: 1; gap: 4px; color: var(--sw-muted); }
 
 /* ------------------------------------------------- placement status */
 
@@ -354,8 +337,6 @@
 @media (max-width: 600px) {
   .sw-workspace { --sw-gutter: 12px; --sw-stage-min: 320px; }
   .sw-map-top { flex-wrap: wrap; }
-  .sw-minimap { bottom: 8px; left: 8px; width: 86px; }
-  .sw-minimap-plan { height: auto; aspect-ratio: 1; }
   .sw-map-controls { top: 8px; right: 8px; }
   .sw-map-controls button { padding-inline: 5px; }
   .sw-map-controls output { min-width: 30px; }

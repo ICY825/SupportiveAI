@@ -9,6 +9,7 @@ import type { FloorOccupancy } from './data/registry'
 import type { PlacementIssue } from './domain/placement'
 import type { BaseLayerId, Classification, VerificationState } from './domain/spatial'
 import type { AssignmentType, DeviceType, Presence, SeatType } from './domain/allocation'
+import type { AssignmentIssue } from './domain/assignment'
 import type { DeskStatus } from './domain/desk'
 import type { SourceMode } from './map/mapSettings'
 
@@ -143,13 +144,6 @@ export const SPATIAL_OUT_OF_SCOPE = 'Vị trí ngoài phạm vi hiện tại'
 export const SPATIAL_OUT_OF_SCOPE_HINT = 'Chuyển sang bản vẽ để xem vị trí đang chọn.'
 export const SPATIAL_UNAVAILABLE = 'Bố trí chỗ ngồi hiện chỉ có tại Tầng 16.'
 export const SPATIAL_NO_EDIT_AREAS = 'Tầng này chưa có khu vực chỉnh sửa.'
-export const SPATIAL_MINIMAP = {
-  label: 'Bản đồ định vị khu vực',
-  title: 'Vị trí trên mặt bằng',
-  overview: 'Toàn bộ bộ phận',
-  choose: 'Chọn một khu vực để bắt đầu chỉnh sửa.',
-  current: (area: string) => `${area} · đang xem`,
-} as const
 
 export const DEMO_DATA_LABEL = 'Dữ liệu minh họa'
 export const DEMO_DATA_HINT = 'Nhân sự, chỗ ngồi và thiết bị là dữ liệu giả lập để thiết kế giao diện; chưa kết nối HR/Admin.'
@@ -193,6 +187,40 @@ export const DEVICE_TYPE: Record<DeviceType, string> = {
   monitor: 'Màn hình',
   dock: 'Dock sạc',
   other: 'Thiết bị khác',
+}
+
+/** Wording for the employee-to-seat assignment flow. */
+export const SEAT_ASSIGNMENT = {
+  pickerTitle: 'Chọn nhân sự',
+  searchPlaceholder: 'Tìm theo tên hoặc mã nhân viên…',
+  currentSeat: (code: string) => `Đang ở ${code}`,
+  noResults: 'Không tìm thấy nhân sự phù hợp',
+  unseated: 'Chưa được gán chỗ',
+  edit: 'Chỉnh sửa',
+  assign: 'Gán nhân sự',
+  reassign: 'Đổi chỗ',
+  release: 'Giải phóng chỗ ngồi',
+  undo: 'Hoàn tác',
+  assigned: (name: string) => `Đã gán ${name}`,
+  released: 'Đã giải phóng chỗ ngồi',
+} as const
+
+export const ASSIGNMENT_ISSUE = {
+  seatUnavailable: 'Chỗ ngồi không khả dụng',
+  seatOccupied: 'Chỗ ngồi đã có nhân sự',
+  employeeSeatedElsewhere: (seatCode: string) => `Nhân sự đang được gán tại ${seatCode}`,
+  unknownEmployee: 'Không tìm thấy hồ sơ nhân sự',
+  unknownSeat: 'Không tìm thấy chỗ ngồi',
+} as const
+
+export function assignmentIssueText(issue: AssignmentIssue): string {
+  switch (issue.type) {
+    case 'seat-unavailable': return ASSIGNMENT_ISSUE.seatUnavailable
+    case 'seat-occupied': return ASSIGNMENT_ISSUE.seatOccupied
+    case 'employee-seated-elsewhere': return ASSIGNMENT_ISSUE.employeeSeatedElsewhere(issue.seatCode)
+    case 'unknown-employee': return ASSIGNMENT_ISSUE.unknownEmployee
+    case 'unknown-seat': return ASSIGNMENT_ISSUE.unknownSeat
+  }
 }
 
 /* --------------------------------------------- layout editor (spatial view) */

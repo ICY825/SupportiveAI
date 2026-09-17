@@ -77,9 +77,13 @@ export function segmentsCross(a1: Point, a2: Point, b1: Point, b2: Point, epsilo
  */
 export function polygonContainsBBox(polygon: readonly Point[], bbox: BBox, epsilon = GEOMETRY_EPSILON): boolean {
   if (polygon.length < 3) return false
-  const corners = rectangle(bbox)
   const shrunk: BBox = [bbox[0] + epsilon, bbox[1] + epsilon, bbox[2] - epsilon, bbox[3] - epsilon]
-  for (const corner of rectangle(shrunk)) {
+  // Both tests run against the same shrunk box. Testing corners shrunk but
+  // edges full-size spends the tolerance twice over: a boundary grazing the box
+  // by less than epsilon would pass the corner test and then be rejected as a
+  // crossing, so the caller's stated tolerance would only half apply.
+  const corners = rectangle(shrunk)
+  for (const corner of corners) {
     if (!pointInPolygon(corner, polygon)) return false
   }
   for (let i = 0; i < polygon.length; i++) {

@@ -24,7 +24,57 @@ const DEPARTMENT_GEOMETRY_LINKS: readonly DepartmentGeometryLink[] = [
     departmentId: 'dept-ai-data',
     zoneIds: ['zone-16-ai-platform'],
   },
+  {
+    floorId: 'floor-16',
+    departmentId: 'dept-smart-city',
+    zoneIds: ['zone-16-bds-smart-city'],
+  },
+  {
+    floorId: 'floor-16',
+    departmentId: 'dept-gsm',
+    zoneIds: ['zone-16-kd-vh-gsm'],
+  },
+  {
+    floorId: 'floor-16',
+    departmentId: 'dept-vinfast-kdo2o',
+    zoneIds: ['zone-16-vinfast-kdo2o'],
+  },
 ]
+
+/**
+ * Building wing (Zone A / Zone B) mapping for Technopark Tower departments.
+ * Zone A: Upper wing (Khu A / Phía trên - trục 7 đến 4: GSM, VinFast, Smart City).
+ * Zone B: Lower wing (Khu B / Phía dưới - trục 4.1 đến 1: AI & Data, Unlabeled zone).
+ */
+export const DEPARTMENT_WING_ZONES: Record<string, 'Zone A' | 'Zone B'> = {
+  'dept-ai-data': 'Zone B',
+  'dept-smart-city': 'Zone A',
+  'dept-gsm': 'Zone A',
+  'dept-vinfast-kdo2o': 'Zone A',
+}
+
+export const ZONE_WING_MAPPING: Record<string, 'Zone A' | 'Zone B'> = {
+  'zone-16-ai-platform': 'Zone B',
+  'zone-16-unlabeled-01': 'Zone B',
+  'zone-16-kd-vh-gsm': 'Zone A',
+  'zone-16-vinfast-kdo2o': 'Zone A',
+  'zone-16-bds-smart-city': 'Zone A',
+}
+
+export function resolveDepartmentWingZone(scope: WorkspaceScope | null, zoneIds?: readonly string[]): 'Zone A' | 'Zone B' {
+  if (scope?.kind === 'department' && DEPARTMENT_WING_ZONES[scope.departmentId]) {
+    return DEPARTMENT_WING_ZONES[scope.departmentId]
+  }
+  if (scope?.kind === 'zone' && ZONE_WING_MAPPING[scope.zoneId]) {
+    return ZONE_WING_MAPPING[scope.zoneId]
+  }
+  if (zoneIds) {
+    for (const id of zoneIds) {
+      if (ZONE_WING_MAPPING[id]) return ZONE_WING_MAPPING[id]
+    }
+  }
+  return 'Zone B'
+}
 
 export interface ResolvedWorkspaceScope {
   scope: WorkspaceScope

@@ -118,6 +118,22 @@ export function buildWorkspaceScene(dataset: FloorDataset, scope: WorkspaceScope
 export const MARKER_ELEVATION = 5
 export const MARKER_RADIUS = 1.85
 
+/**
+ * A caption belongs to the view only when its anchor sits inside the window the
+ * camera frames.
+ *
+ * Architecture is clipped to `contextBounds`, but captions are drawn outside
+ * that clip, so a zone whose polygon merely reaches into the window would put
+ * its name wherever the annotation anchored it. On Floor 16 the AI department's
+ * anchor is 270 pt north of Area F, and reserving room for it there fits the
+ * area at half the scale its desks deserve.
+ */
+export const labelAnchorInView = ([x, y]: Point, [x0, y0, x1, y1]: BBox) =>
+  x >= x0 && x <= x1 && y >= y0 && y <= y1
+
+/** Rooms are captioned at the middle of their extent, not at an authored anchor. */
+export const roomLabelAnchor = (bbox: BBox): Point => [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2]
+
 const addTextAllowance = (add: (point: Point) => void, anchor: Point, text: string, size = 1.6) => {
   const [x, y] = project(anchor)
   const halfWidth = Math.max(4, text.length * size * 0.32)
@@ -138,10 +154,14 @@ export function sceneBounds(scene: WorkspaceSceneModel): BBox {
     add([mx - MARKER_RADIUS, my - MARKER_RADIUS])
     add([mx + MARKER_RADIUS, my + MARKER_RADIUS])
   }
-  for (const zone of scene.zones) if (zone.name) addTextAllowance(add, zone.labelAnchor, zone.name)
+  for (const zone of scene.zones) {
+    if (zone.name && labelAnchorInView(zone.labelAnchor, scene.contextBounds)) {
+      addTextAllowance(add, zone.labelAnchor, zone.name)
+    }
+  }
   for (const room of scene.rooms) {
-    const [x0, y0, x1, y1] = room.bbox
-    addTextAllowance(add, [(x0 + x1) / 2, (y0 + y1) / 2], room.name, 1.35)
+    const anchor = roomLabelAnchor(room.bbox)
+    if (labelAnchorInView(anchor, scene.contextBounds)) addTextAllowance(add, anchor, room.name, 1.35)
   }
 
   return projected.length ? bboxOfPoints(projected) : [0, 0, 1, 1]

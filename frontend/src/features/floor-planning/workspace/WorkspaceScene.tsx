@@ -6,9 +6,11 @@ import { DESK_STATUS } from '../labels'
 import {
   MARKER_RADIUS,
   memoizeSceneGeometry,
+  labelAnchorInView,
   planeTransform,
   points,
   project,
+  roomLabelAnchor,
   projectedPoints,
   rectangle,
   type MemoizedChair,
@@ -102,11 +104,14 @@ const Architecture = memo(function Architecture({ scene, clipId }: { scene: Work
       <g transform={planeTransform(1)} clipPath={`url(#${clipId})`} fill="none" stroke="#4f7ea7" strokeWidth={0.7} strokeDasharray="2 1.5">
         {scene.scopePolygons.map((polygon, index) => <polygon key={`scope-boundary-${index}`} points={points(polygon)} />)}
       </g>
-      {scene.zones.map((zone) => zone.name ? (
+      {/* Captions are outside the clip, so they are placed by anchor, not by
+          whether the shape reaches in. sceneBounds applies the same rule. */}
+      {scene.zones.map((zone) => zone.name && labelAnchorInView(zone.labelAnchor, scene.contextBounds) ? (
         <text key={`label-${zone.id}`} x={project(zone.labelAnchor)[0]} y={project(zone.labelAnchor)[1]} className="sw-plane-label" textAnchor="middle">{zone.name}</text>
       ) : null)}
       {scene.rooms.map((room) => {
-        const center: Point = [(room.bbox[0] + room.bbox[2]) / 2, (room.bbox[1] + room.bbox[3]) / 2]
+        const center = roomLabelAnchor(room.bbox)
+        if (!labelAnchorInView(center, scene.contextBounds)) return null
         const label = project(center)
         return <text key={`room-label-${room.id}`} x={label[0]} y={label[1]} className="sw-room-label" textAnchor="middle">{room.name}</text>
       })}

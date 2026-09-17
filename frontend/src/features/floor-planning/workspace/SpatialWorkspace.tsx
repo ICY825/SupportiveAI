@@ -1,20 +1,32 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import type { FloorAllocationData } from '../domain/allocation'
 import { createDemoAllocation } from '../allocation/demoAllocation'
+import {
+  applyAllocationMutations,
+  inverseAllocationMutations,
+  planAssignment,
+  planRelease,
+  sessionAllocationStore,
+  type AllocationMutation,
+} from '../allocation/allocationStore'
 import { FloorSearch } from '../components/FloorSearch'
 import { isMac, isTypingTarget } from '../components/keyboard'
 import { formatDate, initials } from '../components/desk-inspector/format'
+import { EmployeePicker } from '../components/desk-inspector/EmployeePicker'
+import { OverflowMenu } from '../components/desk-inspector/OverflowMenu'
 import { buildDeskIndex, DESK_STATUSES, type DeskRecord, type DeskStatus } from '../domain/desk'
 import { placementsEqual, type SpatialPlacement } from '../domain/placement'
 import type { BBox, EntityRef, FloorDataset, Point } from '../domain/spatial'
 import {
   DESK_STATUS,
   LAYOUT_EDIT,
+  SEAT_ASSIGNMENT,
+  assignmentIssueText,
   SEAT_TYPE,
   SPATIAL_OUT_OF_SCOPE,
   SPATIAL_OUT_OF_SCOPE_HINT,
   SPATIAL_NO_EDIT_AREAS,
-  SPATIAL_SCOPE_LABEL,
   SPATIAL_UNAVAILABLE,
 } from '../labels'
 import { ARROW_DIRECTION, DIRECTION_VECTOR, nearestInDirection } from '../map/deskNavigation'
@@ -32,9 +44,8 @@ import {
   type LayoutStore,
 } from './layoutDraft'
 import { buildWorkspaceDisplayAreas } from './displayAreas'
-import { AreaMinimap } from './AreaMinimap'
-import { bboxesIntersect, buildWorkspaceScene, cameraCenter, detailTierForZoom, effectiveZoom, fitViewBox, project, sceneBounds, unprojectDelta } from './scene'
-import { defaultWorkspaceScope } from './scope'
+import { buildWorkspaceScene, detailTierForZoom, effectiveZoom, fitViewBox, project, sceneBounds, unprojectDelta } from './scene'
+import { defaultWorkspaceScope, resolveDepartmentWingZone } from './scope'
 import { useLayoutEditor, NUDGE_COARSE_CELLS, type WorkspaceMode } from './useLayoutEditor'
 import { SeatSymbol, WorkspaceScene } from './WorkspaceScene'
 import './workspace.css'
@@ -42,10 +53,13 @@ import './workspace.css'
 /** Screen-pixel margin left around the fitted scene. Matches the verification map. */
 const SCENE_PADDING = 20
 const DEFAULT_STAGE = { width: 1200, height: 800 }
-const MINIMAP_PADDING_PT = 60
 const MIN_ZOOM = 0.85
 const MAX_ZOOM = 3.5
-/** Pan limit as a share of the framed scene, so it scales with the stage. */
+/**
+ * Slack for panning a scene that already fits, as a share of the framed scene,
+ * so it scales with the stage. Beyond 1x the limit has to grow with the zoom
+ * instead — see panLimit.
+ */
 const PAN_LIMIT = 0.3
 /** Pointer travel before a press becomes a drag rather than a click. */
 const DRAG_THRESHOLD_PX = 4
@@ -71,22 +85,28 @@ function LegendMark({ status }: { status: DeskStatus }) {
  * Seat counts and the map key for the current scope. Stays in the panel whether
  * or not a desk is selected: it describes the scope, not the selection.
  */
-function ScopeSummary({ count, counts, children }: {
+function ScopeSummary({ dataset, departmentZone, count, counts, children }: {
+  dataset: FloorDataset
+  departmentZone: string
   count: number
   counts: (status: DeskStatus) => number
   /** empty-state prompt, shown between the counts and the key when nothing is selected */
   children?: ReactNode
 }) {
+  const { floor } = dataset.layout
   return (
     <section className="sw-summary" aria-labelledby="sw-summary-title">
-      <p className="fp-eyebrow" id="sw-summary-title">{SPATIAL_SCOPE_LABEL}</p>
-      <div className="sw-capacity"><strong>{count}</strong><span>chỗ ngồi</span></div>
-      <div className="sw-occupancy-bar" aria-hidden="true">
-        {DESK_STATUSES.map((s) => <span key={s} data-status={s} style={{ flex: counts(s) }} />)}
-      </div>
-      <dl className="sw-counts">
+      <header className="fp-panel-head">
+        <h2 id="sw-summary-title">{floor.name}</h2>
+        <p className="fp-head-meta">{departmentZone}</p>
+      </header>
+      <dl className="fp-stats">
+        <div>
+          <dt><span aria-hidden="true">Chỗ ngồi</span><span className="fp-sr-only"> chỗ ngồi</span></dt>
+          <dd>{count}</dd>
+        </div>
         {DESK_STATUSES.map((s) => (
-          <div key={s} data-status={s} title={DESK_STATUS[s].hint}>
+          <div key={s} title={DESK_STATUS[s].hint}>
             <dt>{DESK_STATUS[s].short}</dt>
             <dd>{counts(s)}</dd>
           </div>
@@ -118,13 +138,78 @@ function ScopeSummary({ count, counts, children }: {
   )
 }
 
-function CompactInspector({ desk, onClose, onVerify, showHeader = true }: { desk: DeskRecord; onClose: () => void; onVerify: () => void; showHeader?: boolean }) {
+function CompactInspector({
+  desk,
+  allocation,
+  now,
+  canUndo,
+  onApplyMutations,
+  onUndo,
+  onClose,
+  onVerify,
+  showHeader = true,
+}: {
+  desk: DeskRecord
+  allocation: FloorAllocationData
+  now: Date
+  canUndo: boolean
+  onApplyMutations: (mutations: readonly AllocationMutation[]) => void
+  onUndo: () => void
+  onClose: () => void
+  onVerify: () => void
+  showHeader?: boolean
+}) {
+  const [assignmentState, setAssignmentState] = useState({
+    seatId: desk.seat.id,
+    editorOpen: false,
+    notice: null as string | null,
+  })
+  const currentAssignmentState = assignmentState.seatId === desk.seat.id
+    ? assignmentState
+    : { seatId: desk.seat.id, editorOpen: false, notice: null }
+  const assignmentEditorOpen = currentAssignmentState.editorOpen
+  const assignmentNotice = currentAssignmentState.notice
   const people = desk.status === 'reserved' && desk.reservation ? [desk.reservation] : desk.occupants
+  const canAssign = desk.status === 'available' || desk.status === 'occupied'
+  const releaseItems = desk.status === 'occupied' || desk.status === 'conflict'
+    ? [{ id: 'release-seat' as const, label: SEAT_ASSIGNMENT.release }]
+    : []
+
+  const updateAssignmentState = (update: Partial<typeof currentAssignmentState>) => {
+    setAssignmentState({ ...currentAssignmentState, ...update, seatId: desk.seat.id })
+  }
+
+  const selectEmployee = (employee: FloorAllocationData['employees'][number]) => {
+    const plan = planAssignment(
+      allocation,
+      { seatId: desk.seat.id, employeeId: employee.id },
+      { now, actor: 'demo-admin', move: desk.status === 'occupied' },
+    )
+    if (!plan.valid) {
+      updateAssignmentState({ notice: plan.reasons.map(assignmentIssueText).join(' · ') })
+      return
+    }
+    onApplyMutations(plan.mutations)
+    updateAssignmentState({ editorOpen: false, notice: SEAT_ASSIGNMENT.assigned(employee.name) })
+  }
+
+  const releaseSeat = () => {
+    const plan = planRelease(allocation, desk.seat.id, { now, actor: 'demo-admin' })
+    if (plan.mutations.length === 0) {
+      updateAssignmentState({ notice: 'Không có phân công đang hiệu lực' })
+      return
+    }
+    onApplyMutations(plan.mutations)
+    updateAssignmentState({ notice: SEAT_ASSIGNMENT.released })
+  }
+
   return <aside className={`sw-inspector${showHeader ? '' : ' is-secondary'}`} aria-labelledby={showHeader ? 'sw-desk-title' : undefined} aria-label={showHeader ? undefined : `Thông tin nhân sự bàn ${desk.seat.code}`}>
-    {showHeader && <header className="fp-card-head"><div><p className="fp-eyebrow">Bàn đang chọn</p><h2 id="sw-desk-title" className="fp-card-title">{desk.seat.code}</h2></div><button type="button" className="fp-icon-btn" onClick={onClose} aria-label="Đóng bảng thông tin bàn" title="Đóng (Esc)"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg></button></header>}
+    {showHeader && <header className="fp-card-head"><div><p className="fp-eyebrow">Bàn đang chọn</p><h2 id="sw-desk-title" className="fp-card-title">{desk.seat.code}</h2></div><div className="sw-inspector-actions">{releaseItems.length > 0 && <OverflowMenu
+      label="Thao tác khác"
+      items={releaseItems}
+      onSelect={releaseSeat}
+    />}<button type="button" className="fp-icon-btn" onClick={onClose} aria-label="Đóng bảng thông tin bàn" title="Đóng (Esc)"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg></button></div></header>}
     <Status desk={desk} />
-    {/* Who sits here is the answer to the click, so it reads without a click —
-        the same way the verification panel keeps an entity's own facts visible. */}
     <section className="sw-person-section">
       <h3 className="fp-section-title">{desk.status === 'reserved' ? 'Nhân sự đặt chỗ' : 'Nhân sự sử dụng'}</h3>
       {people.map(({ employee }) => <div className="sw-person" key={employee.id}><span className="sw-avatar">{initials(employee.name)}</span><div><strong>{employee.name}</strong><span>{employee.employeeCode} · {employee.jobTitle}</span></div></div>)}
@@ -139,6 +224,35 @@ function CompactInspector({ desk, onClose, onVerify, showHeader = true }: { desk
       </summary>
       <dl className="fp-facts"><div><dt>Khu vực</dt><dd>{desk.zone?.name ?? 'Chưa có nhãn'}</dd></div><div><dt>Bộ phận</dt><dd>{desk.department?.name ?? 'Chưa có dữ liệu'}</dd></div><div><dt>Loại chỗ ngồi</dt><dd>{SEAT_TYPE[desk.seat.seatType]}</dd></div></dl>
     </details>
+    {canAssign && (
+      <section className="sw-assignment-editor" aria-label="Chỉnh sửa phân công">
+        {!assignmentEditorOpen ? (
+          <button type="button" className="fp-btn is-primary is-wide sw-assignment-edit" onClick={() => updateAssignmentState({ editorOpen: true })}>
+            {SEAT_ASSIGNMENT.edit}
+          </button>
+        ) : (
+          <>
+            <EmployeePicker
+              employees={allocation.employees}
+              departments={allocation.departments}
+              seats={allocation.seats}
+              assignments={allocation.assignments}
+              now={now}
+              onSelect={selectEmployee}
+            />
+            <button type="button" className="fp-btn is-wide sw-assignment-cancel" onClick={() => updateAssignmentState({ editorOpen: false })}>
+              Hủy
+            </button>
+          </>
+        )}
+        {assignmentNotice && (
+          <p className="sw-assignment-notice" role="status" aria-live="polite">
+            <span>{assignmentNotice}</span>
+            {canUndo && <button type="button" className="fp-link" onClick={() => { onUndo(); updateAssignmentState({ notice: 'Đã hoàn tác' }) }}>{SEAT_ASSIGNMENT.undo}</button>}
+          </p>
+        )}
+      </section>
+    )}
     <button type="button" className="fp-btn is-wide sw-verify" onClick={onVerify}>Đối chiếu trên bản vẽ <span aria-hidden="true">↗</span></button>
   </aside>
 }
@@ -167,12 +281,48 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
   layoutStore?: LayoutStore
 }) {
   const [now] = useState(() => new Date())
+  const [allocation, setAllocation] = useState<FloorAllocationData>(() => {
+    const baseAllocation = createDemoAllocation(dataset, now)
+    return applyAllocationMutations(baseAllocation, sessionAllocationStore.read(dataset.layout.floor.id) ?? [])
+  })
+  const allocationRef = useRef(allocation)
+  const undoMutationsRef = useRef<readonly AllocationMutation[] | null>(null)
+  const [canUndo, setCanUndo] = useState(false)
+
+  const applyAllocationChange = useCallback((mutations: readonly AllocationMutation[]) => {
+    if (mutations.length === 0) return
+    const before = allocationRef.current
+    const next = applyAllocationMutations(before, mutations)
+    if (next === before) return
+    allocationRef.current = next
+    setAllocation(next)
+    undoMutationsRef.current = inverseAllocationMutations(before, mutations, { at: new Date().toISOString(), actor: 'demo-admin' })
+    setCanUndo(true)
+    void sessionAllocationStore.append(dataset.layout.floor.id, mutations)
+  }, [dataset.layout.floor.id])
+
+  const undoAllocationChange = useCallback(() => {
+    const mutations = undoMutationsRef.current
+    if (!mutations || mutations.length === 0) return
+    const before = allocationRef.current
+    const next = applyAllocationMutations(before, mutations)
+    allocationRef.current = next
+    setAllocation(next)
+    undoMutationsRef.current = null
+    setCanUndo(false)
+    void sessionAllocationStore.append(dataset.layout.floor.id, mutations)
+  }, [dataset.layout.floor.id])
+
   const overviewScope = useMemo(() => defaultWorkspaceScope(dataset), [dataset])
   const overviewScene = useMemo(() => buildWorkspaceScene(dataset, overviewScope), [dataset, overviewScope])
   const displayAreas = useMemo(() => buildWorkspaceDisplayAreas(dataset), [dataset])
   const [areaId, setAreaId] = useState<string | null>(null)
   const activeArea = areaId ? displayAreas.find((area) => area.id === areaId) ?? null : null
   const scope = activeArea?.scope ?? overviewScope
+  const departmentZone = useMemo(
+    () => resolveDepartmentWingZone(scope, overviewScene.resolvedScope.zoneIds),
+    [scope, overviewScene.resolvedScope.zoneIds],
+  )
   const scopedBaseScene = useMemo(() => activeArea
     ? buildWorkspaceScene(dataset, activeArea.scope, {
         workstationIds: activeArea.workstationIds,
@@ -205,7 +355,7 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
   const scene = useMemo(() => applyPlacements(scopedBaseScene, base, editor.placements), [scopedBaseScene, base, editor.placements])
   const departmentScene = useMemo(() => applyPlacements(overviewScene, base, editor.placements), [overviewScene, base, editor.placements])
 
-  const allDesks = useMemo(() => buildDeskIndex(dataset, createDemoAllocation(dataset, now), now), [dataset, now])
+  const allDesks = useMemo(() => buildDeskIndex(dataset, allocation, now), [dataset, allocation, now])
   const departmentDesks = useMemo(() => {
     const entries: Array<readonly [string, DeskRecord]> = []
     for (const ws of departmentScene.workstations) {
@@ -305,32 +455,20 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
   )
   const viewBox = frame.join(' ')
   const origin: Point = useMemo(() => [frame[0] + frame[2] / 2, frame[1] + frame[3] / 2], [frame])
-  const panLimit: Point = useMemo(() => [frame[2] * PAN_LIMIT, frame[3] * PAN_LIMIT], [frame])
+  /**
+   * How far the scene may be dragged off centre.
+   *
+   * The content is scaled about the frame's centre, so at zoom z its edge sits
+   * (z - 1) / 2 of a frame beyond the viewport. A fixed share of the frame was
+   * therefore reachable only near 1x: at 3.5x the outer third of a focused area
+   * could not be brought into view at all. Taking the larger of the two keeps
+   * the gentle slack for a scene that already fits.
+   */
+  const panLimit: Point = useMemo(() => {
+    const share = Math.max(PAN_LIMIT, (zoom - 1) / 2)
+    return [frame[2] * share, frame[3] * share]
+  }, [frame, zoom])
   const detailTier = detailTierForZoom(effectiveZoom(zoom, overviewFrame[2], frame[2]))
-  const minimapWindow = useMemo<BBox>(() => {
-    const [x0, y0, x1, y1] = overviewScene.resolvedScope.bbox
-    const { width, height } = dataset.layout.floor
-    return [
-      Math.max(0, x0 - MINIMAP_PADDING_PT),
-      Math.max(0, y0 - MINIMAP_PADDING_PT),
-      Math.min(width, x1 + MINIMAP_PADDING_PT),
-      Math.min(height, y1 + MINIMAP_PADDING_PT),
-    ]
-  }, [dataset.layout.floor, overviewScene])
-  const minimapZones = useMemo(
-    () => dataset.zones.filter((zone) => bboxesIntersect(zone.bbox, minimapWindow)),
-    [dataset.zones, minimapWindow],
-  )
-  const minimapCenter = useMemo(
-    () => cameraCenter(frame, origin, pan, zoom),
-    [frame, origin, pan, zoom],
-  )
-
-  const selectedAreaId = selected?.kind === 'workstation'
-    ? displayAreas.find((area) => area.workstationIds.includes(selected.id))?.id ?? null
-    : null
-  const minimapActiveAreaId = selectedAreaId ?? activeArea?.id ?? null
-
   const panLimitRef = useRef(panLimit)
   useEffect(() => {
     panLimitRef.current = panLimit
@@ -724,18 +862,9 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
           </nav>
           {editing
             ? <span className="sw-edit-caption"><span title={LAYOUT_EDIT.gridNote}>{LAYOUT_EDIT.gridLabel(GRID_CELL_MM)}</span></span>
-            : <span className={desk ? 'sw-selected-caption' : undefined}>{desk ? `Đang chọn ${desk.seat.code}${outsideScope ? ' · ngoài khu vực đang xem' : ''}` : scopeLabel}</span>}
+            : desk ? <span className="sw-selected-caption">{`Đang chọn ${desk.seat.code}${outsideScope ? ' · ngoài khu vực đang xem' : ''}`}</span> : null}
         </div>
         <div className="sw-map-stage" ref={stageRef}>
-          <AreaMinimap
-            window={minimapWindow}
-            departmentPolygons={overviewScene.resolvedScope.polygons}
-            zones={minimapZones}
-            areas={displayAreas}
-            activeAreaId={minimapActiveAreaId}
-            centerPoint={minimapCenter}
-            prompting={areaPrompt}
-          />
           <WorkspaceScene
             scene={scene}
             desks={desks}
@@ -805,13 +934,23 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
           <p className="sw-edit-hint">{LAYOUT_EDIT.hint}</p>
         </section>
       )}
-      {desk && <CompactInspector desk={desk} showHeader={!editing} onClose={() => { onSelect(null); svgRef.current?.focus() }} onVerify={onVerify} />}
+      {desk && <CompactInspector
+        desk={desk}
+        allocation={allocation}
+        now={now}
+        canUndo={canUndo}
+        onApplyMutations={applyAllocationChange}
+        onUndo={undoAllocationChange}
+        showHeader={!editing}
+        onClose={() => { onSelect(null); svgRef.current?.focus() }}
+        onVerify={onVerify}
+      />}
       {editing && (
         <p className="sw-edit-note">
           {LAYOUT_EDIT.boundaryNote} {LAYOUT_EDIT.persistenceNote}
         </p>
       )}
-      <ScopeSummary count={desks.size} counts={counts}>
+      <ScopeSummary dataset={dataset} departmentZone={departmentZone} count={desks.size} counts={counts}>
         {/*
           * No "pick a desk" prompt: the map already reads as clickable. This
           * only speaks up when a deep link points at a desk outside the scope,
