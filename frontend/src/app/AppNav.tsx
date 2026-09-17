@@ -71,6 +71,8 @@ interface AppNavProps {
   activeId: string
   /** the active module's settings panel (floor planning: map display settings) */
   settingsOpen: boolean
+  /** false when the current view has no settings, so the control is not offered */
+  settingsAvailable?: boolean
   onToggleSettings: () => void
 }
 
@@ -79,7 +81,7 @@ interface AppNavProps {
  * edge brings it back. Sets `data-nav-collapsed` on the shell so page chrome
  * can leave room for that tab.
  */
-export function AppNav({ activeId, settingsOpen, onToggleSettings }: AppNavProps) {
+export function AppNav({ activeId, settingsOpen, settingsAvailable = true, onToggleSettings }: AppNavProps) {
   const [collapsed, setCollapsed] = useState(initialCollapsed)
   const toggledByUser = useRef(false)
   const collapseRef = useRef<HTMLButtonElement>(null)
@@ -158,25 +160,27 @@ export function AppNav({ activeId, settingsOpen, onToggleSettings }: AppNavProps
       ))}
 
       <div className="app-nav-foot">
-        <button
-          type="button"
-          className={`app-nav-settings${settingsOpen ? ' is-open' : ''}`}
-          aria-pressed={settingsOpen}
-          aria-controls="fp-map-settings"
-          onClick={onToggleSettings}
-        >
-          <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-            <path
-              d="M8.6 2.5h2.8l.4 2.1 1.6.9 2-.8 1.4 2.4-1.6 1.4v1.9l1.6 1.4-1.4 2.4-2-.8-1.6.9-.4 2.1H8.6l-.4-2.1-1.6-.9-2 .8-1.4-2.4 1.6-1.4V8.5L3.2 7.1l1.4-2.4 2 .8 1.6-.9z"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinejoin="round"
-            />
-            <circle cx="10" cy="10" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.5" />
-          </svg>
-          <span>Cài đặt bản đồ</span>
-        </button>
+        {settingsAvailable && (
+          <button
+            type="button"
+            className={`app-nav-settings${settingsOpen ? ' is-open' : ''}`}
+            aria-pressed={settingsOpen}
+            aria-controls="fp-map-settings"
+            onClick={onToggleSettings}
+          >
+            <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+              <path
+                d="M8.6 2.5h2.8l.4 2.1 1.6.9 2-.8 1.4 2.4-1.6 1.4v1.9l1.6 1.4-1.4 2.4-2-.8-1.6.9-.4 2.1H8.6l-.4-2.1-1.6-.9-2 .8-1.4-2.4 1.6-1.4V8.5L3.2 7.1l1.4-2.4 2 .8 1.6-.9z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinejoin="round"
+              />
+              <circle cx="10" cy="10" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            </svg>
+            <span>Cài đặt bản đồ</span>
+          </button>
+        )}
         <button
           ref={collapseRef}
           type="button"

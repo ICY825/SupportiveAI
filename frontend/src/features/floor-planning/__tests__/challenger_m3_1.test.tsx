@@ -80,8 +80,6 @@ function Harness({
       onSelect={setSelected}
       onVerify={vi.fn()}
       searchSlot={null}
-      settingsOpen={false}
-      onCloseSettings={vi.fn()}
       layoutStore={store}
     />
   )

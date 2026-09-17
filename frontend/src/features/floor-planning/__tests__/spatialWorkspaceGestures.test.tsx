@@ -37,8 +37,6 @@ describe('SpatialWorkspace gestures, pointer isolation, and blur resilience', ()
         onSelect={onSelect}
         onVerify={vi.fn()}
         searchSlot={null}
-        settingsOpen={false}
-        onCloseSettings={vi.fn()}
       />
     )
 
@@ -74,8 +72,6 @@ describe('SpatialWorkspace gestures, pointer isolation, and blur resilience', ()
         onSelect={onSelect}
         onVerify={vi.fn()}
         searchSlot={null}
-        settingsOpen={false}
-        onCloseSettings={vi.fn()}
       />
     )
 
@@ -110,8 +106,6 @@ describe('SpatialWorkspace gestures, pointer isolation, and blur resilience', ()
         onSelect={vi.fn()}
         onVerify={vi.fn()}
         searchSlot={null}
-        settingsOpen={false}
-        onCloseSettings={vi.fn()}
       />
     )
 
@@ -146,8 +140,6 @@ describe('SpatialWorkspace gestures, pointer isolation, and blur resilience', ()
         onSelect={onSelect}
         onVerify={vi.fn()}
         searchSlot={null}
-        settingsOpen={false}
-        onCloseSettings={vi.fn()}
       />
     )
 
@@ -175,8 +167,6 @@ describe('SpatialWorkspace gestures, pointer isolation, and blur resilience', ()
         onSelect={onSelect}
         onVerify={vi.fn()}
         searchSlot={null}
-        settingsOpen={false}
-        onCloseSettings={vi.fn()}
       />
     )
 
@@ -201,8 +191,6 @@ describe('SpatialWorkspace gestures, pointer isolation, and blur resilience', ()
         onSelect={vi.fn()}
         onVerify={vi.fn()}
         searchSlot={null}
-        settingsOpen={false}
-        onCloseSettings={vi.fn()}
       />
     )
 

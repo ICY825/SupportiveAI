@@ -45,6 +45,32 @@ describe('app shell', () => {
     expect(toggle.getAttribute('aria-pressed')).toBe('false')
   }, 30000)
 
+  /**
+   * The panel holds CAD layer toggles and the source-drawing modes, which exist
+   * to check the extraction against the sheet. The seating view has no use for
+   * them, and the card it used to show there only repeated the "?" shortcuts and
+   * the "Vừa khung" button already in its toolbar.
+   */
+  it('offers map settings on the verification view and not on the seating view', async () => {
+    localStorage.setItem('vsf.nav.collapsed', '0')
+    render(<App />)
+    await screen.findByRole('application', {}, { timeout: 15000 })
+    expect(screen.getByRole('button', { name: 'Cài đặt bản đồ' })).toBeTruthy()
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('radio', { name: 'Bố trí chỗ ngồi' }))
+    await screen.findByRole('button', { name: /Chỉnh sửa bố trí/ }, { timeout: 15000 })
+
+    expect(screen.queryByRole('button', { name: 'Cài đặt bản đồ' })).toBeNull()
+    expect(screen.queryByRole('complementary', { name: 'Cài đặt bản đồ' })).toBeNull()
+    // the card the seating view used to carry, and what it duplicated
+    expect(screen.queryByText('Góc nhìn không gian')).toBeNull()
+    expect(screen.getAllByRole('button', { name: /Vừa khung/ }).length).toBe(1)
+
+    await user.click(screen.getByRole('radio', { name: 'Xác minh mặt bằng' }))
+    expect(await screen.findByRole('button', { name: 'Cài đặt bản đồ' }, { timeout: 15000 })).toBeTruthy()
+  }, 45000)
+
   it('navigates to lockers module when hash is #/lockers', async () => {
     localStorage.setItem('vsf.nav.collapsed', '0')
     window.location.hash = '#/lockers'

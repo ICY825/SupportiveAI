@@ -23,6 +23,7 @@ function getActiveModule(hash: string): string {
 /** Application shell. Handles navigation between Floor Planning and Locker Management. */
 export function App() {
   const [settingsOpen, setSettingsOpen] = useState(initialSettingsOpen)
+  const [settingsApplicable, setSettingsApplicable] = useState(false)
   const [activeModule, setActiveModule] = useState(() => getActiveModule(window.location.hash))
 
   useEffect(() => {
@@ -47,13 +48,18 @@ export function App() {
       <AppNav
         activeId={activeModule}
         settingsOpen={settingsOpen}
+        settingsAvailable={activeModule === 'floor-planning' && settingsApplicable}
         onToggleSettings={() => changeSettingsOpen(!settingsOpen)}
       />
       <div className="app-content">
         {activeModule === 'lockers' ? (
           <LockerManagementPage />
         ) : (
-          <FloorPlanningPage settingsOpen={settingsOpen} onSettingsOpenChange={changeSettingsOpen} />
+          <FloorPlanningPage
+            settingsOpen={settingsOpen}
+            onSettingsOpenChange={changeSettingsOpen}
+            onSettingsApplicableChange={setSettingsApplicable}
+          />
         )}
       </div>
     </div>

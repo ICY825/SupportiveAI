@@ -77,8 +77,6 @@ function Harness({ store, onSelect }: { store?: LayoutStore; onSelect: (ref: unk
       onSelect={setSelected}
       onVerify={vi.fn()}
       searchSlot={null}
-      settingsOpen={false}
-      onCloseSettings={vi.fn()}
       layoutStore={store}
     />
   )

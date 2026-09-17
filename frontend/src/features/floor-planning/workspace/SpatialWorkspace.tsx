@@ -267,14 +267,12 @@ interface DragSession {
   moved: boolean
 }
 
-export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, searchSlot, settingsOpen, onCloseSettings, onDirtyChange, layoutStore = sessionLayoutStore }: {
+export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, searchSlot, onDirtyChange, layoutStore = sessionLayoutStore }: {
   dataset: FloorDataset
   selected: EntityRef | null
   onSelect: (ref: EntityRef | null) => void
   onVerify: () => void
   searchSlot: HTMLElement | null
-  settingsOpen: boolean
-  onCloseSettings: () => void
   /** lets the page guard floor and view changes while a layout draft is open */
   onDirtyChange?: (dirty: boolean) => void
   /** swap for an API-backed store once a layout endpoint exists */
@@ -896,7 +894,6 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
             onPointerUp={pointerUp}
             onPointerCancel={pointerCancel}
           />
-          {settingsOpen && <div id="fp-map-settings" className="fp-card sw-view-settings"><button type="button" className="fp-icon-btn" aria-label="Đóng cài đặt bản đồ" title="Đóng" onClick={onCloseSettings}><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg></button><strong>Góc nhìn không gian</strong><p>Kéo để di chuyển, cuộn để thu phóng. Góc nhìn được giữ cố định để dễ đối chiếu vị trí.</p><button type="button" className="fp-btn is-wide" onClick={reset}>Vừa khung</button></div>}
           <div className="fp-toolbar sw-map-controls" role="toolbar" aria-label="Điều khiển khung nhìn">
             <div className="fp-btn-group">
               <button type="button" aria-label="Thu nhỏ" title="Thu nhỏ" onClick={() => zoomBy(1 / 1.2)} disabled={zoom <= MIN_ZOOM}>−</button>

@@ -39,9 +39,22 @@ interface FloorPlanningPageProps {
   /** map display settings panel (opened from the app sidebar) */
   settingsOpen?: boolean
   onSettingsOpenChange?: (open: boolean) => void
+  /**
+   * Whether the settings panel has anything to show for the current view.
+   *
+   * It holds CAD layer toggles and the source-drawing modes, which exist to
+   * check the extraction against the sheet. That is the verification view's
+   * work; the workspace has no use for it, so the sidebar hides the button
+   * rather than offering one that does nothing.
+   */
+  onSettingsApplicableChange?: (applicable: boolean) => void
 }
 
-export function FloorPlanningPage({ settingsOpen = false, onSettingsOpenChange }: FloorPlanningPageProps = {}) {
+export function FloorPlanningPage({
+  settingsOpen = false,
+  onSettingsOpenChange,
+  onSettingsApplicableChange,
+}: FloorPlanningPageProps = {}) {
   const initial = useMemo(() => parseHash(window.location.hash), [])
   const [floorId, setFloorId] = useState(findFloor(initial.floorId)?.id ?? FLOORS[0].id)
   const [selected, setSelected] = useState<EntityRef | null>(initial.selected)
@@ -70,6 +83,11 @@ export function FloorPlanningPage({ settingsOpen = false, onSettingsOpenChange }
     const next = buildHash({ floorId, selected, view })
     if (window.location.hash !== next) window.history.replaceState(null, '', next)
   }, [floorId, selected, view])
+
+  useEffect(() => {
+    onSettingsApplicableChange?.(view === 'verification')
+  }, [onSettingsApplicableChange, view])
+  useEffect(() => () => onSettingsApplicableChange?.(false), [onSettingsApplicableChange])
 
   // A pasted or edited link in the same tab only changes the hash.
   useEffect(() => {
@@ -216,8 +234,6 @@ export function FloorPlanningPage({ settingsOpen = false, onSettingsOpenChange }
           onSelect={setSelected}
           onVerify={() => navigate({ view: 'verification' })}
           searchSlot={searchSlot}
-          settingsOpen={settingsOpen}
-          onCloseSettings={() => onSettingsOpenChange?.(false)}
           onDirtyChange={setLayoutDirty}
         />
       )}
