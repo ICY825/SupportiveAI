@@ -230,6 +230,16 @@ export function createDemoAllocation(dataset: FloorDataset, now: Date): FloorAll
     }
   }
 
+  // A small deterministic bench makes the assignment flow usable without an
+  // HR directory. These people have no assignment or device by design.
+  for (const department of departments) {
+    for (let i = 1; i <= 8; i++) {
+      newEmployee(`bench-${department.id}-${i}`, department.id, {
+        presence: pick(['in_office', 'in_office', 'remote', 'away'], `bench-${department.id}-${i}presence`),
+      })
+    }
+  }
+
   return { source: { kind: 'demo', asOf: now.toISOString() }, seats, assignments, departments, employees, devices }
 }
 

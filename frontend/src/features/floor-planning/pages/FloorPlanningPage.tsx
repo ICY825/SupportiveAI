@@ -15,7 +15,13 @@ import { DeskStatusIcon } from '../components/desk-inspector/DeskStatusBadge'
 import { FLOORS, FLOOR_INVENTORY, findFloor } from '../data/registry'
 import { validateFloorDataset } from '../data/validateFloorDataset'
 import { buildDeskIndex } from '../domain/desk'
-import type { BBox, EntityRef, FloorDataset } from '../domain/spatial'
+import type { BBox, EntityRef, FloorDataset, Point, VerificationState } from '../domain/spatial'
+import {
+  applyDatasetZoneCustomizations,
+  loadZoneCustomizations,
+  saveZoneCustomizations,
+  type FloorZoneCustomizations,
+} from '../domain/zoneCustomization'
 import { DESK_STATUS, UNLABELED_ZONE, VIEW_MODES, objectName } from '../labels'
 import { ARROW_DIRECTION, nearestInDirection } from '../map/deskNavigation'
 import { buildSearchIndex, type SearchItem } from '../search/searchIndex'
@@ -107,6 +113,63 @@ export function FloorPlanningPage({ settingsOpen = false, onSettingsOpenChange }
   const current = state?.id === floorId ? state : null
   const floorLabel = findFloor(floorId)?.label
 
+  // Zone customizations (rename, assign, reposition labels)
+  const [customizationsByFloor, setCustomizationsByFloor] = useState<Record<string, FloorZoneCustomizations>>({})
+  const floorCustomizations = customizationsByFloor[floorId] ?? loadZoneCustomizations(floorId)
+
+  const handleZoneUpdate = useCallback(
+    (update: {
+      zoneId: string
+      name?: string | null
+      labelAnchor?: Point
+      sourceColor?: string | null
+      verification?: VerificationState
+      type?: 'WORKSPACE_ZONE' | 'UNKNOWN'
+    }) => {
+      setCustomizationsByFloor((prev) => {
+        const floorPrev = prev[floorId] ?? loadZoneCustomizations(floorId)
+        const nextFloor = {
+          ...floorPrev,
+          [update.zoneId]: {
+            ...(floorPrev[update.zoneId] ?? {}),
+            ...(update.name !== undefined ? { name: update.name } : {}),
+            ...(update.labelAnchor !== undefined ? { labelAnchor: update.labelAnchor } : {}),
+            ...(update.sourceColor !== undefined ? { sourceColor: update.sourceColor } : {}),
+            ...(update.verification !== undefined ? { verification: update.verification } : {}),
+            ...(update.type !== undefined ? { type: update.type } : {}),
+          },
+        }
+        saveZoneCustomizations(floorId, nextFloor)
+        return { ...prev, [floorId]: nextFloor }
+      })
+    },
+    [floorId],
+  )
+
+  const handleResetZone = useCallback(
+    (zoneId: string) => {
+      setCustomizationsByFloor((prev) => {
+        const floorPrev = prev[floorId] ?? loadZoneCustomizations(floorId)
+        const nextFloor = { ...floorPrev }
+        delete nextFloor[zoneId]
+        saveZoneCustomizations(floorId, nextFloor)
+        return { ...prev, [floorId]: nextFloor }
+      })
+    },
+    [floorId],
+  )
+
+  const handleResetAllZones = useCallback(() => {
+    setCustomizationsByFloor((prev) => ({ ...prev, [floorId]: {} }))
+    saveZoneCustomizations(floorId, {})
+  }, [floorId])
+
+  const currentDataset = current?.dataset
+  const effectiveDataset = useMemo(() => {
+    if (!currentDataset) return undefined
+    return applyDatasetZoneCustomizations(currentDataset, floorCustomizations)
+  }, [currentDataset, floorCustomizations])
+
   return (
     <div className={`fp-page${view === 'workspace' ? ' is-spatial-page' : ''}`}>
       <header className="fp-topbar">
@@ -145,10 +208,10 @@ export function FloorPlanningPage({ settingsOpen = false, onSettingsOpenChange }
           <span className="fp-mono">{current.error}</span>
         </div>
       )}
-      {current?.dataset && view === 'workspace' && (
+      {effectiveDataset && view === 'workspace' && (
         <SpatialWorkspace
           key={floorId}
-          dataset={current.dataset}
+          dataset={effectiveDataset}
           selected={selected}
           onSelect={setSelected}
           onVerify={() => navigate({ view: 'verification' })}
@@ -158,10 +221,11 @@ export function FloorPlanningPage({ settingsOpen = false, onSettingsOpenChange }
           onDirtyChange={setLayoutDirty}
         />
       )}
-      {current?.dataset && view === 'verification' && (
+      {effectiveDataset && view === 'verification' && (
         <FloorWorkspace
           key={floorId}
-          dataset={current.dataset}
+          dataset={effectiveDataset}
+          baseDataset={current?.dataset}
           selected={selected}
           onSelect={setSelected}
           view={view}
@@ -169,6 +233,9 @@ export function FloorPlanningPage({ settingsOpen = false, onSettingsOpenChange }
           searchSlot={searchSlot}
           settingsOpen={settingsOpen}
           onCloseSettings={() => onSettingsOpenChange?.(false)}
+          onZoneUpdate={handleZoneUpdate}
+          onResetZone={handleResetZone}
+          onResetAllZones={handleResetAllZones}
         />
       )}
       {pendingNav && (
@@ -188,6 +255,7 @@ export function FloorPlanningPage({ settingsOpen = false, onSettingsOpenChange }
 
 function FloorWorkspace({
   dataset,
+  baseDataset,
   selected,
   onSelect,
   view,
@@ -195,8 +263,12 @@ function FloorWorkspace({
   searchSlot,
   settingsOpen,
   onCloseSettings,
+  onZoneUpdate,
+  onResetZone,
+  onResetAllZones,
 }: {
   dataset: FloorDataset
+  baseDataset?: FloorDataset
   selected: EntityRef | null
   onSelect: (ref: EntityRef | null) => void
   view: ViewMode
@@ -205,6 +277,16 @@ function FloorWorkspace({
   searchSlot: HTMLElement | null
   settingsOpen: boolean
   onCloseSettings: () => void
+  onZoneUpdate?: (update: {
+    zoneId: string
+    name?: string | null
+    labelAnchor?: Point
+    sourceColor?: string | null
+    verification?: VerificationState
+    type?: 'WORKSPACE_ZONE' | 'UNKNOWN'
+  }) => void
+  onResetZone?: (zoneId: string) => void
+  onResetAllZones?: () => void
 }) {
   const [settings, setSettings] = useState<MapSettings>(DEFAULT_SETTINGS)
   const [hovered, setHovered] = useState<EntityRef | null>(null)
@@ -358,6 +440,7 @@ function FloorWorkspace({
           assetBase={import.meta.env.BASE_URL}
           deskStatuses={deskStatuses}
           onKeyDown={onMapKeyDown}
+          onZoneUpdate={onZoneUpdate}
         />
         {callout && selectedDesk && (
           <div className="fp-desk-callout" style={{ left: callout.left, top: callout.top }} data-desk-status={selectedDesk.status} aria-hidden="true">
@@ -405,12 +488,16 @@ function FloorWorkspace({
       ) : (
         <FloorDetailsPanel
           dataset={dataset}
+          baseDataset={baseDataset}
           selected={selected}
           onSelect={onSelect}
           debug={settings.debug.enabled}
           issues={issues}
           desks={workspace ? desks : undefined}
           allocationSource={allocation?.source}
+          onZoneUpdate={onZoneUpdate}
+          onResetZone={onResetZone}
+          onResetAllZones={onResetAllZones}
         />
       )}
     </div>
