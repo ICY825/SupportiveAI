@@ -377,6 +377,14 @@ export const draftBounds = (placement: SpatialPlacement): BBox => placementBound
 
 export interface LayoutStore {
   read(floorId: string): Record<string, SpatialPlacement> | null
+  /**
+   * Merges `placements` into the floor's stored layout. Ids that are absent
+   * keep whatever they already had.
+   *
+   * A save covers one editing area, not the whole floor, so a store that
+   * replaced its contents would drop every other area's committed positions.
+   * An HTTP-backed store has to behave the same way: PATCH, never PUT.
+   */
   write(floorId: string, placements: Record<string, SpatialPlacement>): Promise<void>
 }
 
@@ -391,7 +399,7 @@ const memory = new Map<string, Record<string, SpatialPlacement>>()
 export const sessionLayoutStore: LayoutStore = {
   read: (floorId) => memory.get(floorId) ?? null,
   write: async (floorId, placements) => {
-    memory.set(floorId, { ...placements })
+    memory.set(floorId, { ...(memory.get(floorId) ?? {}), ...placements })
   },
 }
 

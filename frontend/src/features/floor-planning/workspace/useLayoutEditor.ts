@@ -313,6 +313,16 @@ export function useLayoutEditor({
     setDraft(future[0])
   }, [future, clearDrag, setDraft])
 
+  /**
+   * Commits the editable membership, not the whole floor.
+   *
+   * Every placement in the area goes out, not only the changed ones: the store
+   * merges what it is given, so omitting a desk that was moved in an earlier
+   * session and has since been put back would leave the old position standing.
+   *
+   * The committed map is then extended, never rebuilt from `basePlacements` —
+   * rebuilding discards every area saved before this one.
+   */
   const save = useCallback(async () => {
     if (!draft || !valid || saving) return
     const next = editableSet
@@ -321,7 +331,7 @@ export function useLayoutEditor({
     setSaving(true)
     try {
       await store.write(floorId, next)
-      setCommitted(mergeStoredPlacements(basePlacements, next))
+      setCommitted((current) => mergeStoredPlacements(current, next))
       setDraft(null)
       resetHistory()
       clearDrag()
@@ -329,7 +339,7 @@ export function useLayoutEditor({
     } finally {
       setSaving(false)
     }
-  }, [basePlacements, draft, editableSet, valid, saving, store, floorId, clearDrag, setDraft, resetHistory])
+  }, [draft, editableSet, valid, saving, store, floorId, clearDrag, setDraft, resetHistory])
 
   const cancel = useCallback(() => {
     clearDrag()
