@@ -551,7 +551,7 @@
 
 /* map settings panel, opened from the app sidebar's "Cài đặt bản đồ" button */
 .fp-workspace.has-settings {
-  grid-template-columns: clamp(248px, 13vw, 272px) minmax(0, 1fr) var(--fp-inspector-w);
+  grid-template-columns: clamp(260px, 16vw, 300px) minmax(0, 1fr) var(--fp-inspector-w);
 }
 
 .fp-sidebar {
@@ -623,6 +623,11 @@
 .fp-controls section {
   padding: 14px 14px 14px;
   border-bottom: 1px solid var(--fp-hairline);
+}
+
+.fp-controls .fp-section,
+.fp-controls .fp-technical {
+  margin-top: 0;
 }
 
 .fp-controls h2 {

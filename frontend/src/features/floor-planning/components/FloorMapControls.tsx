@@ -1,6 +1,19 @@
-import type { BaseLayer, BaseLayerId } from '../domain/spatial'
-import { BASE_LAYER_LABELS, CLASSIFICATION, SOURCE_MODES } from '../labels'
+import { useMemo, type ReactNode } from 'react'
+import type { AllocationSource } from '../domain/allocation'
+import { DESK_STATUSES, type DeskRecord } from '../domain/desk'
+import type { BaseLayer, BaseLayerId, EntityRef, FloorDataset } from '../domain/spatial'
+import {
+  BASE_LAYER_LABELS,
+  CLASSIFICATION,
+  DEMO_DATA_LABEL,
+  NO_OPERATIONAL_DATA,
+  NO_OPERATIONAL_DATA_HINT,
+  NOT_AVAILABLE,
+  SOURCE_MODES,
+  UNLABELED_ZONE,
+} from '../labels'
 import type { DebugOptions, MapSettings } from '../map/mapSettings'
+import { DeskStatusBadge } from './desk-inspector/DeskStatusBadge'
 
 interface ViewControlsProps {
   onZoomIn: () => void
@@ -42,6 +55,22 @@ interface FloorMapControlsProps {
   settings: MapSettings
   layers: BaseLayer[]
   onChange: (next: MapSettings) => void
+  dataset: FloorDataset
+  desks?: ReadonlyMap<string, DeskRecord>
+  allocationSource?: AllocationSource
+  selected?: EntityRef | null
+}
+
+const DASH = '—'
+const nf = new Intl.NumberFormat('vi-VN')
+
+function Row({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+  return (
+    <div className="fp-row">
+      <dt title={hint}>{label}</dt>
+      <dd>{children}</dd>
+    </div>
+  )
 }
 
 const DEBUG_OPTIONS: { key: Exclude<keyof DebugOptions, 'enabled'>; label: string; hint: string }[] = [
@@ -51,13 +80,62 @@ const DEBUG_OPTIONS: { key: Exclude<keyof DebugOptions, 'enabled'>; label: strin
   { key: 'coords', label: 'Tọa độ bản vẽ', hint: 'Hiện tọa độ con trỏ theo điểm PDF, milimét và lưới trục' },
 ]
 
-/** Source comparison, layer visibility and technical inspection switches. */
-export function FloorMapControls({ settings, layers, onChange }: FloorMapControlsProps) {
+/** Source comparison, layer visibility, operational data, source specs and technical inspection. */
+export function FloorMapControls({
+  settings,
+  layers,
+  onChange,
+  dataset,
+  desks,
+  allocationSource,
+  selected,
+}: FloorMapControlsProps) {
   const set = <K extends keyof MapSettings>(key: K, value: MapSettings[K]) => onChange({ ...settings, [key]: value })
   const setDebug = (key: keyof DebugOptions, value: boolean) => set('debug', { ...settings.debug, [key]: value })
   const setLayer = (id: BaseLayerId, value: boolean) => set('layers', { ...settings.layers, [id]: value })
   const activeMode = SOURCE_MODES.find((m) => m.id === settings.sourceMode)!
   const opacity = Math.round(settings.sourceOpacity * 100)
+
+  const { floor } = dataset.layout
+  const { pdf } = dataset.extraction
+
+  const scopeInfo = useMemo(() => {
+    if (!selected) {
+      return {
+        label: 'Toàn tầng',
+        workstations: dataset.workstations.filter((w) => w.classification === 'WORKSTATION'),
+      }
+    }
+    if (selected.kind === 'zone') {
+      const z = dataset.zones.find((k) => k.id === selected.id)
+      return {
+        label: `Khu vực: ${z?.name ?? UNLABELED_ZONE}`,
+        workstations: dataset.workstations.filter((w) => w.zoneId === selected.id && w.classification === 'WORKSTATION'),
+      }
+    }
+    if (selected.kind === 'cluster') {
+      return {
+        label: `Cụm bàn: ${selected.id}`,
+        workstations: dataset.workstations.filter((w) => w.clusterId === selected.id),
+      }
+    }
+    if (selected.kind === 'workstation') {
+      return {
+        label: `Vị trí: ${selected.id}`,
+        workstations: dataset.workstations.filter((w) => w.id === selected.id),
+      }
+    }
+    return {
+      label: 'Toàn tầng',
+      workstations: dataset.workstations.filter((w) => w.classification === 'WORKSTATION'),
+    }
+  }, [selected, dataset])
+
+  const inScopeDesks = useMemo(() => {
+    if (!desks) return []
+    const ids = new Set(scopeInfo.workstations.map((w) => w.id))
+    return [...desks.values()].filter((d) => ids.has(d.workstation.id))
+  }, [desks, scopeInfo])
 
   return (
     <div className="fp-controls">
@@ -140,6 +218,85 @@ export function FloorMapControls({ settings, layers, onChange }: FloorMapControl
         </p>
       </section>
 
+      <section aria-labelledby="fp-ctl-operational">
+        <details className="fp-section fp-operational" open>
+          <summary>
+            <h3 id="fp-ctl-operational">Dữ liệu vận hành</h3>
+          </summary>
+          {desks && desks.size > 0 ? (
+            <div>
+              {allocationSource?.kind === 'demo' && (
+                <p className="fp-sub" style={{ margin: '4px 0 8px' }}>
+                  {DEMO_DATA_LABEL} · chưa kết nối HR/Admin
+                </p>
+              )}
+              <div className="fp-hint" style={{ margin: '4px 0 8px', fontWeight: 500 }}>
+                Phạm vi: {scopeInfo.label} ({scopeInfo.workstations.length} vị trí)
+              </div>
+              {inScopeDesks.length === 0 ? (
+                <p className="fp-empty">Không có chỗ ngồi trong phạm vi này</p>
+              ) : (
+                <ul className="fp-list">
+                  {DESK_STATUSES.map((st) => (
+                    <li key={st}>
+                      <DeskStatusBadge status={st} size="sm" />
+                      <span className="fp-count">
+                        {inScopeDesks.filter((d) => d.status === st).length}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : (
+            <div>
+              <p className="fp-empty">
+                {NO_OPERATIONAL_DATA}
+                <span className="fp-sub" style={{ display: 'block', marginTop: 2, color: 'var(--muted)' }}>
+                  {NO_OPERATIONAL_DATA_HINT}
+                </span>
+              </p>
+              <dl>
+                <Row label="Chỗ ngồi đã xác minh">
+                  <span aria-label={NOT_AVAILABLE} title={NOT_AVAILABLE} className="fp-muted">
+                    {desks ? 'Chọn bàn trên bản đồ' : DASH}
+                  </span>
+                </Row>
+                <Row label="Nhân sự đã bố trí">
+                  <span aria-label={NOT_AVAILABLE} title={NOT_AVAILABLE} className="fp-muted">
+                    {desks ? 'Chọn bàn trên bản đồ' : DASH}
+                  </span>
+                </Row>
+                <Row label="Tỷ lệ sử dụng">
+                  <span aria-label={NOT_AVAILABLE} title={NOT_AVAILABLE} className="fp-muted">
+                    {desks ? 'Chọn bàn trên bản đồ' : DASH}
+                  </span>
+                </Row>
+              </dl>
+            </div>
+          )}
+        </details>
+      </section>
+
+      <section aria-labelledby="fp-ctl-source">
+        <details className="fp-section" open>
+          <summary>
+            <h3 id="fp-ctl-source">Nguồn dữ liệu</h3>
+          </summary>
+          <dl>
+            <Row label="Bản vẽ gốc">
+              <span className="fp-filename" title={floor.sourcePdf}>
+                {dataset.sourceName}
+              </span>
+            </Row>
+            <Row label="Tỷ lệ bản vẽ">{floor.sourceScale}</Row>
+            <Row label="Phần mềm xuất">{pdf.creator || DASH}</Row>
+            {pdf.producer && <Row label="Trình tạo PDF">{pdf.producer}</Row>}
+            <Row label="Ghế nhận diện">{dataset.extraction.chairSymbolsDetected} ký hiệu</Row>
+          </dl>
+        </details>
+      </section>
+
       <section className="fp-advanced" aria-labelledby="fp-ctl-debug">
         <label className="fp-switch">
           <span className="fp-switch-text">
@@ -166,6 +323,32 @@ export function FloorMapControls({ settings, layers, onChange }: FloorMapControl
             ))}
           </div>
         )}
+      </section>
+
+      <section className="fp-advanced" aria-labelledby="fp-ctl-tech">
+        <details className="fp-technical">
+          <summary id="fp-ctl-tech">Chi tiết kỹ thuật</summary>
+          <dl>
+            <Row label="Hệ tọa độ">Điểm PDF, gốc trên-trái</Row>
+            <Row label="Quy đổi">1 pt ≈ {floor.mmPerPt.toFixed(2)} mm</Row>
+            <Row label="Khổ vẽ">
+              {nf.format(Math.round(floor.width * floor.mmPerPt))} × {nf.format(Math.round(floor.height * floor.mmPerPt))} mm
+            </Row>
+            <Row label="Đối tượng vector">{nf.format(pdf.vectorPathObjects)}</Row>
+            <Row label="Dòng chữ">{nf.format(pdf.textLines)}</Row>
+            <Row label="Chú thích PDF">{pdf.annotations}</Row>
+            <Row label="Mã SHA-256">
+              <span className="fp-mono fp-filename" title={dataset.layout.sourcePdfSha256}>
+                {dataset.layout.sourcePdfSha256.slice(0, 16)}…
+              </span>
+            </Row>
+            {selected && (
+              <Row label="Đối tượng chọn">
+                <span className="fp-mono">{selected.id}</span> ({selected.kind})
+              </Row>
+            )}
+          </dl>
+        </details>
       </section>
     </div>
   )

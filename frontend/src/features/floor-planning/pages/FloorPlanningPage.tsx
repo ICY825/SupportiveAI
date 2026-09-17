@@ -423,7 +423,15 @@ function FloorWorkspace({
               </svg>
             </button>
           </header>
-          <FloorMapControls settings={settings} layers={dataset.layout.layers} onChange={setSettings} />
+          <FloorMapControls
+            settings={settings}
+            layers={dataset.layout.layers}
+            onChange={setSettings}
+            dataset={dataset}
+            desks={workspace ? desks : undefined}
+            allocationSource={allocation?.source}
+            selected={selected}
+          />
         </aside>
       )}
       <main className="fp-main" ref={mainRef}>

@@ -1,21 +1,15 @@
 import { useState, type ReactNode } from 'react'
 import type { AllocationSource } from '../domain/allocation'
-import { DESK_STATUSES, type DeskRecord } from '../domain/desk'
+import type { DeskRecord } from '../domain/desk'
 import type { EntityRef, FloorDataset, Point, VerificationState, Zone } from '../domain/spatial'
 import { polygonCentroid } from '../domain/zoneCustomization'
 import type { ValidationIssue } from '../data/validateFloorDataset'
 import {
   CLASSIFICATION,
-  DEMO_DATA_LABEL,
-  NO_OPERATIONAL_DATA,
-  NO_OPERATIONAL_DATA_HINT,
-  NOT_AVAILABLE,
   UNLABELED_ZONE,
-  VERIFICATION,
   generated,
   objectName,
 } from '../labels'
-import { DeskStatusBadge } from './desk-inspector/DeskStatusBadge'
 import { MapLegend } from './MapLegend'
 import { VerificationStatus } from './VerificationStatus'
 
@@ -101,7 +95,6 @@ function Head({ kicker, title, state }: { kicker: string; title: ReactNode; stat
 }
 
 const fmtPt = (p: Point) => `${p[0].toFixed(1)}, ${p[1].toFixed(1)}`
-const fmtMm = (p: Point, mmPerPt: number) => `${nf.format(Math.round(p[0] * mmPerPt))}, ${nf.format(Math.round(p[1] * mmPerPt))}`
 
 function Notes({ notes }: { notes: string[] }) {
   if (!notes.length) return null
@@ -113,90 +106,6 @@ function Notes({ notes }: { notes: string[] }) {
         </li>
       ))}
     </ul>
-  )
-}
-
-function VerificationRow({ state }: { state: VerificationState }) {
-  return (
-    <Row label="Trạng thái">
-      {VERIFICATION[state].label}
-      <span className="fp-sub">{VERIFICATION[state].hint}</span>
-    </Row>
-  )
-}
-
-function SourceFileRow({ dataset }: { dataset: FloorDataset }) {
-  return (
-    <Row label="Bản vẽ gốc">
-      <span className="fp-filename" title={dataset.layout.floor.sourcePdf}>
-        {dataset.sourceName}
-      </span>
-    </Row>
-  )
-}
-
-/**
- * Seat/people data. Without attached allocation data every field is "—" (never
- * computed from geometry). With desks, shows status counts for the given scope.
- */
-function OperationalData({
-  fields,
-  desks,
-  source,
-  scope,
-}: {
-  fields: string[]
-  desks?: ReadonlyMap<string, DeskRecord>
-  source?: AllocationSource
-  /** workstation ids the counts cover */
-  scope?: string[]
-}) {
-  if (desks && scope) {
-    const inScope = scope.map((id) => desks.get(id)).filter((d): d is DeskRecord => d !== undefined)
-    return (
-      <Section title="Chỗ ngồi" className="fp-operational">
-        {source?.kind === 'demo' && <p className="fp-sub">{DEMO_DATA_LABEL} · chưa kết nối HR/Admin</p>}
-        {inScope.length === 0 ? (
-          <p className="fp-empty">Không có chỗ ngồi trong phạm vi này</p>
-        ) : (
-          <ul className="fp-list">
-            {DESK_STATUSES.map((st) => (
-              <li key={st}>
-                <DeskStatusBadge status={st} size="sm" />
-                <span className="fp-count">{inScope.filter((d) => d.status === st).length}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
-    )
-  }
-  const value = desks ? 'Chọn bàn trên bản đồ' : DASH
-  return (
-    <Section title="Dữ liệu vận hành" className="fp-operational">
-      <p className="fp-empty">
-        {NO_OPERATIONAL_DATA}
-        <span className="fp-sub">{NO_OPERATIONAL_DATA_HINT}</span>
-      </p>
-      <dl>
-        {fields.map((f) => (
-          <Row key={f} label={f}>
-            <span aria-label={NOT_AVAILABLE} title={NOT_AVAILABLE} className="fp-muted">
-              {value}
-            </span>
-          </Row>
-        ))}
-      </dl>
-    </Section>
-  )
-}
-
-function Technical({ children }: { children: ReactNode }) {
-  return (
-    <details className="fp-technical">
-      <summary>Chi tiết kỹ thuật</summary>
-      <dl>{children}</dl>
-    </details>
   )
 }
 
@@ -506,8 +415,6 @@ export function FloorDetailsPanel({
   onSelect,
   debug,
   issues,
-  desks,
-  allocationSource,
   onZoneUpdate,
   onResetZone,
   onResetAllZones,
@@ -523,16 +430,6 @@ export function FloorDetailsPanel({
       </Link>
     )
   }
-  const position = (p: Point) => (
-    <>
-      <Row label="Tọa độ tâm (pt)" hint="Điểm PDF, gốc ở góc trên-trái tờ bản vẽ">
-        <span className="fp-mono">{fmtPt(p)}</span>
-      </Row>
-      <Row label="Tọa độ tâm (mm)" hint="Quy đổi theo tỷ lệ bản vẽ, gốc ở góc trên-trái tờ bản vẽ">
-        <span className="fp-mono">{fmtMm(p, floor.mmPerPt)}</span>
-      </Row>
-    </>
-  )
 
   let body: ReactNode
   let raw: unknown = null
@@ -543,7 +440,6 @@ export function FloorDetailsPanel({
       dataset.zones.filter((z) => z.verification === 'UNKNOWN').length +
       dataset.workstations.filter((w) => w.classification === 'UNKNOWN').length +
       dataset.objects.filter((o) => o.classification === 'UNKNOWN').length
-    const { pdf } = dataset.extraction
     body = (
       <>
         <header className="fp-panel-head">
@@ -611,34 +507,6 @@ export function FloorDetailsPanel({
             </div>
           )}
         </Section>
-
-        <OperationalData
-          fields={['Chỗ ngồi đã xác minh', 'Nhân sự đã bố trí', 'Tỷ lệ sử dụng']}
-          desks={desks}
-          source={allocationSource}
-          scope={dataset.workstations.map((w) => w.id)}
-        />
-
-        <Section title="Nguồn dữ liệu">
-          <dl>
-            <SourceFileRow dataset={dataset} />
-            <Row label="Tỷ lệ bản vẽ">{floor.sourceScale}</Row>
-            <Row label="Phần mềm xuất">{pdf.creator || DASH}</Row>
-          </dl>
-        </Section>
-
-        <Technical>
-          <Row label="Hệ tọa độ">Điểm PDF, gốc trên-trái</Row>
-          <Row label="Quy đổi">1 pt ≈ {floor.mmPerPt.toFixed(2)} mm</Row>
-          <Row label="Đối tượng vector">{nf.format(pdf.vectorPathObjects)}</Row>
-          <Row label="Dòng chữ">{nf.format(pdf.textLines)}</Row>
-          <Row label="Chú thích PDF">{pdf.annotations}</Row>
-          <Row label="SHA-256">
-            <span className="fp-mono fp-filename" title={layout.sourcePdfSha256}>
-              {layout.sourcePdfSha256.slice(0, 16)}…
-            </span>
-          </Row>
-        </Technical>
       </>
     )
     raw = { floor, extraction: dataset.extraction }
@@ -694,39 +562,6 @@ export function FloorDetailsPanel({
               </ul>
             </Section>
           )}
-
-          <OperationalData
-            fields={['Chỗ ngồi đã xác minh', 'Nhân sự đã bố trí', 'Tỷ lệ sử dụng']}
-            desks={desks}
-            source={allocationSource}
-            scope={dataset.workstations.filter((w) => w.zoneId === z.id).map((w) => w.id)}
-          />
-
-          <Section title="Nguồn & xác minh">
-            <dl>
-              <VerificationRow state={z.verification} />
-              <Row label="Nhãn trên bản vẽ">{z.sourceLabel ?? <span className="fp-unknown">Không có nhãn</span>}</Row>
-              {z.sourceLabelFigure !== null && (
-                <Row label="Số trên nhãn">
-                  ({z.sourceLabelFigure})<span className="fp-sub">Sức chứa cũ do người vẽ CAD ghi, đã hết hiệu lực — Facilities xác nhận. Số chỗ ngồi lấy theo bàn đếm được trên bản vẽ.</span>
-                </Row>
-              )}
-              <Row label="Loại chú thích">{generated(z.source.annotationType) ?? DASH}</Row>
-              <SourceFileRow dataset={dataset} />
-            </dl>
-          </Section>
-
-          <Technical>
-            <Row label="Mã">
-              <span className="fp-mono">{z.id}</span>
-            </Row>
-            <Row label="Hình học">{generated(z.source.geometry) ?? DASH}</Row>
-            <Row label="Mã chú thích PDF">
-              <span className="fp-mono fp-filename" title={z.source.annotationId}>
-                {z.source.annotationId ?? DASH}
-              </span>
-            </Row>
-          </Technical>
         </>
       )
     }
@@ -749,29 +584,6 @@ export function FloorDetailsPanel({
             <Row label="Lưới trục">{w.gridRef}</Row>
           </dl>
           <Notes notes={w.notes} />
-
-          <OperationalData fields={['Chỗ ngồi', 'Nhân sự đã bố trí']} desks={desks} />
-
-          <Section title="Nguồn & xác minh">
-            <dl>
-              <VerificationRow state={w.verification} />
-              <Row label="Phân loại">{CLASSIFICATION[w.classification]}</Row>
-              <Row label="Quy tắc trích xuất">
-                <span title={w.source.rule}>{generated(w.source.rule) ?? DASH}</span>
-              </Row>
-              <Row label="Nhãn trên bản vẽ">{w.source.deskLabel ?? DASH}</Row>
-              <SourceFileRow dataset={dataset} />
-            </dl>
-            <p className="fp-sub">Vị trí làm việc vật lý chưa phải chỗ ngồi; cần Admin xác minh trước khi bố trí.</p>
-          </Section>
-
-          <Technical>
-            <Row label="Mã">
-              <span className="fp-mono">{w.id}</span>
-            </Row>
-            <Row label="Góc xoay">{w.rotationDeg}°</Row>
-            {position(w.center)}
-          </Technical>
         </>
       )
     }
@@ -799,27 +611,6 @@ export function FloorDetailsPanel({
               ))}
             </ul>
           </Section>
-
-          <OperationalData
-            fields={['Chỗ ngồi đã xác minh', 'Nhân sự đã bố trí']}
-            desks={desks}
-            source={allocationSource}
-            scope={c.workstationIds}
-          />
-
-          <Section title="Nguồn & xác minh">
-            <dl>
-              <VerificationRow state={c.verification} />
-              <Row label="Cách xác định">Các bàn chạm nhau được gom thành một cụm</Row>
-            </dl>
-          </Section>
-
-          <Technical>
-            <Row label="Mã">
-              <span className="fp-mono">{c.id}</span>
-            </Row>
-            {position(c.center)}
-          </Technical>
         </>
       )
     }
@@ -836,27 +627,6 @@ export function FloorDetailsPanel({
             <Row label="Lưới trục">{r.gridRef}</Row>
           </dl>
           <Notes notes={r.notes} />
-
-          <OperationalData fields={['Người sử dụng']} desks={desks} />
-
-          <Section title="Nguồn & xác minh">
-            <dl>
-              <VerificationRow state={r.verification} />
-              <Row label="Hình học">{generated(r.source.geometry) ?? DASH}</Row>
-              <SourceFileRow dataset={dataset} />
-            </dl>
-          </Section>
-
-          <Technical>
-            <Row label="Mã">
-              <span className="fp-mono">{r.id}</span>
-            </Row>
-            <Row label="Mã chú thích PDF">
-              <span className="fp-mono fp-filename" title={r.source.annotationId}>
-                {r.source.annotationId ?? DASH}
-              </span>
-            </Row>
-          </Technical>
         </>
       )
     }
@@ -877,24 +647,6 @@ export function FloorDetailsPanel({
             <Row label="Lưới trục">{o.gridRef}</Row>
           </dl>
           <Notes notes={o.notes} />
-
-          <Section title="Nguồn & xác minh">
-            <dl>
-              <VerificationRow state={o.verification} />
-              <Row label="Chữ trên bản vẽ">{o.source.text ? `“${o.source.text}”` : DASH}</Row>
-              <Row label="Cách xác định">{generated(o.source.geometry) ?? DASH}</Row>
-              <SourceFileRow dataset={dataset} />
-            </dl>
-          </Section>
-
-          <Technical>
-            <Row label="Mã">
-              <span className="fp-mono">{o.id}</span>
-            </Row>
-            <Row label="Loại (kind)">
-              <span className="fp-mono">{o.kind}</span>
-            </Row>
-          </Technical>
         </>
       )
     }
