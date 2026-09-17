@@ -88,7 +88,7 @@ describe('SpatialWorkspace gestures, pointer isolation, and blur resilience', ()
     fireEvent(window, new Event('blur'))
 
     // Next interaction with new pointer must not be blocked
-    const marker = container.querySelector<SVGGElement>('.sw-marker')!
+    const marker = container.querySelector<SVGGElement>('.sw-furniture')!
     expect(marker).toBeTruthy()
 
     fireEvent.pointerDown(marker, { button: 0, pointerId: 2, clientX: 300, clientY: 300 })

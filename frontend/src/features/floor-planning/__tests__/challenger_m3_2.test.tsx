@@ -17,7 +17,7 @@ import {
   deriveEditableArea,
   type LayoutStore,
 } from '../workspace/layoutDraft'
-import { buildSpikeScene } from '../workspace/scene'
+import { buildWorkspaceScene } from '../workspace/scene'
 import { SpatialWorkspace } from '../workspace/SpatialWorkspace'
 import { useLayoutEditor } from '../workspace/useLayoutEditor'
 
@@ -95,7 +95,11 @@ const deskNode = (container: HTMLElement, id = DESK) =>
   container.querySelector<SVGGElement>(`.sw-furniture[data-workstation-id="${id}"]`)!
 
 const saveButton = () => screen.getByRole('button', { name: /Lưu bố trí|Đang lưu/ }) as HTMLButtonElement
-const enterEdit = () => fireEvent.click(screen.getByRole('button', { name: /Chỉnh sửa bố trí/ }))
+const enterEdit = () => {
+  const picker = screen.getByRole('combobox', { name: 'Tập trung khu vực' }) as HTMLSelectElement
+  fireEvent.change(picker, { target: { value: picker.options[1].value } })
+  fireEvent.click(screen.getByRole('button', { name: /Chỉnh sửa bố trí/ }))
+}
 const inViewMode = () => screen.queryAllByRole('button', { name: /Chỉnh sửa bố trí/ }).length === 1
 
 function clickDesk(container: HTMLElement, id = DESK) {
@@ -106,7 +110,7 @@ function clickDesk(container: HTMLElement, id = DESK) {
 
 describe('Challenger M3-2-2: Perimeter Wall & Live Validation Adversarial Suite', () => {
   describe('Task 1: Northern Perimeter Wall Edge Case', () => {
-    it('places desk flush against northern wall with chair facing inward (y=234.39): evaluates valid=true, 0 issues, Save writes to store', async () => {
+    it('moves a rotated desk toward the canonical northern boundary while remaining valid and saves', async () => {
       const written: Array<[string, Record<string, SpatialPlacement>]> = []
       const store: LayoutStore = {
         read: () => null,
@@ -119,12 +123,14 @@ describe('Challenger M3-2-2: Perimeter Wall & Live Validation Adversarial Suite'
       enterEdit()
       clickDesk(container, 'ws-16-065')
 
-      // Rotate 180° so chair faces inward into room (southwards, away from north wall)
+      // Rotate 270° so the chair clears the neighbouring extracted desks.
+      fireEvent.keyDown(scene(container), { key: 'r' })
       fireEvent.keyDown(scene(container), { key: 'r' })
       fireEvent.keyDown(scene(container), { key: 'r' })
 
-      // Nudge 2 grid steps north (ArrowUp)
-      fireEvent.keyDown(scene(container), { key: 'ArrowUp' })
+      // One grid step remains inside the extracted polygon. A second step is
+      // outside the canonical annotation and is no longer admitted by a
+      // crop-specific boundary correction.
       fireEvent.keyDown(scene(container), { key: 'ArrowUp' })
 
       const status = container.querySelector('.sw-edit-inspector .sw-placement-status')!
@@ -146,9 +152,9 @@ describe('Challenger M3-2-2: Perimeter Wall & Live Validation Adversarial Suite'
       expect(written[0][0]).toBe('floor-16')
       const savedPlacement = written[0][1]['ws-16-065']
       expect(savedPlacement).toBeDefined()
-      // Bounds check: top edge reaches approximately y = 234.39
+      // Bounds check: one canonical 600 mm grid step north.
       const [minX, minY, maxX, maxY] = placementBounds(savedPlacement)
-      expect(minY).toBeCloseTo(234.39, 1)
+      expect(minY).toBeCloseTo(240.05, 1)
       expect(maxY).toBeGreaterThan(minY)
       expect(maxX).toBeGreaterThan(minX)
 
@@ -196,7 +202,8 @@ describe('Challenger M3-2-2: Perimeter Wall & Live Validation Adversarial Suite'
 
   describe('Task 2: Live Validation in useLayoutEditor & Zero-Gap Flush Obstacle', () => {
     it('live validation immediately reports valid: false and disables Save when desk moves outside zone', () => {
-      const baseScene = buildSpikeScene(dataset)
+      const focus = dataset.clusters.find((cluster) => cluster.id === 'cluster-16-13')!
+      const baseScene = buildWorkspaceScene(dataset, { kind: 'bbox', bbox: focus.bbox })
       const base = basePlacements(baseScene.workstations)
       const area = deriveEditableArea(dataset, baseScene)
       const dummyStore: LayoutStore = { read: () => null, write: async () => {} }
@@ -350,8 +357,8 @@ describe('Challenger M3-2-2: Perimeter Wall & Live Validation Adversarial Suite'
       enterEdit()
       clickDesk(container)
 
-      // Move 1 step up into open space: valid and dirty
-      fireEvent.keyDown(scene(container), { key: 'ArrowUp' })
+      // Move 1 step left into open space: valid and dirty
+      fireEvent.keyDown(scene(container), { key: 'ArrowLeft' })
 
       const saveBtn = saveButton()
       expect(saveBtn.disabled).toBe(false)
@@ -376,7 +383,7 @@ describe('Challenger M3-2-2: Perimeter Wall & Live Validation Adversarial Suite'
       const { container } = setup(slowStore)
       enterEdit()
       clickDesk(container)
-      fireEvent.keyDown(scene(container), { key: 'ArrowUp' })
+      fireEvent.keyDown(scene(container), { key: 'ArrowLeft' })
 
       const saveBtn = saveButton()
       expect(saveBtn.disabled).toBe(false)

@@ -1,11 +1,8 @@
-import { rectangle } from '../domain/geometry'
-import type { BaseLayer, BBox, FloorDataset, Point, Room, Workstation, Zone } from '../domain/spatial'
+import { bboxOfPoints, rectangle } from '../domain/geometry'
+import type { BaseLayer, BBox, FloorDataset, FloorObstacle, Point, Room, Workstation, Zone } from '../domain/spatial'
+import { resolveWorkspaceScope, workstationInScope, type ResolvedWorkspaceScope, type WorkspaceScope } from './scope'
 
 export { rectangle }
-
-/** Camera crop, NOT a room or floor outline. Only these three complete source clusters are in the spike. */
-export const SPIKE_CLUSTER_IDS = ['cluster-16-13', 'cluster-16-17', 'cluster-16-18']
-export const SPIKE_CROP: BBox = [900, 225, 1008, 294]
 
 const AZIMUTH = Math.PI / 6
 const ELEVATION = Math.PI / 4
@@ -13,56 +10,51 @@ const C = Math.cos(AZIMUTH)
 const S = Math.sin(AZIMUTH)
 const E = Math.sin(ELEVATION)
 
-/** True orthographic projection. All inputs retain the dataset's PDF-point units. */
+/** Orthographic projection from canonical floor coordinates. No viewport origin is baked in. */
 export function project([x, y]: Point, z = 0): Point {
-  const dx = x - SPIKE_CROP[0]
-  const dy = y - SPIKE_CROP[1]
-  return [C * dx - S * dy, E * (S * dx + C * dy) - Math.cos(ELEVATION) * z]
+  return [C * x - S * y, E * (S * x + C * y) - Math.cos(ELEVATION) * z]
 }
 
-/**
- * Inverse of project()'s linear part: a displacement in scene units back to a
- * displacement in floor coordinates. Pointer drags are deltas, so this is the
- * conversion the editor actually uses; it needs no element measurement.
- */
+/** Inverse of project()'s linear part for pointer displacement. */
 export function unprojectDelta([dx, dy]: Point): Point {
   return [C * dx + (S / E) * dy, -S * dx + (C / E) * dy]
 }
 
-/** Inverse of project(). Floor point that lands at `scenePoint` on plane `z`. */
+/** Inverse projection back to canonical floor coordinates. */
 export function unproject([px, py]: Point, z = 0): Point {
-  const [dx, dy] = unprojectDelta([px, py + Math.cos(ELEVATION) * z])
-  return [dx + SPIKE_CROP[0], dy + SPIKE_CROP[1]]
+  return unprojectDelta([px, py + Math.cos(ELEVATION) * z])
 }
 
-/** The same projection as project(), for unmodified source SVG paths. */
+/** The same projection as project(), expressed for source SVG paths. */
 export function planeTransform(z = 0): string {
-  const [x, y] = project([0, 0], z)
-  return `matrix(${C} ${E * S} ${-S} ${E * C} ${x} ${y})`
+  return `matrix(${C} ${E * S} ${-S} ${E * C} 0 ${-Math.cos(ELEVATION) * z})`
 }
 
-export const points = (polygon: Point[]) => polygon.map((p) => p.join(',')).join(' ')
-export const projectedPoints = (polygon: Point[], z = 0) => points(polygon.map((p) => project(p, z)))
+export const points = (polygon: readonly Point[]) => polygon.map((p) => p.join(',')).join(' ')
+export const projectedPoints = (polygon: readonly Point[], z = 0) => points(polygon.map((p) => project(p, z)))
 
-const intersects = (a: BBox, b: BBox) => a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1]
+export const bboxesIntersect = (a: BBox, b: BBox) => a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1]
 
-/**
- * Cull complete source subpaths without resampling their geometry. The generated
- * CAD paths use absolute M/L/C/Z commands; cubic control bounds are conservative.
- * Unknown syntax stays intact and is clipped by SVG, never silently reinterpreted.
- */
-export function cropSourcePath(d: string, crop: BBox): string {
+/** Cull complete absolute source subpaths to a scoped floor bbox. */
+export function clipSourcePathToBBox(d: string, bbox: BBox): string {
   if (/[A-Za-z]/.test(d.replace(/[MLCZ]/g, ''))) return d
   return (d.match(/M[^M]*/g) ?? []).filter((part) => {
     const numbers = (part.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number)
     const xs = numbers.filter((_, i) => i % 2 === 0)
     const ys = numbers.filter((_, i) => i % 2 === 1)
-    return xs.length > 0 && intersects([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)], crop)
+    return xs.length > 0 && bboxesIntersect([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)], bbox)
   }).join('')
 }
 
-export interface SpikeScene {
+export interface WorkspaceSceneModel {
+  scope: WorkspaceScope
+  resolvedScope: ResolvedWorkspaceScope
+  scopeBounds: BBox
+  contextBounds: BBox
+  scopePolygons: Point[][]
   workstations: Workstation[]
+  contextWorkstations: Workstation[]
+  obstacles: FloorObstacle[]
   layers: BaseLayer[]
   zones: Zone[]
   rooms: Room[]
@@ -70,77 +62,92 @@ export interface SpikeScene {
   chairHeight: number
 }
 
-export function buildSpikeScene(dataset: FloorDataset): SpikeScene {
-  const clusterIds = new Set(dataset.layout.floor.id === 'floor-16' ? SPIKE_CLUSTER_IDS : [])
-  const workstations = dataset.workstations.filter((w) => clusterIds.has(w.clusterId))
-  const layers: BaseLayer[] = dataset.layout.layers
-    .filter((l) => ['facade', 'structure', 'walls', 'partitions', 'doors'].includes(l.id))
-    .map((l) => ({ ...l, d: cropSourcePath(l.d, SPIKE_CROP) }))
+const CONTEXT_LAYERS = new Set(['facade', 'structure', 'walls', 'partitions', 'doors'])
+
+export interface WorkspaceSceneOptions {
+  /** Explicit target membership for a UI display area. */
+  workstationIds?: readonly string[]
+  /** Larger camera/architecture window; never a physical editing boundary. */
+  contextBounds?: BBox
+  /** Draw nearby canonical desks as muted, non-interactive context. */
+  includeContextWorkstations?: boolean
+}
+
+const normalizedBounds = ([x0, y0, x1, y1]: BBox): BBox => [
+  Math.min(x0, x1),
+  Math.min(y0, y1),
+  Math.max(x0, x1),
+  Math.max(y0, y1),
+]
+
+export function buildWorkspaceScene(dataset: FloorDataset, scope: WorkspaceScope, options: WorkspaceSceneOptions = {}): WorkspaceSceneModel {
+  const resolvedScope = resolveWorkspaceScope(dataset, scope)
+  const targetIds = options.workstationIds ? new Set(options.workstationIds) : null
+  const workstations = dataset.workstations.filter((workstation) => targetIds
+    ? targetIds.has(workstation.id)
+    : workstationInScope(workstation, resolvedScope))
+  const contextBounds = normalizedBounds(options.contextBounds ?? resolvedScope.bbox)
+  const contextWorkstations = options.includeContextWorkstations
+    ? dataset.workstations.filter((workstation) => !targetIds?.has(workstation.id) && bboxesIntersect(workstation.bbox, contextBounds))
+    : []
+  const zones = scope.kind === 'bbox'
+    ? dataset.zones.filter((zone) => bboxesIntersect(zone.bbox, contextBounds))
+    : dataset.zones.filter((zone) => resolvedScope.zoneIds.includes(zone.id))
+  const layers = dataset.layout.layers
+    .filter((layer) => CONTEXT_LAYERS.has(layer.id))
+    .map((layer) => ({ ...layer, d: clipSourcePathToBBox(layer.d, contextBounds) }))
+
   return {
+    scope,
+    resolvedScope,
+    scopeBounds: resolvedScope.bbox,
+    contextBounds,
+    scopePolygons: resolvedScope.polygons,
     workstations,
+    contextWorkstations,
+    obstacles: dataset.obstacles.filter((obstacle) => bboxesIntersect(obstacle.bbox, contextBounds)),
     layers,
-    zones: dataset.zones.filter((z) => intersects(z.bbox, SPIKE_CROP)),
-    rooms: dataset.rooms.filter((r) => intersects(r.bbox, SPIKE_CROP)),
-    // Heights are restrained presentation dimensions; plan geometry is never changed.
+    zones,
+    rooms: dataset.rooms.filter((room) => bboxesIntersect(room.bbox, contextBounds)),
     deskHeight: 750 / dataset.layout.floor.mmPerPt,
     chairHeight: 450 / dataset.layout.floor.mmPerPt,
   }
 }
 
-/** Where the marker discs sit above the chair seat, and how wide they are. */
+/** Where status marker discs sit above the chair seat, and how wide they are. */
 export const MARKER_ELEVATION = 5
 export const MARKER_RADIUS = 1.85
-/** Anchors of the two captions drawn inside the scene. */
-export const ZONE_LABEL_ANCHOR: Point = [924, 230]
-export const CROP_LABEL_ANCHOR: Point = [940, 293]
-export const CROP_LABEL_OFFSET = 5
-/** Half-width / height allowed for a caption, in scene units. */
-const LABEL_ALLOWANCE: Point = [17, 2]
 
-/**
- * Projected bounds of everything the scene draws, in scene units.
- *
- * Derived from the geometry rather than measured from the DOM so the first
- * paint is already framed correctly and the value is testable. Text labels are
- * given a generous allowance because their width depends on the font.
- */
-export function sceneBounds(scene: SpikeScene): BBox {
-  let x0 = Infinity
-  let y0 = Infinity
-  let x1 = -Infinity
-  let y1 = -Infinity
-  const add = ([x, y]: Point) => {
-    if (x < x0) x0 = x
-    if (y < y0) y0 = y
-    if (x > x1) x1 = x
-    if (y > y1) y1 = y
-  }
+const addTextAllowance = (add: (point: Point) => void, anchor: Point, text: string, size = 1.6) => {
+  const [x, y] = project(anchor)
+  const halfWidth = Math.max(4, text.length * size * 0.32)
+  add([x - halfWidth, y - size])
+  add([x + halfWidth, y + size * 0.4])
+}
 
-  // ground plate, at the elevation it is actually drawn at
-  for (const corner of rectangle(SPIKE_CROP)) add(project(corner, -0.8))
-  // furniture tops and the marker discs that float above the chairs
-  for (const ws of scene.workstations) {
-    for (const corner of ws.polygon) add(project(corner, scene.deskHeight))
-    const [mx, my] = project(ws.chair?.center ?? ws.center, scene.chairHeight + MARKER_ELEVATION)
+/** Projected bounds of scoped geometry, furniture, markers, and dynamic labels. */
+export function sceneBounds(scene: WorkspaceSceneModel): BBox {
+  const projected: Point[] = []
+  const add = (point: Point) => projected.push(point)
+
+  for (const point of rectangle(scene.contextBounds)) add(project(point, -0.8))
+  for (const polygon of scene.scopePolygons) for (const point of polygon) add(project(point, -0.8))
+  for (const workstation of [...scene.contextWorkstations, ...scene.workstations]) {
+    for (const corner of workstation.polygon) add(project(corner, scene.deskHeight))
+    const [mx, my] = project(workstation.chair?.center ?? workstation.center, scene.chairHeight + MARKER_ELEVATION)
     add([mx - MARKER_RADIUS, my - MARKER_RADIUS])
     add([mx + MARKER_RADIUS, my + MARKER_RADIUS])
   }
-  // the two in-scene captions
-  const [zx, zy] = project(ZONE_LABEL_ANCHOR)
-  add([zx, zy - LABEL_ALLOWANCE[1]])
-  add([zx + LABEL_ALLOWANCE[0], zy])
-  const [cx, cy] = project(CROP_LABEL_ANCHOR)
-  add([cx - LABEL_ALLOWANCE[0], cy + CROP_LABEL_OFFSET])
-  add([cx + LABEL_ALLOWANCE[0], cy + CROP_LABEL_OFFSET + LABEL_ALLOWANCE[1]])
+  for (const zone of scene.zones) if (zone.name) addTextAllowance(add, zone.labelAnchor, zone.name)
+  for (const room of scene.rooms) {
+    const [x0, y0, x1, y1] = room.bbox
+    addTextAllowance(add, [(x0 + x1) / 2, (y0 + y1) / 2], room.name, 1.35)
+  }
 
-  return [x0, y0, x1, y1]
+  return projected.length ? bboxOfPoints(projected) : [0, 0, 1, 1]
 }
 
-
-/**
- * A viewBox that fills `view` with `bounds` at the largest scale that still
- * leaves `padding` screen pixels of margin. Returned as SVG viewBox order.
- */
+/** Fit scoped projected bounds into an SVG stage while preserving its aspect ratio. */
 export function fitViewBox(bounds: BBox, view: { width: number; height: number }, padding: number): BBox {
   const contentWidth = Math.max(bounds[2] - bounds[0], 1e-6)
   const contentHeight = Math.max(bounds[3] - bounds[1], 1e-6)
@@ -157,95 +164,116 @@ export function fitViewBox(bounds: BBox, view: { width: number; height: number }
   ]
 }
 
-export interface MemoizedPrismFace {
-  points: string
-  fill: string
+/**
+ * Compares the user's zoom across scopes. A small area fitted to the same
+ * stage is already magnified relative to the department overview.
+ */
+export const effectiveZoom = (zoom: number, referenceWidth: number, frameWidth: number) =>
+  frameWidth > 0 ? zoom * (referenceWidth / frameWidth) : zoom
+
+/**
+ * The floor-space footprint of the fitted camera. The scene's projected
+ * viewBox is inverted through its viewport transform and then unprojected.
+ */
+export function cameraFootprint(frame: BBox, origin: Point, pan: Point, zoom: number): Point[] {
+  const [fx, fy, fw, fh] = frame
+  const scale = zoom > 0 ? zoom : 1
+  const corners: Point[] = [[fx, fy], [fx + fw, fy], [fx + fw, fy + fh], [fx, fy + fh]]
+  return corners.map(([sx, sy]) => unproject([
+    origin[0] + (sx - pan[0] - origin[0]) / scale,
+    origin[1] + (sy - pan[1] - origin[1]) / scale,
+  ]))
 }
 
-export interface MemoizedPrism {
-  faces: MemoizedPrismFace[]
-  topPoints: string
+/** Floor-space point currently at the centre of the fitted viewport. */
+export function cameraCenter(frame: BBox, origin: Point, pan: Point, zoom: number): Point {
+  const scale = zoom > 0 ? zoom : 1
+  const viewportCenter: Point = [frame[0] + frame[2] / 2, frame[1] + frame[3] / 2]
+  // Invert the content transform at the viewport centre before converting the
+  // projected point back to floor space. `origin` normally equals this centre,
+  // but keeping both inputs makes the relationship explicit and testable.
+  return unproject([
+    origin[0] + (viewportCenter[0] - pan[0] - origin[0]) / scale,
+    origin[1] + (viewportCenter[1] - pan[1] - origin[1]) / scale,
+  ])
 }
 
+export type WorkspaceDetailTier = 'far' | 'medium' | 'close'
+export const MEDIUM_DETAIL_ZOOM = 1.3
+export const CLOSE_DETAIL_ZOOM = 2
+
+export function detailTierForZoom(zoom: number): WorkspaceDetailTier {
+  if (zoom >= CLOSE_DETAIL_ZOOM) return 'close'
+  if (zoom >= MEDIUM_DETAIL_ZOOM) return 'medium'
+  return 'far'
+}
+
+export interface MemoizedPrismFace { points: string; fill: string }
+export interface MemoizedPrism { faces: MemoizedPrismFace[]; topPoints: string }
 export interface MemoizedDesk {
   shadowPoints: string
   legs: Array<{ a: Point; b: Point }>
   prism: MemoizedPrism
   codePos: Point
 }
-
 export interface MemoizedChair {
   shadowPoints: string
   stem: { a: Point; b: Point }
   prism: MemoizedPrism
   backPoints: string
 }
-
 export interface MemoizedSceneItem {
   id: string
   kind: 'desk' | 'chair'
+  context: boolean
   depth: number
   ws: Workstation
   deskGeom?: MemoizedDesk
   chairGeom?: MemoizedChair
 }
-
 export interface MemoizedSceneGeometry {
   items: MemoizedSceneItem[]
-  markers: Array<{
-    ws: Workstation
-    pos: Point
-  }>
+  markers: Array<{ ws: Workstation; pos: Point }>
   selectionPolygons: Map<string, string>
-  zoneCaptionPos: Point
-  cropCaptionPos: Point
 }
 
 export function createPrismGeometry(polygon: Point[], height: number, bottom: number): MemoizedPrism {
   const faces = polygon
     .map((a, i) => {
       const b = polygon[(i + 1) % polygon.length]
-      return {
-        a,
-        b,
-        depth: project(a)[1] + project(b)[1],
-      }
+      return { a, b, depth: project(a)[1] + project(b)[1] }
     })
     .sort((a, b) => a.depth - b.depth)
     .map(({ a, b }, i) => ({
       points: points([project(a, bottom), project(b, bottom), project(b, height), project(a, height)]),
       fill: i % 2 ? '#bbc7d0' : '#d2dbe1',
     }))
-
-  return {
-    faces,
-    topPoints: projectedPoints(polygon, height),
-  }
+  return { faces, topPoints: projectedPoints(polygon, height) }
 }
 
-function buildSceneGeometry(scene: SpikeScene): MemoizedSceneGeometry {
-  const rawItems: MemoizedSceneItem[] = []
+function buildSceneGeometry(scene: WorkspaceSceneModel): MemoizedSceneGeometry {
+  const items: MemoizedSceneItem[] = []
   const selectionPolygons = new Map<string, string>()
-
-  for (const ws of scene.workstations) {
+  const targetIds = new Set(scene.workstations.map((workstation) => workstation.id))
+  for (const ws of [...scene.contextWorkstations, ...scene.workstations]) {
+    const context = !targetIds.has(ws.id)
     const deskPrism = createPrismGeometry(ws.polygon, scene.deskHeight, scene.deskHeight - 0.5)
     const [cx, cy] = ws.center
-    const deskGeom: MemoizedDesk = {
-      shadowPoints: projectedPoints(ws.polygon),
-      legs: ws.polygon.map(([px, py]) => {
-        const p: Point = [px + (cx - px) * 0.14, py + (cy - py) * 0.14]
-        return { a: project(p, 0), b: project(p, scene.deskHeight) }
-      }),
-      prism: deskPrism,
-      codePos: project(ws.center, scene.deskHeight + 0.5),
-    }
-
-    rawItems.push({
+    items.push({
       id: ws.id,
       kind: 'desk',
+      context,
       depth: project(ws.center)[1],
       ws,
-      deskGeom,
+      deskGeom: {
+        shadowPoints: projectedPoints(ws.polygon),
+        legs: ws.polygon.map(([px, py]) => {
+          const point: Point = [px + (cx - px) * 0.14, py + (cy - py) * 0.14]
+          return { a: project(point, 0), b: project(point, scene.deskHeight) }
+        }),
+        prism: deskPrism,
+        codePos: project(ws.center, scene.deskHeight + 0.5),
+      },
     })
 
     if (ws.chair) {
@@ -253,69 +281,48 @@ function buildSceneGeometry(scene: SpikeScene): MemoizedSceneGeometry {
       const polygon = rectangle(bbox)
       const dx = center[0] - ws.center[0]
       const dy = center[1] - ws.center[1]
-      const back =
-        Math.abs(dx) > Math.abs(dy)
-          ? dx > 0
-            ? [polygon[1], polygon[2]]
-            : [polygon[3], polygon[0]]
-          : dy > 0
-          ? [polygon[2], polygon[3]]
-          : [polygon[0], polygon[1]]
-
-      const chairPrism = createPrismGeometry(polygon, scene.chairHeight, scene.chairHeight - 0.5)
-      const chairGeom: MemoizedChair = {
-        shadowPoints: projectedPoints(polygon),
-        stem: { a: project(center, 0.5), b: project(center, scene.chairHeight) },
-        prism: chairPrism,
-        backPoints: points([
-          project(back[0], scene.chairHeight),
-          project(back[1], scene.chairHeight),
-          project(back[1], scene.chairHeight + 3),
-          project(back[0], scene.chairHeight + 3),
-        ]),
-      }
-
-      rawItems.push({
+      const back = Math.abs(dx) > Math.abs(dy)
+        ? (dx > 0 ? [polygon[1], polygon[2]] : [polygon[3], polygon[0]])
+        : (dy > 0 ? [polygon[2], polygon[3]] : [polygon[0], polygon[1]])
+      items.push({
         id: ws.id,
         kind: 'chair',
+        context,
         depth: project(center)[1],
         ws,
-        chairGeom,
+        chairGeom: {
+          shadowPoints: projectedPoints(polygon),
+          stem: { a: project(center, 0.5), b: project(center, scene.chairHeight) },
+          prism: createPrismGeometry(polygon, scene.chairHeight, scene.chairHeight - 0.5),
+          backPoints: points([
+            project(back[0], scene.chairHeight),
+            project(back[1], scene.chairHeight),
+            project(back[1], scene.chairHeight + 3),
+            project(back[0], scene.chairHeight + 3),
+          ]),
+        },
       })
     }
-
-    selectionPolygons.set(ws.id, projectedPoints(ws.polygon, scene.deskHeight + 0.15))
+    if (!context) selectionPolygons.set(ws.id, projectedPoints(ws.polygon, scene.deskHeight + 0.15))
   }
-
-  rawItems.sort((a, b) => a.depth - b.depth)
-
-  const markers = scene.workstations.map((ws) => ({
-    ws,
-    pos: project(ws.chair?.center ?? ws.center, scene.chairHeight + MARKER_ELEVATION),
-  }))
-
+  items.sort((a, b) => a.depth - b.depth)
   return {
-    items: rawItems,
-    markers,
+    items,
+    markers: scene.workstations.map((ws) => ({
+      ws,
+      pos: project(ws.chair?.center ?? ws.center, scene.chairHeight + MARKER_ELEVATION),
+    })),
     selectionPolygons,
-    zoneCaptionPos: project(ZONE_LABEL_ANCHOR),
-    cropCaptionPos: project(CROP_LABEL_ANCHOR),
   }
 }
 
-const sceneGeometryCache = new WeakMap<SpikeScene, MemoizedSceneGeometry>()
+const sceneGeometryCache = new WeakMap<WorkspaceSceneModel, MemoizedSceneGeometry>()
 
-/**
- * Returns pre-projected, depth-sorted geometry for the 2.5D spatial scene.
- * Memoized by scene dataset identity to eliminate redundant geometry calculations
- * during continuous zoom and pan frames.
- */
-export function memoizeSceneGeometry(scene: SpikeScene): MemoizedSceneGeometry {
-  let geom = sceneGeometryCache.get(scene)
-  if (!geom) {
-    geom = buildSceneGeometry(scene)
-    sceneGeometryCache.set(scene, geom)
+export function memoizeSceneGeometry(scene: WorkspaceSceneModel): MemoizedSceneGeometry {
+  let geometry = sceneGeometryCache.get(scene)
+  if (!geometry) {
+    geometry = buildSceneGeometry(scene)
+    sceneGeometryCache.set(scene, geometry)
   }
-  return geom
+  return geometry
 }
-

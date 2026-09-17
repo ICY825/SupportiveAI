@@ -142,8 +142,14 @@ export const SPATIAL_SCOPE_BREADCRUMB = 'Khu vực làm việc'
 export const SPATIAL_OUT_OF_SCOPE = 'Vị trí ngoài phạm vi hiện tại'
 export const SPATIAL_OUT_OF_SCOPE_HINT = 'Chuyển sang bản vẽ để xem vị trí đang chọn.'
 export const SPATIAL_UNAVAILABLE = 'Bố trí chỗ ngồi hiện chỉ có tại Tầng 16.'
-export const SCENE_ZONE_CAPTION = 'RANH GIỚI KHU AI'
-export const SCENE_CROP_CAPTION = 'Mặt bằng tiếp tục ngoài phạm vi hiện tại'
+export const SPATIAL_NO_EDIT_AREAS = 'Tầng này chưa có khu vực chỉnh sửa.'
+export const SPATIAL_MINIMAP = {
+  label: 'Bản đồ định vị khu vực',
+  title: 'Vị trí trên mặt bằng',
+  overview: 'Toàn bộ bộ phận',
+  choose: 'Chọn một khu vực để bắt đầu chỉnh sửa.',
+  current: (area: string) => `${area} · đang xem`,
+} as const
 
 export const DEMO_DATA_LABEL = 'Dữ liệu minh họa'
 export const DEMO_DATA_HINT = 'Nhân sự, chỗ ngồi và thiết bị là dữ liệu giả lập để thiết kế giao diện; chưa kết nối HR/Admin.'
@@ -216,6 +222,7 @@ export const LAYOUT_EDIT = {
   cancel: 'Hủy',
   saving: 'Đang lưu…',
   noSelection: 'Chọn một bàn trên mặt bằng để di chuyển hoặc xoay.',
+  chooseArea: 'Chọn khu vực trước khi chỉnh sửa bố trí.',
   hint: 'Kéo bàn để di chuyển · Phím mũi tên để dịch từng ô · R để xoay · Esc để bỏ chọn',
   gridNote: 'Lưới bám theo vị trí gốc của bàn đang chọn, nên luôn đưa được bàn về đúng chỗ cũ.',
   changed: (n: number) => `${n} bàn đã đổi`,

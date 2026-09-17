@@ -26,7 +26,6 @@ import {
   createDraft,
   draftIsValid,
   gridForEntity,
-  isDraftDirty,
   mergeStoredPlacements,
   setDraftPlacement,
   validateDraft,
@@ -108,6 +107,11 @@ export function useLayoutEditor({
   const [drag, setDrag] = useState<DragState | null>(null)
   const [saving, setSaving] = useState(false)
   const dragRef = useRef<DragState | null>(null)
+  const editableSet = useMemo(
+    () => (area.editableIds ? new Set(area.editableIds) : null),
+    [area.editableIds],
+  )
+  const isEditable = useCallback((entityId: string) => !editableSet || editableSet.has(entityId), [editableSet])
 
   /**
    * The draft is mirrored in a ref and written synchronously, because pointer
@@ -151,12 +155,16 @@ export function useLayoutEditor({
     [placements, area],
   )
   const dirty = useMemo(
-    () => (mode === 'edit' && draft ? isDraftDirty(draft, committed) : false),
-    [mode, draft, committed],
+    () => mode === 'edit' && draft
+      ? changedIds(draft, committed).some((id) => isEditable(id))
+      : false,
+    [mode, draft, committed, isEditable],
   )
   const changedCount = useMemo(
-    () => (mode === 'edit' && draft ? changedIds(draft, committed).length : 0),
-    [mode, draft, committed],
+    () => mode === 'edit' && draft
+      ? changedIds(draft, committed).filter((id) => isEditable(id)).length
+      : 0,
+    [mode, draft, committed, isEditable],
   )
   const valid = useMemo(() => draftIsValid(validation), [validation])
 
@@ -175,10 +183,11 @@ export function useLayoutEditor({
   )
 
   const enterEdit = useCallback(() => {
+    if (editableSet?.size === 0) return
     if (!draftRef.current) setDraft(createDraft(committed))
     resetHistory()
     setMode('edit')
-  }, [committed, setDraft, resetHistory])
+  }, [committed, editableSet, setDraft, resetHistory])
 
   const clearDrag = useCallback(() => {
     dragRef.current = null
@@ -195,24 +204,25 @@ export function useLayoutEditor({
   }, [dirty, clearDrag, setDraft, resetHistory])
 
   const startDrag = useCallback((entityId: string) => {
+    if (!isEditable(entityId)) return
     const from = draftRef.current?.placements[entityId]
     if (!from) return
     const state: DragState = { entityId, from, moved: false }
     dragRef.current = state
     setDrag(state)
-  }, [])
+  }, [isEditable])
 
   const dragTo = useCallback(
     ([dx, dy]: Point) => {
       const state = dragRef.current
-      if (!state) return
+      if (!state || !isEditable(state.entityId)) return
       if (!state.moved) {
         state.moved = true
         setDrag({ ...state })
       }
       update(snapPlacementToGrid(translatePlacement(state.from, dx, dy), gridFor(state.entityId)))
     },
-    [gridFor, update],
+    [gridFor, isEditable, update],
   )
 
   /**
@@ -239,6 +249,7 @@ export function useLayoutEditor({
 
   const nudge = useCallback(
     (entityId: string, [cx, cy]: Point) => {
+      if (!isEditable(entityId)) return
       applyStep((current) => {
         const placement = current.placements[entityId]
         if (!placement) return current
@@ -247,7 +258,7 @@ export function useLayoutEditor({
         return setDraftPlacement(current, snapPlacementToGrid(moved, grid))
       })
     },
-    [gridFor, applyStep],
+    [gridFor, isEditable, applyStep],
   )
 
   /**
@@ -257,6 +268,7 @@ export function useLayoutEditor({
    */
   const rotate = useCallback(
     (entityId: string) => {
+      if (!isEditable(entityId)) return
       applyStep((current) => {
         const placement = current.placements[entityId]
         if (!placement) return current
@@ -265,16 +277,17 @@ export function useLayoutEditor({
         return setDraftPlacement(current, snapPlacementToGrid(centred, gridFor(entityId)))
       })
     },
-    [gridFor, applyStep],
+    [gridFor, isEditable, applyStep],
   )
 
   const resetPlacement = useCallback(
     (entityId: string) => {
+      if (!isEditable(entityId)) return
       const original = basePlacements[entityId]
       if (!original) return
       applyStep((current) => setDraftPlacement(current, original))
     },
-    [basePlacements, applyStep],
+    [basePlacements, isEditable, applyStep],
   )
 
   /**
@@ -302,11 +315,13 @@ export function useLayoutEditor({
 
   const save = useCallback(async () => {
     if (!draft || !valid || saving) return
-    const next = { ...draft.placements }
+    const next = editableSet
+      ? Object.fromEntries(Object.entries(draft.placements).filter(([id]) => editableSet.has(id)))
+      : { ...draft.placements }
     setSaving(true)
     try {
       await store.write(floorId, next)
-      setCommitted(next)
+      setCommitted(mergeStoredPlacements(basePlacements, next))
       setDraft(null)
       resetHistory()
       clearDrag()
@@ -314,7 +329,7 @@ export function useLayoutEditor({
     } finally {
       setSaving(false)
     }
-  }, [draft, valid, saving, store, floorId, clearDrag, setDraft, resetHistory])
+  }, [basePlacements, draft, editableSet, valid, saving, store, floorId, clearDrag, setDraft, resetHistory])
 
   const cancel = useCallback(() => {
     clearDrag()

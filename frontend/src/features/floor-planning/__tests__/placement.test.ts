@@ -30,7 +30,8 @@ import {
   gridPoints,
   placementFromWorkstation,
 } from '../workspace/layoutDraft'
-import { buildSpikeScene, project, unproject, unprojectDelta } from '../workspace/scene'
+import { buildWorkspaceScene, project, unproject, unprojectDelta } from '../workspace/scene'
+import { defaultWorkspaceScope } from '../workspace/scope'
 
 const desk = (over: Partial<SpatialPlacement> = {}): SpatialPlacement => ({
   entityId: 'a',
@@ -237,7 +238,7 @@ describe('floor 16 placements, boundary and projection', () => {
   })
 
   it('starts from a layout with no overlapping desks, so Save is not blocked on open', () => {
-    const scene = buildSpikeScene(dataset)
+    const scene = buildWorkspaceScene(dataset, defaultWorkspaceScope(dataset))
     const placements = Object.values(basePlacements(scene.workstations))
     const area = deriveEditableArea(dataset, scene)
     for (const placement of placements) {
@@ -248,8 +249,8 @@ describe('floor 16 placements, boundary and projection', () => {
     }
   })
 
-  it('derives the editable area from the source zone annotation, not from the camera crop', () => {
-    const scene = buildSpikeScene(dataset)
+  it('derives the editable area from the source zone annotation, not from the viewport scope', () => {
+    const scene = buildWorkspaceScene(dataset, defaultWorkspaceScope(dataset))
     const area = deriveEditableArea(dataset, scene)
     expect(area.boundary.kind).toBe('zone-annotation')
     expect(area.boundary.sourceId).toBe('zone-16-ai-platform')
@@ -258,7 +259,7 @@ describe('floor 16 placements, boundary and projection', () => {
   })
 
   it('rejects a desk pushed outside the editable area', () => {
-    const scene = buildSpikeScene(dataset)
+    const scene = buildWorkspaceScene(dataset, defaultWorkspaceScope(dataset))
     const area = deriveEditableArea(dataset, scene)
     const placement = placementFromWorkstation(scene.workstations[0])
     const outside = translatePlacement(placement, 0, -60)
@@ -268,7 +269,8 @@ describe('floor 16 placements, boundary and projection', () => {
   })
 
   it('puts every desk back exactly, whatever route it takes through the grid', () => {
-    const scene = buildSpikeScene(dataset)
+    const focus = dataset.clusters.find((cluster) => cluster.id === 'cluster-16-13')!
+    const scene = buildWorkspaceScene(dataset, { kind: 'bbox', bbox: focus.bbox })
     const area = deriveEditableArea(dataset, scene)
     for (const ws of scene.workstations) {
       const original = placementFromWorkstation(ws)
@@ -307,7 +309,9 @@ describe('floor 16 placements, boundary and projection', () => {
       expect(by).toBeCloseTo(point[1], 9)
     }
     const delta: [number, number] = [7.25, -3.5]
-    const [dx, dy] = unprojectDelta(project([900 + delta[0], 225 + delta[1]]))
+    const from = project([900, 225])
+    const to = project([900 + delta[0], 225 + delta[1]])
+    const [dx, dy] = unprojectDelta([to[0] - from[0], to[1] - from[1]])
     expect(dx).toBeCloseTo(delta[0], 9)
     expect(dy).toBeCloseTo(delta[1], 9)
   })
@@ -792,4 +796,3 @@ describe('Milestone 2 - Multi-Layer Validation Engine', () => {
     })
   })
 })
-

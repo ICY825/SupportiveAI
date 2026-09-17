@@ -99,7 +99,12 @@ const deskNode = (container: HTMLElement, id: string) =>
   container.querySelector<SVGGElement>(`.sw-furniture[data-workstation-id="${id}"]`)!
 
 const saveButton = () => screen.getByRole('button', { name: /Lưu bố trí|Đang lưu/ }) as HTMLButtonElement
-const enterEdit = () => fireEvent.click(screen.getByRole('button', { name: /Chỉnh sửa bố trí/ }))
+const enterEdit = (areaId?: string) => {
+  const picker = screen.getByRole('combobox', { name: 'Tập trung khu vực' }) as HTMLSelectElement
+  const value = areaId ?? picker.options[1].value
+  fireEvent.change(picker, { target: { value } })
+  fireEvent.click(screen.getByRole('button', { name: /Chỉnh sửa bố trí/ }))
+}
 const leaveEdit = () => fireEvent.click(screen.getByRole('button', { name: 'Hủy' }))
 const inViewMode = () => screen.queryAllByRole('button', { name: /Chỉnh sửa bố trí/ }).length === 1
 
@@ -139,7 +144,7 @@ describe('Challenger M3-1: Adversarial Affordance & Conflict Suite', () => {
   describe('2. Edit Mode Door Clearances Projection', () => {
     it('renders all door clearance overlays with non-empty, finite projected points in Edit mode', () => {
       const { container } = setup()
-      enterEdit()
+      enterEdit('ai-area-d')
       const clearances = container.querySelectorAll<SVGPolygonElement>('.sw-edit-clearance')
       expect(clearances.length).toBeGreaterThan(0)
 
@@ -181,14 +186,7 @@ describe('Challenger M3-1: Adversarial Affordance & Conflict Suite', () => {
       // Select desk ws-16-067 (adjacent to column col-16-13)
       clickDesk(container, 'ws-16-067')
 
-      // 1 nudge Up -> valid & dirty
-      fireEvent.keyDown(scene(container), { key: 'ArrowUp' })
-      expect(saveButton().disabled).toBe(false)
-      expect(container.querySelector('.sw-edit-invalid')).toBeNull()
-      expect(container.querySelector('.sw-edit-obstacle-conflict')).toBeNull()
-
-      // 2 nudges Right (+X) -> penetrates column col-16-13
-      fireEvent.keyDown(scene(container), { key: 'ArrowRight' })
+      // One nudge Right (+X) penetrates canonical column col-16-13.
       fireEvent.keyDown(scene(container), { key: 'ArrowRight' })
 
       // A. Does ws-16-067 receive .sw-edit-invalid?
@@ -218,15 +216,14 @@ describe('Challenger M3-1: Adversarial Affordance & Conflict Suite', () => {
       expect(status.getAttribute('data-valid')).toBe('false')
       expect(status.textContent).toMatch(/Va chạm.*cột/i)
 
-      // E. Nudge back to clean position -> both conflict highlights clear, Save re-enables
-      fireEvent.keyDown(scene(container), { key: 'ArrowLeft' })
+      // E. Nudge back to unchanged clean position -> both highlights clear.
       fireEvent.keyDown(scene(container), { key: 'ArrowLeft' })
 
       expect(status.getAttribute('data-valid')).toBe('true')
       expect(container.querySelector('.sw-edit-invalid[data-workstation-id="ws-16-067"]')).toBeNull()
       expect(container.querySelector('.sw-edit-obstacle-conflict[data-obstacle-id="col-16-13"]')).toBeNull()
       expect(container.querySelector('.sw-edit-obstacle-conflict')).toBeNull()
-      expect(saveButton().disabled).toBe(false)
+      expect(saveButton().disabled).toBe(true)
     })
   })
 
@@ -386,4 +383,3 @@ describe('Challenger M3-1: Adversarial Affordance & Conflict Suite', () => {
     })
   })
 })
-

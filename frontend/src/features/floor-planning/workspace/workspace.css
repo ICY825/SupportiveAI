@@ -42,13 +42,16 @@
 /* takes whatever height the heading leaves; the scene reframes itself to fit */
 .sw-map-panel { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
 .sw-map-top { display: flex; justify-content: space-between; gap: 12px; flex: none; padding: 10px var(--sw-gutter, 20px); font-size: var(--fp-t-small); color: var(--sw-muted); }
-.sw-map-top > span:first-child { display: flex; align-items: center; gap: 7px; font-weight: 600; color: var(--fp-text-2); }
-.sw-map-top i { width: 9px; height: 9px; border: 1px solid #95b0c7; background: #dce7f1; border-radius: 2px; }
+.sw-scope-nav { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.sw-scope-nav .fp-btn { min-height: 27px; padding: 4px 9px; }
+.sw-scope-nav .fp-btn[aria-pressed='true'] { border-color: #9bb4ca; background: #edf3f8; color: var(--sw-selected); }
+.sw-scope-nav select { max-width: 230px; height: 27px; border: 1px solid var(--sw-line); border-radius: 4px; background: var(--paper); color: var(--fp-text-2); font: inherit; padding: 0 24px 0 8px; }
+.sw-scope-nav :disabled { opacity: 0.58; cursor: not-allowed; }
 .sw-map-top .sw-selected-caption { color: var(--sw-selected); font-weight: 600; }
 
 /* ---------------------------------------------------------------- scene */
 
-.sw-map-stage { position: relative; flex: 1; min-height: var(--sw-stage-min, 360px); background: #f9fbfc; border-block: 1px solid var(--sw-line); }
+.sw-map-stage { position: relative; flex: 1; min-height: var(--sw-stage-min, 360px); background: #f9fbfc; border-block: 1px solid var(--sw-line); overflow: hidden; }
 /*
  * The scene frames itself from its own geometry (see scene.ts fitViewBox), so
  * the stage can be any shape: it simply takes whatever the shell leaves.
@@ -58,6 +61,28 @@
 .sw-scene:focus { outline: none; }
 .sw-scene-content { transform-box: view-box; transform-origin: 0 0; will-change: transform; }
 .sw-furniture, .sw-marker { cursor: pointer; }
+.sw-context-furniture { opacity: 0.24; cursor: default; }
+
+/* ------------------------------------------------------------ locator map */
+/* The locator is a stage affordance, not inspector content. Keep it pinned to
+ * the left corner so it remains available while the inspector changes. */
+.sw-minimap { position: absolute; z-index: 3; bottom: 14px; left: 14px; width: clamp(132px, 22%, 190px); margin: 0; padding: 0; background: transparent; border: 0; border-radius: 50%; box-shadow: none; pointer-events: none; }
+.sw-minimap-plan { display: block; width: 100%; height: auto; aspect-ratio: 1; background: #b9d7eb; border: 0; border-radius: 50%; box-shadow: 0 0 0 4px #182e40, 0 0 0 6px #8da8ba; }
+.sw-minimap-radar-sky { opacity: 0.98; }
+.sw-minimap-radar-grid line, .sw-minimap-radar-grid circle { fill: none; stroke: #c85c55; stroke-width: 1.15; stroke-opacity: 0.58; }
+.sw-minimap-zone { fill: #8eaebd; fill-opacity: 0.42; stroke: #65899d; stroke-width: 1.5; }
+.sw-minimap-dept { fill: #4f8198; fill-opacity: 0.32; stroke: #2f6179; stroke-width: 2; }
+.sw-minimap-area rect { fill: #eaf4fb; fill-opacity: 0.7; stroke: #527f9b; stroke-width: 1.5; }
+.sw-minimap-area text { fill: #24465d; font-size: 13px; font-weight: 700; paint-order: stroke; stroke: #eaf4fb; stroke-width: 2px; stroke-opacity: 0.75; }
+.sw-minimap-area { cursor: default; pointer-events: none; }
+.sw-minimap-area.is-active rect { fill: #3f8cc0; fill-opacity: 1; stroke: #fff; stroke-width: 2.5; }
+.sw-minimap-area.is-active text { fill: #fff; stroke: #245b83; stroke-width: 2.4px; }
+.sw-minimap-radar-ring { fill: none; stroke: #182e40; stroke-width: 8; pointer-events: none; }
+.sw-minimap-center { pointer-events: none; }
+.sw-minimap-center-ring { fill: #d95c56; fill-opacity: 0.2; stroke: #fff; stroke-width: 1.2; }
+.sw-minimap-center-dot { fill: #d95c56; stroke: #fff; stroke-width: 0.8; }
+.sw-minimap[data-prompt='true'] .sw-minimap-plan { box-shadow: 0 0 0 4px var(--sw-selected), 0 0 0 6px #cfe0f2; }
+.sw-key-context-mark { display: inline-block; width: 18px; height: 10px; border: 1px solid var(--sw-line); background: #eef2f4; opacity: 0.6; }
 .sw-furniture:hover .sw-desktop > g > polygon:last-child { stroke: #527795; stroke-width: 0.3; }
 .sw-desk-code { fill: #334c60; font: 600 1.6px var(--mono); pointer-events: none; }
 .sw-marker { color: var(--seat); }
@@ -66,10 +91,10 @@
 .sw-avatar-text { fill: white; font: 600 1.3px var(--font); }
 .sw-marker.is-selected .sw-marker-disc { stroke: var(--sw-selected); stroke-width: 0.55; }
 .sw-plane-label { fill: #617e97; font: 500 1.35px var(--font); letter-spacing: 0.1px; }
-.sw-crop-label { fill: #7b8d9c; font: 1.45px var(--font); }
+.sw-room-label { fill: #7b8d9c; font: 500 1.1px var(--font); }
 
-/* bottom-right, the same corner as the verification map's controls */
-.sw-map-controls { position: absolute; right: 14px; bottom: 14px; }
+/* View controls stay in the opposite corner from the locator. */
+.sw-map-controls { position: absolute; z-index: 3; top: 14px; right: 14px; bottom: auto; }
 
 /* ---------------------------------------------------------------- legend */
 
@@ -173,6 +198,7 @@
 /* the page title must keep its line whatever the toolbar is saying */
 .sw-heading > div:first-child { min-width: 0; }
 .sw-edit-state[data-blocked='invalid'] { color: var(--sw-invalid); font-weight: 600; }
+.sw-edit-toolbar .sw-edit-state { display: none; }
 
 /* the scene itself: pressing an object moves it, pressing the floor still pans */
 .is-editing .sw-scene { cursor: default; }
@@ -240,6 +266,20 @@
 .sw-placement-status.is-inline { margin: 0; display: inline-flex; }
 
 /* ------------------------------------------------- edit inspector */
+
+.sw-edit-sidebar-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  background: rgba(182, 68, 61, 0.08);
+  border: 1px solid rgba(182, 68, 61, 0.2);
+  border-radius: 4px;
+  color: var(--sw-invalid);
+  font-size: var(--fp-t-small);
+  font-weight: 600;
+}
 
 .sw-edit-inspector, .sw-edit-empty {
   display: block;
@@ -314,4 +354,9 @@
 @media (max-width: 600px) {
   .sw-workspace { --sw-gutter: 12px; --sw-stage-min: 320px; }
   .sw-map-top { flex-wrap: wrap; }
+  .sw-minimap { bottom: 8px; left: 8px; width: 86px; }
+  .sw-minimap-plan { height: auto; aspect-ratio: 1; }
+  .sw-map-controls { top: 8px; right: 8px; }
+  .sw-map-controls button { padding-inline: 5px; }
+  .sw-map-controls output { min-width: 30px; }
 }

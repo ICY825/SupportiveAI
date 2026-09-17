@@ -13,7 +13,7 @@
  * The dataset is never written to. Editing produces placements; the renderer
  * derives geometry from them. Nothing in this file touches React or the DOM.
  */
-import { bboxOfPoints, clipPolygonToBBox, pointInPolygon } from '../domain/geometry'
+import { bboxOfPoints, pointInPolygon } from '../domain/geometry'
 import {
   normalizeRotation,
   placementBounds,
@@ -28,7 +28,7 @@ import {
   type SpatialPlacement,
 } from '../domain/placement'
 import type { BBox, FloorDataset, FloorObstacle, Point, Workstation } from '../domain/spatial'
-import { SPIKE_CROP, type SpikeScene } from './scene'
+import type { WorkspaceSceneModel } from './scene'
 
 /** Planning module for the edit grid. One desk depth; a desk is two cells wide. */
 export const GRID_CELL_MM = 600
@@ -151,16 +151,21 @@ export function validateDraft(
   const roomBoundary = isArea ? boundaryOrArea.roomBoundary : null
   const departmentZone = isArea ? boundaryOrArea.departmentZone : null
   const obstacles = isArea ? boundaryOrArea.obstacles : (boundaryOrArea as any)?.obstacles ?? []
+  const contextPlacements = isArea ? boundaryOrArea.contextPlacements ?? [] : []
   const effectiveTol = isArea ? boundaryOrArea.tolerance : tolerance
   const chairTileSize = isArea ? boundaryOrArea.chairTileSize : undefined
 
   const placements = draftList(draft)
+  const others = contextPlacements.length ? [...placements, ...contextPlacements] : placements
+  const editableIds = isArea ? boundaryOrArea.editableIds : undefined
+  const editableSet = editableIds ? new Set(editableIds) : null
   const result = new Map<string, PlacementValidation>()
   for (const p of placements) {
+    if (editableSet && !editableSet.has(p.entityId)) continue
     result.set(
       p.entityId,
       validatePlacement(p, {
-        others: placements,
+        others,
         boundary,
         roomBoundary,
         departmentZone,
@@ -180,9 +185,17 @@ export const draftIsValid = (validation: ReadonlyMap<string, PlacementValidation
 
 export interface EditableArea {
   boundary: PlacementBoundary
+  /** Target membership for the active UI area; absent means all placements. */
+  editableIds?: readonly string[]
+  /** Camera/edit affordance boundary, separate from physical validation geometry. */
+  displayBoundary?: PlacementBoundary | null
+  /** Canonical desks visible in context, but never editable or persisted. */
+  contextPlacements?: readonly SpatialPlacement[]
   roomBoundary?: PlacementBoundary | null
   departmentZone?: PlacementBoundary | null
   obstacles: FloorObstacle[]
+  /** Obstacles clipped to the visible context window for the edit overlay. */
+  displayObstacles?: readonly FloorObstacle[]
   grid: SpatialGrid
   /** see PLACEMENT_TOLERANCE_MM */
   tolerance: number
@@ -195,28 +208,25 @@ export interface EditableArea {
  * Populates hierarchical roomBoundary, departmentZone, extracted obstacles,
  * and chairTileSize for full multi-layer collision validation.
  */
-export function deriveEditableArea(dataset: FloorDataset, scene: SpikeScene): EditableArea {
-  const zoneId = scene.workstations.find((w) => w.zoneId)?.zoneId ?? null
+export function deriveEditableArea(dataset: FloorDataset, scene: WorkspaceSceneModel): EditableArea {
+  const zoneId = scene.resolvedScope.zoneIds[0] ?? scene.workstations.find((w) => w.zoneId)?.zoneId ?? null
   const zone = zoneId ? dataset.zones.find((z) => z.id === zoneId) : undefined
-  const clippedZone = zone ? clipPolygonToBBox(zone.polygon, SPIKE_CROP) : []
+  // A bbox is a camera/display scope, never a physical editing boundary.
+  const clippedZone = zone ? [...zone.polygon] : []
 
-  const roomId = (scene.workstations.find((w) => (w as unknown as { roomId?: string }).roomId) as unknown as { roomId?: string } | undefined)?.roomId ?? null
-  let room = roomId ? dataset.rooms.find((r) => r.id === roomId) : undefined
-  if (!room && dataset.rooms && scene.workstations.length > 0) {
-    const firstWsCenter = scene.workstations[0].center
-    room = dataset.rooms.find((r) => pointInPolygon(firstWsCenter, r.polygon))
-  }
-  const clippedRoom = room ? clipPolygonToBBox(room.polygon, SPIKE_CROP) : []
-
-  const snapToWall = (pts: Point[]): Point[] =>
-    pts.map(([x, y]) => [x, Math.abs(y - 234.72) < 0.5 ? 232.91 : y] as Point)
-  const adjustedZone = snapToWall(clippedZone)
+  const roomIds = new Set(
+    scene.workstations
+      .map((workstation) => dataset.rooms.find((candidate) => pointInPolygon(workstation.center, candidate.polygon))?.id)
+      .filter((id): id is string => Boolean(id)),
+  )
+  const room = roomIds.size === 1 ? dataset.rooms.find((candidate) => candidate.id === [...roomIds][0]) : undefined
+  const clippedRoom = room ? [...room.polygon] : []
 
   const departmentZone: PlacementBoundary | null =
-    adjustedZone.length >= 3
+    clippedZone.length >= 3
       ? {
-          polygon: adjustedZone,
-          bbox: bboxOfPoints(adjustedZone),
+          polygon: clippedZone,
+          bbox: bboxOfPoints(clippedZone),
           kind: 'department-zone',
           sourceId: zone?.id ?? null,
           name: zone?.name ?? null,
@@ -235,7 +245,7 @@ export function deriveEditableArea(dataset: FloorDataset, scene: SpikeScene): Ed
       : null
 
   const fallbackPolygon: Point[] =
-    departmentZone ? departmentZone.polygon : clipPolygonToBBox(rectPoints(SPIKE_CROP), SPIKE_CROP)
+    departmentZone ? departmentZone.polygon : (scene.scopePolygons[0] ?? rectPoints(scene.scopeBounds))
 
   const chairTileSize = GRID_CELL_MM / dataset.layout.floor.mmPerPt
   const tolerance = PLACEMENT_TOLERANCE_MM / dataset.layout.floor.mmPerPt
@@ -254,9 +264,21 @@ export function deriveEditableArea(dataset: FloorDataset, scene: SpikeScene): Ed
 
   return {
     boundary,
+    editableIds: scene.workstations.map((workstation) => workstation.id),
+    displayBoundary: scene.scope.kind === 'bbox' && scene.scopePolygons[0]
+      ? {
+          polygon: [...scene.scopePolygons[0]],
+          bbox: scene.scopeBounds,
+          kind: 'scene-scope',
+          sourceId: null,
+          name: null,
+        }
+      : null,
+    contextPlacements: [],
     departmentZone,
     roomBoundary,
     obstacles: dataset.obstacles,
+    displayObstacles: scene.obstacles,
     tolerance,
     chairTileSize,
     grid: {
@@ -273,8 +295,8 @@ const rectPoints = ([x0, y0, x1, y1]: BBox): Point[] => [
   [x0, y1],
 ]
 
-function gridOrigin(scene: SpikeScene): Point {
-  if (scene.workstations.length === 0) return [SPIKE_CROP[0], SPIKE_CROP[1]]
+function gridOrigin(scene: WorkspaceSceneModel): Point {
+  if (scene.workstations.length === 0) return [scene.scopeBounds[0], scene.scopeBounds[1]]
   const corners = scene.workstations.map((w) => [w.bbox[0], w.bbox[1]] as Point)
   const [x0, y0] = bboxOfPoints(corners)
   return [x0, y0]
@@ -299,7 +321,7 @@ export function gridPoints(
   const contains = typeof gridOrContains === 'function' ? gridOrContains : (maybeContains ?? (() => true))
   const { cellSize, origin } = grid
   if (!(cellSize > 0)) return []
-  const [bx0, by0, bx1, by1] = area.boundary.bbox
+  const [bx0, by0, bx1, by1] = (area.displayBoundary ?? area.boundary).bbox
   const startX = origin[0] + Math.ceil((bx0 - origin[0]) / cellSize) * cellSize
   const startY = origin[1] + Math.ceil((by0 - origin[1]) / cellSize) * cellSize
   const result: Point[] = []
@@ -324,10 +346,10 @@ export function gridPoints(
  * placement differs from the authoritative one.
  */
 export function applyPlacements(
-  scene: SpikeScene,
+  scene: WorkspaceSceneModel,
   base: Record<string, SpatialPlacement>,
   placements: Record<string, SpatialPlacement>,
-): SpikeScene {
+): WorkspaceSceneModel {
   let touched = false
   const workstations = scene.workstations.map((ws) => {
     const from = base[ws.id]

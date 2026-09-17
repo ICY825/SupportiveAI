@@ -1,43 +1,36 @@
 import { memo, useId, useMemo, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
+import { initials } from '../components/desk-inspector/format'
 import type { DeskRecord, DeskStatus } from '../domain/desk'
 import type { Point, Workstation } from '../domain/spatial'
-import { DESK_STATUS, SCENE_CROP_CAPTION, SCENE_ZONE_CAPTION } from '../labels'
-import { initials } from '../components/desk-inspector/format'
+import { DESK_STATUS } from '../labels'
 import {
-  CROP_LABEL_OFFSET,
   MARKER_RADIUS,
+  memoizeSceneGeometry,
   planeTransform,
   points,
+  project,
   projectedPoints,
   rectangle,
-  SPIKE_CROP,
-  type SpikeScene,
-  type MemoizedDesk,
   type MemoizedChair,
+  type MemoizedDesk,
   type MemoizedPrism,
-  memoizeSceneGeometry,
+  type WorkspaceDetailTier,
+  type WorkspaceSceneModel,
 } from './scene'
-
-/** Used until the stage has been measured, and by environments without layout. */
-export const SCENE_VIEWBOX = '-39 -7 138 95'
 
 function Line({ a, b, ...props }: { a: Point; b: Point; stroke?: string; strokeWidth?: number }) {
   return <line x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} {...props} />
 }
 
-const MemoizedPrism = memo(function MemoizedPrism({
-  prism,
-  fill,
-  edge = '#aab5be',
-}: {
+const Prism = memo(function Prism({ prism, fill, edge = '#aab5be' }: {
   prism: MemoizedPrism
   fill: string
   edge?: string
 }) {
   return (
     <g stroke={edge} strokeWidth={0.12} strokeLinejoin="round">
-      {prism.faces.map(({ points: pts, fill: faceFill }, i) => (
-        <polygon key={i} points={pts} fill={faceFill} />
+      {prism.faces.map(({ points: facePoints, fill: faceFill }, index) => (
+        <polygon key={index} points={facePoints} fill={faceFill} />
       ))}
       <polygon points={prism.topPoints} fill={fill} />
     </g>
@@ -54,13 +47,13 @@ export function SeatSymbol({ status }: { status: DeskStatus }) {
   }
 }
 
-const Chair = memo(function Chair({ geom }: { geom: MemoizedChair }) {
+const Chair = memo(function Chair({ geometry }: { geometry: MemoizedChair }) {
   return (
     <g className="sw-chair">
-      <polygon points={geom.shadowPoints} fill="#253849" opacity={0.09} />
-      <Line a={geom.stem.a} b={geom.stem.b} stroke="#647785" strokeWidth={0.55} />
-      <MemoizedPrism prism={geom.prism} fill="#657887" edge="#536572" />
-      <polygon points={geom.backPoints} fill="#536674" stroke="#465a69" strokeWidth={0.15} strokeLinejoin="round" />
+      <polygon points={geometry.shadowPoints} fill="#253849" opacity={0.09} />
+      <Line a={geometry.stem.a} b={geometry.stem.b} stroke="#647785" strokeWidth={0.55} />
+      <Prism prism={geometry.prism} fill="#657887" edge="#536572" />
+      <polygon points={geometry.backPoints} fill="#536674" stroke="#465a69" strokeWidth={0.15} strokeLinejoin="round" />
     </g>
   )
 })
@@ -69,49 +62,64 @@ const FILL: Record<DeskStatus, string> = {
   occupied: '#dae5ef', available: '#f6fcf9', reserved: '#f8ecd1', conflict: '#f6dfdc', unavailable: '#e1e5e7',
 }
 
-const Desktop = memo(function Desktop({ desk, geom }: { desk: DeskRecord; geom: MemoizedDesk }) {
+const Desktop = memo(function Desktop({ desk, geometry, showCode }: {
+  desk: DeskRecord
+  geometry: MemoizedDesk
+  showCode: boolean
+}) {
   return (
     <g className="sw-desktop">
-      <polygon points={geom.shadowPoints} fill="#233c50" opacity={0.09} />
-      {geom.legs.map((leg, i) => (
-        <Line key={i} a={leg.a} b={leg.b} stroke="#899ba7" strokeWidth={0.35} />
-      ))}
-      <MemoizedPrism prism={geom.prism} fill={FILL[desk.status]} />
-      <text x={geom.codePos[0]} y={geom.codePos[1] + 0.6} textAnchor="middle" className="sw-desk-code">
-        {desk.seat.code.split('-').at(-1)}
-      </text>
+      <polygon points={geometry.shadowPoints} fill="#233c50" opacity={0.09} />
+      {geometry.legs.map((leg, index) => <Line key={index} a={leg.a} b={leg.b} stroke="#899ba7" strokeWidth={0.35} />)}
+      <Prism prism={geometry.prism} fill={FILL[desk.status]} />
+      {showCode && (
+        <text x={geometry.codePos[0]} y={geometry.codePos[1] + 0.6} textAnchor="middle" className="sw-desk-code">
+          {desk.seat.code.split('-').at(-1)}
+        </text>
+      )}
     </g>
   )
 })
 
-const Architecture = memo(function Architecture({ scene, clipId }: { scene: SpikeScene; clipId: string }) {
-  return <g aria-hidden="true">
-    <polygon points={projectedPoints(rectangle(SPIKE_CROP), -0.8)} fill="#c7d3dd" />
-    <g transform={planeTransform()} clipPath={`url(#${clipId})`}>
-      <rect x={SPIKE_CROP[0]} y={SPIKE_CROP[1]} width={SPIKE_CROP[2] - SPIKE_CROP[0]} height={SPIKE_CROP[3] - SPIKE_CROP[1]} fill="#f5f7f8" />
-      {scene.zones.map((z) => <polygon key={z.id} points={points(z.polygon)} fill="#e5edf4" stroke="#7c9bb6" strokeWidth={0.35} strokeDasharray="1.5 1" />)}
-      {scene.rooms.map((r) => <polygon key={r.id} points={points(r.polygon)} fill="#edf0f2" stroke="#8d9ba6" strokeWidth={0.35} />)}
-      {scene.layers.map((l) => <path key={l.id} d={l.d} fill="none" stroke={l.id === 'structure' ? '#c6d1d9' : '#a0b0bc'} strokeWidth={l.id === 'facade' ? 0.16 : 0.12} />)}
-      {scene.zones.map((z) => <polygon key={`boundary-${z.id}`} points={points(z.polygon)} fill="none" stroke="#658aa8" strokeWidth={0.5} strokeDasharray="1.8 1.2" />)}
+const Architecture = memo(function Architecture({ scene, clipId }: { scene: WorkspaceSceneModel; clipId: string }) {
+  const contextPlane = rectangle(scene.contextBounds)
+  return (
+    <g aria-hidden="true">
+      <polygon points={projectedPoints(contextPlane, -0.8)} fill="#c7d3dd" />
+      <g transform={planeTransform()} clipPath={`url(#${clipId})`}>
+        <polygon points={points(contextPlane)} fill="#f5f7f8" />
+        {scene.zones.map((zone) => <polygon key={zone.id} points={points(zone.polygon)} fill="#e5edf4" stroke="#7c9bb6" strokeWidth={0.35} strokeDasharray="1.5 1" />)}
+        {scene.rooms.map((room) => <polygon key={room.id} points={points(room.polygon)} fill="#edf0f2" stroke="#8d9ba6" strokeWidth={0.35} />)}
+        {scene.obstacles.filter((obstacle) => obstacle.category === 'solid').map((obstacle) => (
+          <polygon key={obstacle.id} points={points(obstacle.polygon)} fill="#b8c4cc" stroke="#74838e" strokeWidth={0.35} />
+        ))}
+        {scene.layers.map((layer) => <path key={layer.id} d={layer.d} fill="none" stroke={layer.id === 'structure' ? '#c6d1d9' : '#a0b0bc'} strokeWidth={layer.id === 'facade' ? 0.16 : 0.12} />)}
+        {scene.zones.map((zone) => <polygon key={`boundary-${zone.id}`} points={points(zone.polygon)} fill="none" stroke="#658aa8" strokeWidth={0.5} strokeDasharray="1.8 1.2" />)}
+      </g>
+      <g transform={planeTransform(2.5)} clipPath={`url(#${clipId})`} fill="none" stroke="#96a7b4" strokeWidth={0.4}>
+        {scene.layers.filter((layer) => layer.id === 'walls' || layer.id === 'partitions').map((layer) => <path key={layer.id} d={layer.d} />)}
+      </g>
+      <g transform={planeTransform(1)} clipPath={`url(#${clipId})`} fill="none" stroke="#4f7ea7" strokeWidth={0.7} strokeDasharray="2 1.5">
+        {scene.scopePolygons.map((polygon, index) => <polygon key={`scope-boundary-${index}`} points={points(polygon)} />)}
+      </g>
+      {scene.zones.map((zone) => zone.name ? (
+        <text key={`label-${zone.id}`} x={project(zone.labelAnchor)[0]} y={project(zone.labelAnchor)[1]} className="sw-plane-label" textAnchor="middle">{zone.name}</text>
+      ) : null)}
+      {scene.rooms.map((room) => {
+        const center: Point = [(room.bbox[0] + room.bbox[2]) / 2, (room.bbox[1] + room.bbox[3]) / 2]
+        const label = project(center)
+        return <text key={`room-label-${room.id}`} x={label[0]} y={label[1]} className="sw-room-label" textAnchor="middle">{room.name}</text>
+      })}
     </g>
-    {/* Low relief uses the exact wall paths; it does not close openings or infer walls from zone boundaries. */}
-    <g transform={planeTransform(2.5)} clipPath={`url(#${clipId})`} fill="none" stroke="#96a7b4" strokeWidth={0.4}>
-      {scene.layers.filter((l) => l.id === 'walls' || l.id === 'partitions').map((l) => <path key={l.id} d={l.d} />)}
-    </g>
-  </g>
+  )
 })
 
-const Marker = memo(function Marker({
-  ws,
-  desk,
-  pos,
-  isSelected,
-  onSelect,
-}: {
+const Marker = memo(function Marker({ ws, desk, pos, isSelected, showInitials, onSelect }: {
   ws: Workstation
   desk: DeskRecord
   pos: Point
   isSelected: boolean
+  showInitials: boolean
   onSelect: (id: string) => void
 }) {
   return (
@@ -124,50 +132,39 @@ const Marker = memo(function Marker({
       tabIndex={-1}
       aria-label={`Bàn ${desk.seat.code} · ${DESK_STATUS[desk.status].label}`}
       aria-pressed={isSelected}
-      onClick={(e) => {
-        if (e.detail === 0) onSelect(ws.id)
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
+      onClick={(event) => { if (event.detail === 0) onSelect(ws.id) }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
           onSelect(ws.id)
         }
       }}
     >
-      <title>
-        {desk.seat.code} · {DESK_STATUS[desk.status].label}
-        {desk.occupants[0] ? ` · ${desk.occupants[0].employee.name}` : ''}
-      </title>
+      <title>{desk.seat.code} · {DESK_STATUS[desk.status].label}{desk.occupants[0] ? ` · ${desk.occupants[0].employee.name}` : ''}</title>
       <circle className="sw-marker-disc" r={MARKER_RADIUS} />
-      {desk.status === 'occupied' && desk.occupants[0] ? (
-        <text textAnchor="middle" y={0.48} className="sw-avatar-text">
-          {initials(desk.occupants[0].employee.name)}
-        </text>
-      ) : (
-        <SeatSymbol status={desk.status} />
-      )}
+      {showInitials && desk.status === 'occupied' && desk.occupants[0] ? (
+        <text textAnchor="middle" y={0.48} className="sw-avatar-text">{initials(desk.occupants[0].employee.name)}</text>
+      ) : <SeatSymbol status={desk.status} />}
     </g>
   )
 })
 
-export function WorkspaceScene({ scene, desks, selectedId, onSelect, svgRef, viewBox, origin, zoom, pan, ground, overlay, ariaLabel, onKeyDown, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }: {
-  scene: SpikeScene
+export function WorkspaceScene({ scene, desks, contextDesks, selectedId, onSelect, svgRef, viewBox, origin, zoom, pan, detailTier, ground, overlay, ariaLabel, onKeyDown, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }: {
+  scene: WorkspaceSceneModel
   desks: ReadonlyMap<string, DeskRecord>
+  contextDesks?: ReadonlyMap<string, DeskRecord>
   selectedId?: string
   onSelect: (id: string) => void
   svgRef: RefObject<SVGSVGElement | null>
-  /** framing for the current stage size; see fitViewBox in ./scene */
   viewBox: string
-  /** scene point the zoom is anchored on */
   origin: Point
   zoom: number
   pan: Point
-  /** drawn under the furniture: the edit grid and the editable-area outline */
+  detailTier: WorkspaceDetailTier
   ground?: ReactNode
-  /** drawn over the furniture: selection box, invalid marks, rotate handle */
   overlay?: ReactNode
   ariaLabel?: string
-  onKeyDown: (e: KeyboardEvent<SVGSVGElement>) => void
+  onKeyDown: (event: KeyboardEvent<SVGSVGElement>) => void
   onPointerDown: React.PointerEventHandler<SVGSVGElement>
   onPointerMove: React.PointerEventHandler<SVGSVGElement>
   onPointerUp: React.PointerEventHandler<SVGSVGElement>
@@ -175,6 +172,7 @@ export function WorkspaceScene({ scene, desks, selectedId, onSelect, svgRef, vie
 }) {
   const clipId = useId()
   const geometry = useMemo(() => memoizeSceneGeometry(scene), [scene])
+  const showDeskDetail = detailTier !== 'far'
 
   return (
     <svg
@@ -182,7 +180,9 @@ export function WorkspaceScene({ scene, desks, selectedId, onSelect, svgRef, vie
       className="sw-scene"
       viewBox={viewBox}
       role="application"
-      aria-label={ariaLabel ?? 'Bố trí chỗ ngồi · 19 bàn khu Mô hình & Nền tảng AI'}
+      aria-label={ariaLabel ?? `Bố trí chỗ ngồi · ${scene.workstations.length} bàn · ${scene.resolvedScope.label}`}
+      data-rendered-workstations={scene.workstations.length}
+      data-detail-tier={detailTier}
       tabIndex={0}
       onKeyDown={onKeyDown}
       onPointerDown={onPointerDown}
@@ -192,7 +192,7 @@ export function WorkspaceScene({ scene, desks, selectedId, onSelect, svgRef, vie
     >
       <defs>
         <clipPath id={clipId}>
-          <rect x={SPIKE_CROP[0]} y={SPIKE_CROP[1]} width={SPIKE_CROP[2] - SPIKE_CROP[0]} height={SPIKE_CROP[3] - SPIKE_CROP[1]} />
+          <rect x={scene.contextBounds[0]} y={scene.contextBounds[1]} width={scene.contextBounds[2] - scene.contextBounds[0]} height={scene.contextBounds[3] - scene.contextBounds[1]} />
         </clipPath>
       </defs>
       <g
@@ -208,15 +208,21 @@ export function WorkspaceScene({ scene, desks, selectedId, onSelect, svgRef, vie
         <Architecture scene={scene} clipId={clipId} />
         {ground}
         {geometry.items.map((item) => {
-          const desk = desks.get(item.ws.id)
+          const desk = item.context ? contextDesks?.get(item.ws.id) : desks.get(item.ws.id)
           if (!desk) return null
           return (
-            <g key={`${item.ws.id}-${item.kind}`} data-workstation-id={item.ws.id} className="sw-furniture" data-status={desk.status}>
-              {item.kind === 'desk' && item.deskGeom ? (
-                <Desktop desk={desk} geom={item.deskGeom} />
-              ) : item.chairGeom ? (
-                <Chair geom={item.chairGeom} />
-              ) : null}
+            <g
+              key={`${item.ws.id}-${item.kind}`}
+              {...(item.context ? {} : { 'data-workstation-id': item.ws.id })}
+              className={`sw-furniture${item.context ? ' sw-context-furniture' : ''}`}
+              data-status={desk.status}
+              data-context={item.context ? 'true' : undefined}
+              pointerEvents={item.context ? 'none' : undefined}
+            >
+              <title>{desk.seat.code} · {DESK_STATUS[desk.status].label}{desk.occupants[0] ? ` · ${desk.occupants[0].employee.name}` : ''}</title>
+              {item.kind === 'desk' && item.deskGeom
+                ? <Desktop desk={desk} geometry={item.deskGeom} showCode={showDeskDetail && !item.context} />
+                : item.chairGeom ? <Chair geometry={item.chairGeom} /> : null}
             </g>
           )
         })}
@@ -226,29 +232,12 @@ export function WorkspaceScene({ scene, desks, selectedId, onSelect, svgRef, vie
             <polygon points={geometry.selectionPolygons.get(selectedId)!} stroke="#245bb7" strokeWidth={0.55} />
           </g>
         )}
-        {/* Upright symbols remain legible at this fixed camera angle. */}
         {geometry.markers.map(({ ws, pos }) => {
           const desk = desks.get(ws.id)
-          if (!desk) return null
-          return (
-            <Marker
-              key={ws.id}
-              ws={ws}
-              desk={desk}
-              pos={pos}
-              isSelected={selectedId === ws.id}
-              onSelect={onSelect}
-            />
-          )
+          if (!desk || (!showDeskDetail && selectedId !== ws.id)) return null
+          return <Marker key={ws.id} ws={ws} desk={desk} pos={pos} isSelected={selectedId === ws.id} showInitials={detailTier === 'close'} onSelect={onSelect} />
         })}
-        <g aria-hidden="true" className="sw-plane-label" transform={`translate(${geometry.zoneCaptionPos[0]} ${geometry.zoneCaptionPos[1]})`}>
-          <text>{SCENE_ZONE_CAPTION}</text>
-          <path d="M0 1.2v2.9" stroke="#7c9bb6" strokeWidth={0.2} />
-        </g>
         {overlay}
-        <text aria-hidden="true" x={geometry.cropCaptionPos[0]} y={geometry.cropCaptionPos[1] + CROP_LABEL_OFFSET} className="sw-crop-label" textAnchor="middle">
-          {SCENE_CROP_CAPTION}
-        </text>
       </g>
     </svg>
   )

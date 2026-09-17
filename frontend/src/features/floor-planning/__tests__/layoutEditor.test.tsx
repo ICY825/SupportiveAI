@@ -101,7 +101,11 @@ const deskNode = (container: HTMLElement, id = DESK) =>
   container.querySelector<SVGGElement>(`.sw-furniture[data-workstation-id="${id}"]`)!
 
 const saveButton = () => screen.getByRole('button', { name: /Lưu bố trí|Đang lưu/ }) as HTMLButtonElement
-const enterEdit = () => fireEvent.click(screen.getByRole('button', { name: /Chỉnh sửa bố trí/ }))
+const enterEdit = (areaOption = 1) => {
+  const picker = screen.getByRole('combobox', { name: 'Tập trung khu vực' }) as HTMLSelectElement
+  fireEvent.change(picker, { target: { value: picker.options[areaOption].value } })
+  fireEvent.click(screen.getByRole('button', { name: /Chỉnh sửa bố trí/ }))
+}
 /** Hủy is the only way out of edit mode; it confirms when there is work to lose. */
 const leaveEdit = () => fireEvent.click(screen.getByRole('button', { name: 'Hủy' }))
 const inViewMode = () => screen.queryAllByRole('button', { name: /Chỉnh sửa bố trí/ }).length === 1
@@ -115,7 +119,7 @@ function clickDesk(container: HTMLElement, id = DESK) {
 /** Deterministic, valid edit: one grid cell along the floor's -Y axis. */
 function nudgeUp(container: HTMLElement) {
   clickDesk(container)
-  fireEvent.keyDown(scene(container), { key: 'ArrowUp' })
+  fireEvent.keyDown(scene(container), { key: 'ArrowLeft' })
 }
 
 function dragBy(container: HTMLElement, from: Element, dx: number, dy: number) {
@@ -356,7 +360,7 @@ describe('draft, save and cancel', () => {
     const { container } = setup(store)
     const original = deskTop(container)
     enterEdit()
-    // one cell up, into the free strip above the cluster: a change Save accepts
+    // one cell left, into open space: a change Save accepts
     nudgeUp(container)
     const moved = deskTop(container)
 
@@ -493,7 +497,7 @@ describe('Milestone 3: Visual Affordances & Dual Conflict Highlighting', () => {
     expect(inViewMode()).toBe(true)
     expect(container.querySelector('.sw-edit-clearance')).toBeNull()
 
-    enterEdit()
+    enterEdit(3)
     const clearances = container.querySelectorAll('.sw-edit-clearance')
     expect(clearances.length).toBeGreaterThan(0)
     for (const clr of clearances) {
@@ -509,12 +513,7 @@ describe('Milestone 3: Visual Affordances & Dual Conflict Highlighting', () => {
     enterEdit()
     // Select desk ws-16-067 adjacent to column col-16-13
     clickDesk(container, 'ws-16-067')
-    // First nudge 1 step up so placement is valid and dirty (Save enabled)
-    fireEvent.keyDown(scene(container), { key: 'ArrowUp' })
-    expect(saveButton().disabled).toBe(false)
-
-    // Now nudge 2 grid cells right (+X) into column col-16-13
-    fireEvent.keyDown(scene(container), { key: 'ArrowRight' })
+    // One grid cell right (+X) enters canonical column col-16-13.
     fireEvent.keyDown(scene(container), { key: 'ArrowRight' })
 
     const status = container.querySelector('.sw-edit-inspector .sw-placement-status')!
@@ -530,12 +529,11 @@ describe('Milestone 3: Visual Affordances & Dual Conflict Highlighting', () => {
     // Save button is disabled
     expect(saveButton().disabled).toBe(true)
 
-    // Moving back clears dual highlight and restores validity and re-enables Save
-    fireEvent.keyDown(scene(container), { key: 'ArrowLeft' })
+    // Moving back clears dual highlight and restores the unchanged baseline.
     fireEvent.keyDown(scene(container), { key: 'ArrowLeft' })
     expect(status.getAttribute('data-valid')).toBe('true')
     expect(container.querySelector('.sw-edit-obstacle-conflict')).toBeNull()
-    expect(saveButton().disabled).toBe(false)
+    expect(saveButton().disabled).toBe(true)
   })
 
   it('allows desk placed against northern perimeter wall with chair facing inside, recognized as 100% valid with Save enabled', async () => {
@@ -549,11 +547,11 @@ describe('Milestone 3: Visual Affordances & Dual Conflict Highlighting', () => {
     const { container } = setup(store)
     enterEdit()
     clickDesk(container, 'ws-16-065')
-    // Rotate 180° (two quarter turns) so chair faces inside the room (south)
+    // Rotate 270° so the chair clears neighbouring extracted desks.
     fireEvent.keyDown(scene(container), { key: 'r' })
     fireEvent.keyDown(scene(container), { key: 'r' })
-    // Nudge 2 grid cells north towards perimeter wall (desk y reaches 234.39, wall at y = 234.07)
-    fireEvent.keyDown(scene(container), { key: 'ArrowUp' })
+    fireEvent.keyDown(scene(container), { key: 'r' })
+    // One grid cell north remains inside the canonical department polygon.
     fireEvent.keyDown(scene(container), { key: 'ArrowUp' })
 
     const status = container.querySelector('.sw-edit-inspector .sw-placement-status')!

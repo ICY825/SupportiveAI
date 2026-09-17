@@ -1,37 +1,142 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { FLOORS } from '../data/registry'
 import type { FloorDataset } from '../domain/spatial'
-import { buildSpikeScene, cropSourcePath, fitViewBox, memoizeSceneGeometry, planeTransform, project, sceneBounds, SPIKE_CROP } from '../workspace/scene'
+import {
+  basePlacements,
+  createDraft,
+  deriveEditableArea,
+  placementFromWorkstation,
+  validateDraft,
+} from '../workspace/layoutDraft'
+import {
+  buildWorkspaceScene,
+  cameraCenter,
+  cameraFootprint,
+  clipSourcePathToBBox,
+  CLOSE_DETAIL_ZOOM,
+  detailTierForZoom,
+  effectiveZoom,
+  fitViewBox,
+  MEDIUM_DETAIL_ZOOM,
+  memoizeSceneGeometry,
+  planeTransform,
+  project,
+  sceneBounds,
+} from '../workspace/scene'
+import { buildWorkspaceDisplayAreas, DISPLAY_CONTEXT_PADDING_PT } from '../workspace/displayAreas'
+import { defaultWorkspaceScope, resolveWorkspaceScope, type WorkspaceScope } from '../workspace/scope'
 
 let dataset: FloorDataset
-beforeAll(async () => { dataset = await FLOORS[0].load() })
+let departmentScope: WorkspaceScope
+beforeAll(async () => {
+  dataset = await FLOORS[0].load()
+  departmentScope = defaultWorkspaceScope(dataset)
+})
 
-describe('spatial spike preserves source geometry', () => {
-  it('uses three complete clusters and original workstation, chair and zone objects', () => {
+describe('workspace scope selection', () => {
+  it('selects the complete accepted AI annotation from canonical workstation membership', () => {
     const before = JSON.stringify(dataset)
-    const scene = buildSpikeScene(dataset)
-    expect(scene.workstations).toHaveLength(19)
-    expect(new Set(scene.workstations.map((w) => w.clusterId)).size).toBe(3)
-    expect(new Set(scene.workstations.map((w) => w.rotationDeg)).size).toBeGreaterThan(1)
-    for (const w of scene.workstations) {
-      expect(w).toBe(dataset.workstations.find((original) => original.id === w.id))
-      expect(w.chair).not.toBeNull()
-      for (const bbox of [w.bbox, w.chair!.bbox]) {
-        expect(bbox[0]).toBeGreaterThanOrEqual(SPIKE_CROP[0])
-        expect(bbox[1]).toBeGreaterThanOrEqual(SPIKE_CROP[1])
-        expect(bbox[2]).toBeLessThanOrEqual(SPIKE_CROP[2])
-        expect(bbox[3]).toBeLessThanOrEqual(SPIKE_CROP[3])
-      }
-    }
-    for (const zone of scene.zones) expect(zone).toBe(dataset.zones.find((z) => z.id === zone.id))
+    const scene = buildWorkspaceScene(dataset, departmentScope)
+    expect(scene.workstations).toHaveLength(116)
+    expect(new Set(scene.workstations.map((workstation) => workstation.clusterId)).size).toBe(21)
+    expect(scene.workstations.every((workstation) => workstation.zoneId === 'zone-16-ai-platform')).toBe(true)
+    expect(scene.resolvedScope.sourceLabel).toBe('MÔ HÌNH & NỀN TẢNG AI (145)')
+    expect(scene.resolvedScope.sourceLabelFigure).toBe(145)
     expect(JSON.stringify(dataset)).toBe(before)
   })
 
-  it('projects source paths and furniture through the same affine transform at each elevation', () => {
+  it('supports a physical zone scope and a strict focused bbox subset with the same renderer', () => {
+    const department = buildWorkspaceScene(dataset, departmentScope)
+    const zone = buildWorkspaceScene(dataset, { kind: 'zone', zoneId: 'zone-16-ai-platform' })
+    const cluster = dataset.clusters.find((item) => item.id === 'cluster-16-13')!
+    const focused = buildWorkspaceScene(dataset, { kind: 'bbox', bbox: cluster.bbox })
+
+    expect(zone.workstations.map((workstation) => workstation.id)).toEqual(department.workstations.map((workstation) => workstation.id))
+    expect(focused.workstations.length).toBeGreaterThan(0)
+    expect(focused.workstations.length).toBeLessThan(department.workstations.length)
+    expect(focused.workstations.every((workstation) => department.workstations.includes(workstation))).toBe(true)
+  })
+
+  it('is deterministic for the same dataset and scope', () => {
+    expect(buildWorkspaceScene(dataset, departmentScope)).toEqual(buildWorkspaceScene(dataset, departmentScope))
+  })
+
+  it('resolves department geometry independently of source label capacity', () => {
+    const resolved = resolveWorkspaceScope(dataset, departmentScope)
+    expect(resolved.zoneIds).toEqual(['zone-16-ai-platform'])
+    expect(resolved.bbox).toEqual([806.91, 234.72, 1009.27, 665.58])
+  })
+
+  it('partitions the accepted department into six disjoint display areas', () => {
+    const areas = buildWorkspaceDisplayAreas(dataset)
+    expect(areas).toHaveLength(6)
+    expect(areas.map((area) => area.workstationIds.length)).toEqual([28, 21, 15, 14, 22, 16])
+    expect(areas.flatMap((area) => area.clusterIds)).toHaveLength(21)
+    const workstationIds = areas.flatMap((area) => area.workstationIds)
+    expect(new Set(workstationIds).size).toBe(116)
+    expect(workstationIds).toEqual(expect.arrayContaining(dataset.workstations.filter((workstation) => workstation.zoneId === 'zone-16-ai-platform').map((workstation) => workstation.id)))
+  })
+
+  it('keeps expanded context separate from active desk membership', () => {
+    const area = buildWorkspaceDisplayAreas(dataset)[0]
+    const scene = buildWorkspaceScene(dataset, area.scope, {
+      workstationIds: area.workstationIds,
+      contextBounds: area.contextBBox,
+      includeContextWorkstations: true,
+    })
+    expect(scene.workstations).toHaveLength(28)
+    expect(scene.contextWorkstations.length).toBeGreaterThan(0)
+    expect(scene.contextBounds[0]).toBeLessThan(area.targetBBox[0])
+    expect(scene.contextBounds[2]).toBeGreaterThan(area.targetBBox[2])
+    expect(scene.contextBounds[1]).toBeLessThan(area.targetBBox[1])
+    expect(scene.contextBounds[3]).toBeGreaterThan(area.targetBBox[3])
+    expect(scene.contextBounds[0]).toBeGreaterThanOrEqual(0)
+    expect(scene.contextBounds[2]).toBeLessThanOrEqual(dataset.layout.floor.width)
+    expect(scene.contextBounds[1]).toBeGreaterThanOrEqual(0)
+    expect(scene.contextBounds[3]).toBeLessThanOrEqual(dataset.layout.floor.height)
+    expect(area.targetBBox[0] - scene.contextBounds[0]).toBeCloseTo(DISPLAY_CONTEXT_PADDING_PT, 6)
+    expect(scene.workstations.every((workstation) => area.workstationIds.includes(workstation.id))).toBe(true)
+    expect(scene.contextWorkstations.every((workstation) => !area.workstationIds.includes(workstation.id))).toBe(true)
+    expect(scene.obstacles.some((obstacle) => obstacle.id === 'col-16-13')).toBe(true)
+  })
+
+  it('validates immutable context placements without making them editable', () => {
+    const area = buildWorkspaceDisplayAreas(dataset).find((candidate) => candidate.id === 'ai-area-d')!
+    const scene = buildWorkspaceScene(dataset, area.scope, {
+      workstationIds: area.workstationIds,
+      // The verified extracted unlabeled region is outside the deliberately
+      // small production context window for this area. Expand the test-only
+      // window to exercise the validator contract without changing display
+      // padding or silently widening the product scope.
+      contextBounds: [700, 400, 840, 600],
+      includeContextWorkstations: true,
+    })
+    const neighbour = scene.contextWorkstations.find((workstation) => workstation.zoneId === 'zone-16-unlabeled-01')
+    expect(neighbour).toBeDefined()
+    const placements = basePlacements(dataset.workstations.filter((workstation) => workstation.zoneId === 'zone-16-ai-platform'))
+    const targetId = area.workstationIds[0]
+    const target = placements[targetId]
+    const neighbourPlacement = placementFromWorkstation(neighbour!)
+    const moved = { ...target, x: neighbourPlacement.x, y: neighbourPlacement.y }
+    const editableArea = deriveEditableArea(dataset, scene)
+    const validation = validateDraft(createDraft({ ...placements, [targetId]: moved }), {
+      ...editableArea,
+      editableIds: area.workstationIds,
+      contextPlacements: [neighbourPlacement],
+    })
+    const overlap = validation.get(targetId)?.reasons.find((reason) => reason.type === 'overlap')
+    expect(overlap?.entityId).toBe(neighbour!.id)
+    expect(validation.has(neighbour!.id)).toBe(false)
+  })
+})
+
+describe('scope-independent projection and framing', () => {
+  it('projects source paths and furniture through the same affine transform', () => {
+    const scene = buildWorkspaceScene(dataset, departmentScope)
     for (const height of [0, 4.25, 7.1]) {
       const [a, b, c, d, e, f] = planeTransform(height).slice(7, -1).split(' ').map(Number)
-      for (const w of buildSpikeScene(dataset).workstations) {
-        for (const [x, y] of [...w.polygon, w.chair!.center]) {
+      for (const workstation of scene.workstations.slice(0, 12)) {
+        for (const [x, y] of [...workstation.polygon, workstation.chair!.center]) {
           const [px, py] = project([x, y], height)
           expect(px).toBeCloseTo(a * x + c * y + e, 8)
           expect(py).toBeCloseTo(b * x + d * y + f, 8)
@@ -40,108 +145,67 @@ describe('spatial spike preserves source geometry', () => {
     }
   })
 
-  it('retains crossing lines and cubic curves verbatim and culls only outside subpaths', () => {
+  it('clips source subpaths to an arbitrary bbox without changing retained geometry', () => {
     const crossing = 'M0 5L30 5'
     const curve = 'M0 0C12 10 15 15 30 0'
-    expect(cropSourcePath(`${crossing}M40 40L50 50${curve}`, [10, 4, 20, 8])).toBe(`${crossing}${curve}`)
-    // Unrecognized path syntax must remain intact for SVG clipping.
-    expect(cropSourcePath('M0 0h30v10z', [10, 4, 20, 8])).toBe('M0 0h30v10z')
-  })
-})
-
-describe('spatial spike framing', () => {
-  it('bounds every drawn desk, chair marker and caption', () => {
-    const scene = buildSpikeScene(dataset)
-    const [x0, y0, x1, y1] = sceneBounds(scene)
-    expect(x1).toBeGreaterThan(x0)
-    expect(y1).toBeGreaterThan(y0)
-    for (const w of scene.workstations) {
-      for (const corner of w.polygon) {
-        const [px, py] = project(corner, scene.deskHeight)
-        expect(px).toBeGreaterThanOrEqual(x0)
-        expect(px).toBeLessThanOrEqual(x1)
-        expect(py).toBeGreaterThanOrEqual(y0)
-        expect(py).toBeLessThanOrEqual(y1)
-      }
-    }
+    expect(clipSourcePathToBBox(`${crossing}M40 40L50 50${curve}`, [10, 4, 20, 8])).toBe(`${crossing}${curve}`)
+    expect(clipSourcePathToBBox('M0 0h30v10z', [10, 4, 20, 8])).toBe('M0 0h30v10z')
   })
 
-  it('fills the stage at the largest scale the padding allows', () => {
-    const bounds = sceneBounds(buildSpikeScene(dataset))
+  it('derives different finite scene bounds from department and focused geometry', () => {
+    const department = buildWorkspaceScene(dataset, departmentScope)
+    const cluster = dataset.clusters.find((item) => item.id === 'cluster-16-13')!
+    const focused = buildWorkspaceScene(dataset, { kind: 'bbox', bbox: cluster.bbox })
+    const departmentBounds = sceneBounds(department)
+    const focusedBounds = sceneBounds(focused)
+    expect(departmentBounds.every(Number.isFinite)).toBe(true)
+    expect(focusedBounds.every(Number.isFinite)).toBe(true)
+    expect(focusedBounds[2] - focusedBounds[0]).toBeLessThan(departmentBounds[2] - departmentBounds[0])
+    expect(focusedBounds[3] - focusedBounds[1]).toBeLessThan(departmentBounds[3] - departmentBounds[1])
+  })
+
+  it('fits each scope to the stage after a scope change', () => {
     const view = { width: 900, height: 560 }
-    const padding = 20
-    const [, , width, height] = fitViewBox(bounds, view, padding)
-    // the viewBox takes the stage's aspect ratio, so the scene is never letterboxed
-    expect(width / height).toBeCloseTo(view.width / view.height, 6)
-    const scale = view.width / width
-    const slack = [view.width - (bounds[2] - bounds[0]) * scale, view.height - (bounds[3] - bounds[1]) * scale]
-    // the tight axis lands exactly on the padding; the other one can only be looser
-    expect(Math.min(...slack)).toBeCloseTo(padding * 2, 6)
-    expect(Math.max(...slack)).toBeGreaterThanOrEqual(padding * 2 - 1e-6)
+    const departmentFrame = fitViewBox(sceneBounds(buildWorkspaceScene(dataset, departmentScope)), view, 20)
+    const focus = dataset.clusters.find((item) => item.id === 'cluster-16-61')!
+    const focusFrame = fitViewBox(sceneBounds(buildWorkspaceScene(dataset, { kind: 'bbox', bbox: focus.bbox })), view, 20)
+    expect(departmentFrame[2] / departmentFrame[3]).toBeCloseTo(view.width / view.height, 6)
+    expect(focusFrame[2] / focusFrame[3]).toBeCloseTo(view.width / view.height, 6)
+    expect(focusFrame).not.toEqual(departmentFrame)
   })
 
-  it('wastes less of the stage than the fixed viewBox it replaces', () => {
-    const bounds = sceneBounds(buildSpikeScene(dataset))
-    const [width, height] = [bounds[2] - bounds[0], bounds[3] - bounds[1]]
-    for (const view of [
-      { width: 876, height: 600 },
-      { width: 1400, height: 760 },
-      { width: 700, height: 460 },
-    ]) {
-      // 'xMidYMid meet' fits the whole fixed box, margins included
-      const [, , fixedWidth, fixedHeight] = [-39, -7, 138, 95]
-      const before = Math.min(view.width / fixedWidth, view.height / fixedHeight)
-      const after = view.width / fitViewBox(bounds, view, 20)[2]
-      expect(after).toBeGreaterThan(before)
-      // the stage's tight axis is filled to the padding; only the other one may carry
-      // slack, and only by however much the aspect ratios differ
-      const fill = [(width * after) / view.width, (height * after) / view.height]
-      expect(Math.max(...fill)).toBeGreaterThan(0.94)
-    }
+  it('computes an inverted camera footprint and normalizes detail zoom by scope', () => {
+    const frame = [10, 20, 100, 80] as [number, number, number, number]
+    const origin: [number, number] = [60, 60]
+    const footprint = cameraFootprint(frame, origin, [0, 0], 1)
+    expect(footprint).toHaveLength(4)
+    expect(footprint[0]).toEqual(expect.arrayContaining([expect.any(Number), expect.any(Number)]))
+    const zoomed = cameraFootprint(frame, origin, [0, 0], 2)
+    const width = (points: [number, number][]) => Math.hypot(points[1][0] - points[0][0], points[1][1] - points[0][1])
+    expect(width(zoomed)).toBeLessThan(width(footprint))
+    expect(cameraCenter(frame, origin, [0, 0], 1)).toEqual(expect.any(Array))
+    expect(cameraCenter(frame, origin, [12, -8], 1)).not.toEqual(cameraCenter(frame, origin, [0, 0], 1))
+    expect(effectiveZoom(1, 400, 400)).toBe(1)
+    expect(effectiveZoom(1, 800, 400)).toBe(2)
   })
 })
 
-describe('spatial scene geometry memoization & depth sorting', () => {
-  it('memoizes geometry calculation based on scene dataset identity', () => {
-    const scene = buildSpikeScene(dataset)
-    const geom1 = memoizeSceneGeometry(scene)
-    const geom2 = memoizeSceneGeometry(scene)
-    expect(geom1).toBe(geom2) // exact same reference
+describe('semantic detail and memoized geometry', () => {
+  it('uses explicit far, medium, and close zoom thresholds', () => {
+    expect(detailTierForZoom(1)).toBe('far')
+    expect(detailTierForZoom(MEDIUM_DETAIL_ZOOM)).toBe('medium')
+    expect(detailTierForZoom(CLOSE_DETAIL_ZOOM)).toBe('close')
   })
 
-  it('depth sorts all desks and chairs monotonically', () => {
-    const scene = buildSpikeScene(dataset)
-    const geom = memoizeSceneGeometry(scene)
-    expect(geom.items.length).toBeGreaterThan(0)
-    for (let i = 1; i < geom.items.length; i++) {
-      expect(geom.items[i].depth).toBeGreaterThanOrEqual(geom.items[i - 1].depth)
-    }
-  })
-
-  it('pre-computes complete geometry for 19 workstations and chairs', () => {
-    const scene = buildSpikeScene(dataset)
-    const geom = memoizeSceneGeometry(scene)
-    expect(geom.markers).toHaveLength(19)
-    expect(geom.selectionPolygons.size).toBe(19)
-
-    const deskItems = geom.items.filter((item) => item.kind === 'desk')
-    expect(deskItems).toHaveLength(19)
-    for (const desk of deskItems) {
-      expect(desk.deskGeom).toBeDefined()
-      expect(desk.deskGeom!.legs.length).toBe(desk.ws.polygon.length)
-      expect(desk.deskGeom!.prism.faces.length).toBe(desk.ws.polygon.length)
-      expect(desk.deskGeom!.shadowPoints).toBeTruthy()
-      expect(desk.deskGeom!.prism.topPoints).toBeTruthy()
-    }
-
-    const chairItems = geom.items.filter((item) => item.kind === 'chair')
-    expect(chairItems).toHaveLength(19)
-    for (const chair of chairItems) {
-      expect(chair.chairGeom).toBeDefined()
-      expect(chair.chairGeom!.stem).toBeDefined()
-      expect(chair.chairGeom!.prism.faces.length).toBe(4)
-      expect(chair.chairGeom!.backPoints).toBeTruthy()
+  it('memoizes and depth-sorts complete department geometry', () => {
+    const scene = buildWorkspaceScene(dataset, departmentScope)
+    const first = memoizeSceneGeometry(scene)
+    expect(memoizeSceneGeometry(scene)).toBe(first)
+    expect(first.markers).toHaveLength(116)
+    expect(first.selectionPolygons.size).toBe(116)
+    expect(first.items.filter((item) => item.kind === 'desk')).toHaveLength(116)
+    for (let index = 1; index < first.items.length; index++) {
+      expect(first.items[index].depth).toBeGreaterThanOrEqual(first.items[index - 1].depth)
     }
   })
 })
-

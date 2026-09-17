@@ -38,10 +38,10 @@ afterEach(() => {
 const OCCUPIED = 'ws-16-065'
 const AVAILABLE = 'ws-16-066'
 
-const deskMarker = (id: string) => document.querySelector<SVGGElement>(`.sw-marker[data-workstation-id="${id}"]`)!
+const deskNode = (id: string) => document.querySelector<SVGGElement>(`.sw-furniture[data-workstation-id="${id}"]`)!
 
 function clickDesk(id: string) {
-  const el = deskMarker(id)
+  const el = deskNode(id)
   fireEvent.pointerDown(el, { button: 0, pointerId: 1, clientX: 10, clientY: 10 })
   fireEvent.pointerUp(el, { button: 0, pointerId: 1, clientX: 10, clientY: 10 })
 }
@@ -61,7 +61,6 @@ describe('desk selection → workspace inspector', () => {
     const inspector = await screen.findByRole('complementary', { name: /^F16-.-065$/ })
     expect(within(inspector).getByText('Nguyễn Văn Minh')).toBeTruthy()
     expect(within(inspector).getByText('Thông tin chỗ ngồi').closest('details')?.hasAttribute('open')).toBe(true)
-    expect(deskMarker(OCCUPIED).getAttribute('aria-pressed')).toBe('true')
     expect(document.querySelector('.sw-selection')).not.toBeNull()
     expect(window.location.hash).toContain(`select=workstation%3A${OCCUPIED}`)
 
@@ -108,15 +107,92 @@ describe('desk selection → workspace inspector', () => {
     expect(document.querySelector('.fp-svg')).not.toBeNull()
   }, 30000)
 
-  it('limits the scene and search to 19 desks, keeping all five operational states', async () => {
+  it('renders all 116 accepted department desks while excluding other departments from search', async () => {
     await openWorkspace()
-    const markers = [...document.querySelectorAll('.sw-marker')]
-    expect(markers).toHaveLength(19)
-    expect(new Set(markers.map((m) => m.getAttribute('data-status')))).toEqual(new Set(['occupied', 'available', 'reserved', 'conflict', 'unavailable']))
+    const desks = [...document.querySelectorAll('.sw-desktop')]
+    expect(desks).toHaveLength(116)
+    expect(new Set([...document.querySelectorAll('.sw-furniture')].map((node) => node.getAttribute('data-status')))).toEqual(new Set(['occupied', 'available', 'reserved', 'conflict', 'unavailable']))
     const user = userEvent.setup()
     await user.type(screen.getByRole('combobox', { name: 'Tìm kiếm trên mặt bằng' }), 'ws-16-001')
     expect(searchResults()).toHaveLength(0)
     expect(screen.getByText(/Không tìm thấy kết quả/)).toBeTruthy()
+  }, 30000)
+
+  it('offers six display areas and renders canonical context without expanding the target count', async () => {
+    await openWorkspace()
+    const stage = document.querySelector('.sw-map-stage')
+    expect(stage?.querySelector('.sw-minimap')).not.toBeNull()
+    expect(stage?.querySelector('.sw-map-controls')).not.toBeNull()
+    expect(document.querySelector('.sw-context .sw-minimap')).toBeNull()
+    expect(document.querySelector('.sw-minimap-plan')).not.toBeNull()
+    expect(document.querySelector('.sw-minimap-locator')).toBeNull()
+    expect(screen.queryByText('Vị trí trên mặt bằng')).toBeNull()
+    expect(screen.queryByText('Toàn bộ bộ phận')).toBeNull()
+    const picker = screen.getByRole('combobox', { name: 'Tập trung khu vực' }) as HTMLSelectElement
+    expect(picker.options).toHaveLength(7)
+    expect([...picker.options].slice(1).map((option) => option.textContent)).toEqual([
+      'Khu vực A · 28 chỗ',
+      'Khu vực B · 21 chỗ',
+      'Khu vực C · 15 chỗ',
+      'Khu vực D · 14 chỗ',
+      'Khu vực E · 22 chỗ',
+      'Khu vực F · 16 chỗ',
+    ])
+    const editButton = screen.getByRole('button', { name: /Chỉnh sửa bố trí/ })
+    expect(editButton).not.toHaveProperty('disabled', true)
+    await userEvent.setup().click(editButton)
+    expect(screen.getByText('Chọn khu vực trước khi chỉnh sửa bố trí.')).toBeTruthy()
+    expect(document.querySelector('.sw-minimap[data-prompt="true"]')).not.toBeNull()
+
+    await userEvent.setup().selectOptions(picker, picker.options[1])
+    const map = screen.getByRole('application')
+    expect(map.getAttribute('data-rendered-workstations')).toBe('28')
+    expect(['medium', 'close']).toContain(map.getAttribute('data-detail-tier'))
+    expect(map.querySelectorAll('.sw-desk-code')).toHaveLength(28)
+    expect(map.querySelectorAll('.sw-marker')).toHaveLength(28)
+    expect(map.querySelectorAll('.sw-context-furniture').length).toBeGreaterThan(0)
+    expect(map.querySelector('.sw-context-furniture[data-workstation-id]')).toBeNull()
+    expect(screen.getByRole('button', { name: /Chỉnh sửa bố trí/ })).toHaveProperty('disabled', false)
+    expect(screen.getByText('28')).toBeTruthy()
+    expect(document.querySelectorAll('.sw-minimap-area')).toHaveLength(6)
+    expect(document.querySelector('.sw-minimap-area.is-active')?.getAttribute('data-area-id')).toBe('ai-area-a')
+    expect(document.querySelectorAll('.sw-minimap-area[role="button"]')).toHaveLength(0)
+  }, 30000)
+
+  it('enters edit mode for the currently focused area instead of a fixed first cluster', async () => {
+    await openWorkspace()
+    const picker = screen.getByRole('combobox', { name: 'Tập trung khu vực' }) as HTMLSelectElement
+    await userEvent.setup().selectOptions(picker, picker.options[2])
+    await userEvent.setup().click(screen.getByRole('button', { name: /Chỉnh sửa bố trí/ }))
+    const map = screen.getByRole('application')
+    expect(map.getAttribute('data-rendered-workstations')).toBe('21')
+    expect(document.querySelector('.sw-minimap-area.is-active')?.getAttribute('data-area-id')).toBe('ai-area-b')
+    expect(document.querySelectorAll('.sw-minimap-area[role="button"]')).toHaveLength(0)
+    const target = document.querySelector<SVGGElement>('.sw-furniture[data-workstation-id="ws-16-085"]')!
+    fireEvent.pointerDown(target, { button: 0, pointerId: 1, clientX: 10, clientY: 10 })
+    fireEvent.pointerUp(target, { button: 0, pointerId: 1, clientX: 10, clientY: 10 })
+    expect(await screen.findByRole('complementary', { name: /Thông tin nhân sự bàn .*085/ })).toBeTruthy()
+  }, 30000)
+
+  it('reveals desk IDs/status markers at medium zoom and employee initials only at close zoom', async () => {
+    await openWorkspace()
+    const map = screen.getByRole('application')
+    const zoomIn = screen.getByRole('button', { name: 'Phóng to' })
+    expect(map.getAttribute('data-detail-tier')).toBe('far')
+    expect(map.querySelector('.sw-desk-code')).toBeNull()
+    expect(map.querySelector('.sw-marker')).toBeNull()
+
+    fireEvent.click(zoomIn)
+    fireEvent.click(zoomIn)
+    expect(map.getAttribute('data-detail-tier')).toBe('medium')
+    expect(map.querySelectorAll('.sw-desk-code')).toHaveLength(116)
+    expect(map.querySelectorAll('.sw-marker')).toHaveLength(116)
+    expect(map.querySelector('.sw-avatar-text')).toBeNull()
+
+    fireEvent.click(zoomIn)
+    fireEvent.click(zoomIn)
+    expect(map.getAttribute('data-detail-tier')).toBe('close')
+    expect(map.querySelector('.sw-avatar-text')).not.toBeNull()
   }, 30000)
 
   it('preserves selection when switching to the existing verification renderer and back', async () => {
@@ -129,7 +205,7 @@ describe('desk selection → workspace inspector', () => {
     expect(screen.getByRole('heading', { level: 2, name: OCCUPIED })).toBeTruthy()
     expect(screen.queryByText('Nguyễn Văn Minh')).toBeNull()
     await user.click(screen.getByRole('radio', { name: 'Bố trí chỗ ngồi' }))
-    expect(deskMarker(OCCUPIED).getAttribute('aria-pressed')).toBe('true')
+    expect(document.querySelector('.sw-selection')).not.toBeNull()
     expect(screen.getByText('Nguyễn Văn Minh')).toBeTruthy()
   }, 30000)
 
@@ -145,16 +221,16 @@ describe('desk selection → workspace inspector', () => {
     expect(document.querySelector('.sw-heading-meta')).toBeNull()
     // still stated exactly once, in the summary
     const summary = document.querySelector('.sw-summary')!
-    expect(summary.textContent).toMatch(/19/)
+    expect(summary.textContent).toMatch(/116/)
     expect(summary.textContent).toMatch(/chỗ ngồi/)
   }, 30000)
 
-  it('explains out-of-crop deep links instead of silently expanding the spike', async () => {
+  it('explains deep links outside the accepted department without expanding its scope', async () => {
     window.location.hash = '#/floor-planning?floor=floor-16&view=workspace&select=workstation:ws-16-001'
     render(<FloorPlanningPage />)
     await screen.findByRole('application', {}, { timeout: 15000 })
     expect(screen.getByText(SPATIAL_OUT_OF_SCOPE)).toBeTruthy()
-    expect(document.querySelectorAll('.sw-marker')).toHaveLength(19)
+    expect(document.querySelectorAll('.sw-desktop')).toHaveLength(116)
     expect(document.querySelector('.sw-selection')).toBeNull()
   }, 30000)
 
@@ -172,6 +248,48 @@ describe('desk selection → workspace inspector', () => {
     expect(within(inspector).getByText('Nguyễn Văn Minh')).toBeTruthy()
     expect(searchResults()).toHaveLength(0)
     expect(document.activeElement).toBe(screen.getByRole('application'))
+  }, 30000)
+
+  it('search resolves an AI workstation outside the former 19-seat crop', async () => {
+    await openWorkspace()
+    const user = userEvent.setup()
+    const box = screen.getByRole('combobox', { name: 'Tìm kiếm trên mặt bằng' })
+    await user.type(box, 'ws-16-382')
+    expect(searchResults()[0]?.textContent).toContain('F16')
+    await user.keyboard('{Enter}')
+    expect(await screen.findByRole('complementary', { name: /^F16-.-382$/ })).toBeTruthy()
+    expect(document.querySelector('.sw-selection')).not.toBeNull()
+  }, 30000)
+
+  it('focuses an extracted cluster and returns to the department without losing selection', async () => {
+    await openWorkspace()
+    clickDesk(OCCUPIED)
+    const user = userEvent.setup()
+    const selector = screen.getByRole('combobox', { name: 'Tập trung khu vực' })
+    await user.selectOptions(selector, selector.querySelectorAll('option')[1])
+    expect(document.querySelectorAll('.sw-desktop').length).toBeLessThan(116)
+    expect(screen.getByRole('complementary', { name: /^F16-.-065$/ })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Tổng quan' }))
+    expect(document.querySelectorAll('.sw-desktop')).toHaveLength(116)
+    expect(screen.getByRole('complementary', { name: /^F16-.-065$/ })).toBeTruthy()
+  }, 30000)
+
+  it('keeps focus for an in-area search and returns to overview for an out-of-area hit', async () => {
+    await openWorkspace()
+    const user = userEvent.setup()
+    const selector = screen.getByRole('combobox', { name: 'Tập trung khu vực' })
+    await user.selectOptions(selector, selector.querySelectorAll('option')[1])
+    const box = screen.getByRole('combobox', { name: 'Tìm kiếm trên mặt bằng' })
+
+    await user.type(box, 'ws-16-065')
+    await user.keyboard('{Enter}')
+    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('28')
+    expect(document.querySelector('.sw-minimap-area.is-active')?.getAttribute('data-area-id')).toBe('ai-area-a')
+
+    await user.type(box, 'ws-16-382')
+    await user.keyboard('{Enter}')
+    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('116')
+    expect(document.querySelector('.sw-minimap-area.is-active')?.getAttribute('data-area-id')).toBe('ai-area-f')
   }, 30000)
 
   it('search: shows an empty state and Escape clears the query without closing the inspector', async () => {
@@ -207,9 +325,11 @@ describe('desk selection → workspace inspector', () => {
 describe('unsaved layout changes guard the page', () => {
   it('asks before switching view mode and applies the switch only after discarding', async () => {
     await openWorkspace()
+    const picker = screen.getByRole('combobox', { name: 'Tập trung khu vực' }) as HTMLSelectElement
+    fireEvent.change(picker, { target: { value: picker.options[1].value } })
     fireEvent.click(screen.getByRole('button', { name: /Chỉnh sửa bố trí/ }))
     clickDesk(OCCUPIED)
-    fireEvent.keyDown(document.querySelector('.sw-scene')!, { key: 'ArrowUp' })
+    fireEvent.keyDown(document.querySelector('.sw-scene')!, { key: 'ArrowLeft' })
     expect(screen.getByRole('button', { name: 'Lưu bố trí' })).toHaveProperty('disabled', false)
 
     fireEvent.click(screen.getByRole('radio', { name: 'Xác minh mặt bằng' }))

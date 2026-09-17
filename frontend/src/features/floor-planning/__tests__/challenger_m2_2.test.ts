@@ -15,7 +15,8 @@ import {
   draftIsValid,
   validateDraft,
 } from '../workspace/layoutDraft'
-import { buildSpikeScene, SPIKE_CLUSTER_IDS } from '../workspace/scene'
+import { buildWorkspaceScene } from '../workspace/scene'
+import { defaultWorkspaceScope } from '../workspace/scope'
 
 const desk = (over: Partial<SpatialPlacement> = {}): SpatialPlacement => ({
   entityId: 'test-desk',
@@ -348,23 +349,29 @@ describe('Challenger M2-2: Chair Seating Space & Boundary Stress Verification', 
     })
   })
 
-  describe('Task 2: Active Spike Scene (SPIKE_CLUSTER_IDS) 19 Workstations Validation', () => {
-    it('verifies SPIKE_CLUSTER_IDS contains cluster-16-13, cluster-16-17, cluster-16-18', () => {
-      expect(SPIKE_CLUSTER_IDS).toEqual(['cluster-16-13', 'cluster-16-17', 'cluster-16-18'])
+  describe('Task 2: Scoped AI department workstation validation', () => {
+    const focusedEditorScene = () => {
+      const cluster = dataset.clusters.find((item) => item.id === 'cluster-16-13')!
+      return buildWorkspaceScene(dataset, { kind: 'bbox', bbox: cluster.bbox })
+    }
+
+    it('uses all canonical AI clusters instead of a fixed cluster allowlist', () => {
+      const scene = buildWorkspaceScene(dataset, defaultWorkspaceScope(dataset))
+      expect(new Set(scene.workstations.map((workstation) => workstation.clusterId)).size).toBe(21)
     })
 
-    it('verifies exactly 19 workstations are extracted in the spike scene', () => {
-      const scene = buildSpikeScene(dataset)
-      expect(scene.workstations).toHaveLength(19)
+    it('verifies exactly 116 workstations are extracted in the accepted department scope', () => {
+      const scene = buildWorkspaceScene(dataset, defaultWorkspaceScope(dataset))
+      expect(scene.workstations).toHaveLength(116)
     })
 
-    it('verifies each individual workstation in the spike scene validates with 0 errors on load', () => {
-      const scene = buildSpikeScene(dataset)
+    it('verifies each workstation in the focused editor scope validates with 0 errors on load', () => {
+      const scene = focusedEditorScene()
       const placementsMap = basePlacements(scene.workstations)
       const placements = Object.values(placementsMap)
       const area = deriveEditableArea(dataset, scene)
 
-      expect(placements).toHaveLength(19)
+      expect(placements).toHaveLength(6)
 
       for (const p of placements) {
         const validation = validatePlacement(p, {
@@ -381,14 +388,14 @@ describe('Challenger M2-2: Chair Seating Space & Boundary Stress Verification', 
       }
     })
 
-    it('verifies validateDraft on the entire spike scene draft produces valid: true', () => {
-      const scene = buildSpikeScene(dataset)
+    it('verifies validateDraft on the focused editor draft produces valid: true', () => {
+      const scene = focusedEditorScene()
       const draft = createDraft(basePlacements(scene.workstations))
       const area = deriveEditableArea(dataset, scene)
 
       // Test validateDraft with EditableArea
       const validations = validateDraft(draft, area)
-      expect(validations.size).toBe(19)
+      expect(validations.size).toBe(6)
       expect(draftIsValid(validations)).toBe(true)
 
       for (const [id, val] of validations.entries()) {
@@ -398,28 +405,28 @@ describe('Challenger M2-2: Chair Seating Space & Boundary Stress Verification', 
     })
 
     it('tests validateDraft behavior when passed area.boundary vs area', () => {
-      const scene = buildSpikeScene(dataset)
+      const scene = focusedEditorScene()
       const draft = createDraft(basePlacements(scene.workstations))
       const area = deriveEditableArea(dataset, scene)
 
       // When passed area.boundary (as useLayoutEditor does)
       const validationsBoundary = validateDraft(draft, area.boundary, area.tolerance)
-      expect(validationsBoundary.size).toBe(19)
+      expect(validationsBoundary.size).toBe(6)
       expect(draftIsValid(validationsBoundary)).toBe(true)
     })
 
     it('adversarial check: inspect area.roomBoundary and area.departmentZone', () => {
-      const scene = buildSpikeScene(dataset)
+      const scene = focusedEditorScene()
       const area = deriveEditableArea(dataset, scene)
       // Log / verify what they are
       expect(area.departmentZone).not.toBeNull()
-      // Note: roomBoundary is null in spike scene because cluster 13, 17, 18 are in open plan
+      // Workstations do not carry a room id in the extracted department data.
       const withRoom = scene.workstations.filter((w) => (w as any).roomId)
-      expect(withRoom.length).toBe(0) // Spike workstations are in open plan
+      expect(withRoom.length).toBe(0)
     })
 
     it('adversarial check: behavior when chair leaves department zone using area vs area.boundary', () => {
-      const scene = buildSpikeScene(dataset)
+      const scene = focusedEditorScene()
       const area = deriveEditableArea(dataset, scene)
       const baseMap = basePlacements(scene.workstations)
       const firstWs = scene.workstations[0]

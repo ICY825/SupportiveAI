@@ -5,7 +5,7 @@ import { FloorSearch } from '../components/FloorSearch'
 import { isMac, isTypingTarget } from '../components/keyboard'
 import { formatDate, initials } from '../components/desk-inspector/format'
 import { buildDeskIndex, DESK_STATUSES, type DeskRecord, type DeskStatus } from '../domain/desk'
-import { placementsEqual } from '../domain/placement'
+import { placementsEqual, type SpatialPlacement } from '../domain/placement'
 import type { BBox, EntityRef, FloorDataset, Point } from '../domain/spatial'
 import {
   DESK_STATUS,
@@ -13,7 +13,7 @@ import {
   SEAT_TYPE,
   SPATIAL_OUT_OF_SCOPE,
   SPATIAL_OUT_OF_SCOPE_HINT,
-  SPATIAL_SCOPE_BREADCRUMB,
+  SPATIAL_NO_EDIT_AREAS,
   SPATIAL_SCOPE_LABEL,
   SPATIAL_UNAVAILABLE,
 } from '../labels'
@@ -21,24 +21,30 @@ import { ARROW_DIRECTION, DIRECTION_VECTOR, nearestInDirection } from '../map/de
 import { normalizeWheelZoom } from '../map/viewport'
 import { buildSearchIndex } from '../search/searchIndex'
 import { EditAffordances, EditGround } from './EditLayer'
-import { EditInspector, EditToolbar, EnterEditButton, PlacementStatus, UnsavedChangesDialog } from './EditPanel'
+import { EditInspector, EditToolbar, EnterEditButton, UnsavedChangesDialog } from './EditPanel'
 import {
   applyPlacements,
   basePlacements as deriveBasePlacements,
   deriveEditableArea,
   GRID_CELL_MM,
+  placementFromWorkstation,
   sessionLayoutStore,
   type LayoutStore,
 } from './layoutDraft'
-import { buildSpikeScene, fitViewBox, project, sceneBounds, unprojectDelta } from './scene'
+import { buildWorkspaceDisplayAreas } from './displayAreas'
+import { AreaMinimap } from './AreaMinimap'
+import { bboxesIntersect, buildWorkspaceScene, cameraCenter, detailTierForZoom, effectiveZoom, fitViewBox, project, sceneBounds, unprojectDelta } from './scene'
+import { defaultWorkspaceScope } from './scope'
 import { useLayoutEditor, NUDGE_COARSE_CELLS, type WorkspaceMode } from './useLayoutEditor'
-import { SCENE_VIEWBOX, SeatSymbol, WorkspaceScene } from './WorkspaceScene'
+import { SeatSymbol, WorkspaceScene } from './WorkspaceScene'
 import './workspace.css'
 
 /** Screen-pixel margin left around the fitted scene. Matches the verification map. */
 const SCENE_PADDING = 20
+const DEFAULT_STAGE = { width: 1200, height: 800 }
+const MINIMAP_PADDING_PT = 60
 const MIN_ZOOM = 0.85
-const MAX_ZOOM = 2.5
+const MAX_ZOOM = 3.5
 /** Pan limit as a share of the framed scene, so it scales with the stage. */
 const PAN_LIMIT = 0.3
 /** Pointer travel before a press becomes a drag rather than a click. */
@@ -102,6 +108,10 @@ function ScopeSummary({ count, counts, children }: {
             <span className="sw-key-rule" aria-hidden="true" />
             Ranh giới khu vực
           </li>
+          <li className="sw-key-context">
+            <span className="sw-key-context-mark" aria-hidden="true" />
+            Bàn lân cận · không chỉnh sửa
+          </li>
         </ul>
       </details>
     </section>
@@ -157,40 +167,94 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
   layoutStore?: LayoutStore
 }) {
   const [now] = useState(() => new Date())
-  const baseScene = useMemo(() => buildSpikeScene(dataset), [dataset])
-  const base = useMemo(() => deriveBasePlacements(baseScene.workstations), [baseScene])
-  const area = useMemo(() => deriveEditableArea(dataset, baseScene), [dataset, baseScene])
+  const overviewScope = useMemo(() => defaultWorkspaceScope(dataset), [dataset])
+  const overviewScene = useMemo(() => buildWorkspaceScene(dataset, overviewScope), [dataset, overviewScope])
+  const displayAreas = useMemo(() => buildWorkspaceDisplayAreas(dataset), [dataset])
+  const [areaId, setAreaId] = useState<string | null>(null)
+  const activeArea = areaId ? displayAreas.find((area) => area.id === areaId) ?? null : null
+  const scope = activeArea?.scope ?? overviewScope
+  const scopedBaseScene = useMemo(() => activeArea
+    ? buildWorkspaceScene(dataset, activeArea.scope, {
+        workstationIds: activeArea.workstationIds,
+        contextBounds: activeArea.contextBBox,
+        includeContextWorkstations: true,
+      })
+    : overviewScene, [activeArea, dataset, overviewScene])
+  const editorBaseScene = overviewScene
+  const base = useMemo(() => deriveBasePlacements(editorBaseScene.workstations), [editorBaseScene])
+  const contextPlacements = useMemo(
+    () => scopedBaseScene.contextWorkstations
+      .filter((workstation) => !Object.prototype.hasOwnProperty.call(base, workstation.id))
+      .map(placementFromWorkstation),
+    [base, scopedBaseScene],
+  )
+  const baseArea = useMemo(() => deriveEditableArea(dataset, scopedBaseScene), [dataset, scopedBaseScene])
+  const area = useMemo(
+    () => ({
+      ...baseArea,
+      editableIds: activeArea?.workstationIds ?? [],
+      contextPlacements,
+    }),
+    [activeArea, baseArea, contextPlacements],
+  )
+  const displayArea = baseArea
   const editor = useLayoutEditor({ floorId: dataset.layout.floor.id, basePlacements: base, area, store: layoutStore })
   const editing = editor.mode === 'edit'
 
   // What is drawn: the authoritative geometry moved to its current placements.
-  const scene = useMemo(() => applyPlacements(baseScene, base, editor.placements), [baseScene, base, editor.placements])
+  const scene = useMemo(() => applyPlacements(scopedBaseScene, base, editor.placements), [scopedBaseScene, base, editor.placements])
+  const departmentScene = useMemo(() => applyPlacements(overviewScene, base, editor.placements), [overviewScene, base, editor.placements])
 
   const allDesks = useMemo(() => buildDeskIndex(dataset, createDemoAllocation(dataset, now), now), [dataset, now])
-  const desks = useMemo(() => {
+  const departmentDesks = useMemo(() => {
     const entries: Array<readonly [string, DeskRecord]> = []
-    for (const ws of scene.workstations) {
+    for (const ws of departmentScene.workstations) {
       const record = allDesks.get(ws.id)
       // the record keeps its own identity while nothing has moved, so the
       // inspector and the map always describe the same geometry
       if (record) entries.push([ws.id, record.workstation === ws ? record : { ...record, workstation: ws }] as const)
     }
     return new Map(entries)
-  }, [allDesks, scene])
-  const search = useMemo(() => buildSearchIndex(dataset, desks).filter((item) => item.target.kind === 'workstation' && desks.has(item.target.id)), [dataset, desks])
+  }, [allDesks, departmentScene])
+  const desks = useMemo(() => {
+    const entries: Array<readonly [string, DeskRecord]> = []
+    for (const workstation of scene.workstations) {
+      const record = departmentDesks.get(workstation.id)
+      if (record) entries.push([
+        workstation.id,
+        record.workstation === workstation ? record : { ...record, workstation },
+      ] as const)
+    }
+    return new Map(entries)
+  }, [departmentDesks, scene])
+  const contextDesks = useMemo(() => {
+    const entries: Array<readonly [string, DeskRecord]> = []
+    for (const workstation of scene.contextWorkstations) {
+      const record = allDesks.get(workstation.id)
+      if (record) entries.push([workstation.id, record] as const)
+    }
+    return new Map(entries)
+  }, [allDesks, scene.contextWorkstations])
+  const search = useMemo(
+    () => buildSearchIndex(dataset, departmentDesks).filter((item) => item.target.kind === 'workstation' && departmentDesks.has(item.target.id)),
+    [dataset, departmentDesks],
+  )
+  const scopeLabel = activeArea?.label ?? overviewScene.resolvedScope.label
   const svgRef = useRef<SVGSVGElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const [stage, setStage] = useState<{ width: number; height: number } | null>(null)
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState<Point>([0, 0])
   const [exitPrompt, setExitPrompt] = useState(false)
+  const [areaPrompt, setAreaPrompt] = useState(false)
   const drag = useRef<DragSession | null>(null)
   const pendingPan = useRef<{ dx: number; dy: number }>({ dx: 0, dy: 0 })
   const pendingZoomFactor = useRef(1)
   const pendingDrag = useRef<Point | null>(null)
   const rafId = useRef<number | null>(null)
-  const desk = selected?.kind === 'workstation' ? desks.get(selected.id) : undefined
-  const outsideCrop = selected !== null && !desk
+  const desk = selected?.kind === 'workstation' ? departmentDesks.get(selected.id) : undefined
+  const visibleDesk = selected?.kind === 'workstation' ? desks.get(selected.id) : undefined
+  const outsideScope = selected !== null && !visibleDesk
 
   // Pointer handlers and rAF callbacks reach the editor through a ref so they
   // never capture a stale closure and never need re-binding mid-gesture.
@@ -199,7 +263,10 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     editorRef.current = editor
   }, [editor])
 
-  const codeOf = useCallback((entityId: string) => desks.get(entityId)?.seat.code.split('-').at(-1) ?? entityId, [desks])
+  const codeOf = useCallback(
+    (entityId: string) => (departmentDesks.get(entityId) ?? allDesks.get(entityId))?.seat.code.split('-').at(-1) ?? entityId,
+    [allDesks, departmentDesks],
+  )
   /** Rotating from the map keeps the keyboard on the map, where R and the arrows live. */
   const rotateSelected = useCallback((entityId: string) => {
     editorRef.current.rotate(entityId)
@@ -213,7 +280,7 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     editorRef.current.redo()
     svgRef.current?.focus()
   }, [])
-  const selectedId = desk?.workstation.id
+  const selectedId = visibleDesk?.workstation.id
   const movedFromOriginal = (() => {
     if (!selectedId) return false
     const original = base[selectedId]
@@ -229,17 +296,40 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange])
 
   // The scene is framed from its own geometry, so it fills whatever stage it gets.
-  const bounds = useMemo<BBox>(() => sceneBounds(baseScene), [baseScene])
-  const frame = useMemo(() => (stage ? fitViewBox(bounds, stage, SCENE_PADDING) : null), [bounds, stage])
-  const viewBox = frame ? frame.join(' ') : SCENE_VIEWBOX
-  const origin: Point = useMemo(
-    () => (frame ? [frame[0] + frame[2] / 2, frame[1] + frame[3] / 2] : [31, 40]),
-    [frame],
+  const bounds = useMemo<BBox>(() => sceneBounds(scopedBaseScene), [scopedBaseScene])
+  const stageSize = stage ?? DEFAULT_STAGE
+  const frame = useMemo(() => fitViewBox(bounds, stageSize, SCENE_PADDING), [bounds, stageSize])
+  const overviewFrame = useMemo(
+    () => fitViewBox(sceneBounds(overviewScene), stageSize, SCENE_PADDING),
+    [overviewScene, stageSize],
   )
-  const panLimit: Point = useMemo(
-    () => (frame ? [frame[2] * PAN_LIMIT, frame[3] * PAN_LIMIT] : [80, 60]),
-    [frame],
+  const viewBox = frame.join(' ')
+  const origin: Point = useMemo(() => [frame[0] + frame[2] / 2, frame[1] + frame[3] / 2], [frame])
+  const panLimit: Point = useMemo(() => [frame[2] * PAN_LIMIT, frame[3] * PAN_LIMIT], [frame])
+  const detailTier = detailTierForZoom(effectiveZoom(zoom, overviewFrame[2], frame[2]))
+  const minimapWindow = useMemo<BBox>(() => {
+    const [x0, y0, x1, y1] = overviewScene.resolvedScope.bbox
+    const { width, height } = dataset.layout.floor
+    return [
+      Math.max(0, x0 - MINIMAP_PADDING_PT),
+      Math.max(0, y0 - MINIMAP_PADDING_PT),
+      Math.min(width, x1 + MINIMAP_PADDING_PT),
+      Math.min(height, y1 + MINIMAP_PADDING_PT),
+    ]
+  }, [dataset.layout.floor, overviewScene])
+  const minimapZones = useMemo(
+    () => dataset.zones.filter((zone) => bboxesIntersect(zone.bbox, minimapWindow)),
+    [dataset.zones, minimapWindow],
   )
+  const minimapCenter = useMemo(
+    () => cameraCenter(frame, origin, pan, zoom),
+    [frame, origin, pan, zoom],
+  )
+
+  const selectedAreaId = selected?.kind === 'workstation'
+    ? displayAreas.find((area) => area.workstationIds.includes(selected.id))?.id ?? null
+    : null
+  const minimapActiveAreaId = selectedAreaId ?? activeArea?.id ?? null
 
   const panLimitRef = useRef(panLimit)
   useEffect(() => {
@@ -305,6 +395,12 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     setZoom(1)
     setPan([0, 0])
   }, [])
+
+  const changeScope = useCallback((nextAreaId: string | null) => {
+    setAreaId(nextAreaId)
+    setAreaPrompt(false)
+    reset()
+  }, [reset])
 
   const zoomBy = useCallback((factor: number) => {
     if (!Number.isFinite(factor) || factor <= 0) return
@@ -416,27 +512,27 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     const direction = ARROW_DIRECTION[e.key]
     // Edit mode rebinds the arrows to nudging the selected object; view-mode
     // desk-to-desk navigation is untouched.
-    if (editing && desk) {
+    if (editing && visibleDesk) {
       if (direction) {
         e.preventDefault()
         // Nudging runs along the floor's own axes, which is what the grid and
         // the desk rows are aligned to — not along the screen's axes.
         const step = e.shiftKey ? NUDGE_COARSE_CELLS : 1
         const [ux, uy] = DIRECTION_VECTOR[direction]
-        editor.nudge(desk.workstation.id, [ux * step, uy * step])
+        editor.nudge(visibleDesk.workstation.id, [ux * step, uy * step])
         return
       }
       if (e.key === 'r' || e.key === 'R') {
         e.preventDefault()
-        editor.rotate(desk.workstation.id)
+        editor.rotate(visibleDesk.workstation.id)
         return
       }
     }
     if (!direction) return
     e.preventDefault()
     const candidates = scene.workstations.map((w) => ({ id: w.id, center: project(w.center) }))
-    const from = desk ? project(desk.workstation.center) : null
-    const next = from ? nearestInDirection(from, direction, candidates, desk?.workstation.id) : candidates[0]
+    const from = visibleDesk ? project(visibleDesk.workstation.center) : null
+    const next = from ? nearestInDirection(from, direction, candidates, visibleDesk?.workstation.id) : candidates[0]
     if (next) { selectDesk(next.id); reset() }
   }
 
@@ -529,11 +625,28 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
   const changeMode = useCallback((next: WorkspaceMode) => {
     if (next === editorRef.current.mode) return
     if (next === 'edit') {
+      if (!activeArea) {
+        setAreaPrompt(true)
+        return
+      }
       editorRef.current.enterEdit()
       return
     }
     if (!editorRef.current.tryExitEdit()) setExitPrompt(true)
-  }, [])
+  }, [activeArea])
+
+  const startEditing = useCallback(() => {
+    changeMode('edit')
+  }, [changeMode])
+
+  const visiblePlacements = useMemo(() => {
+    const result: Record<string, SpatialPlacement> = {}
+    for (const workstation of scene.workstations) {
+      const placement = editor.placements[workstation.id]
+      if (placement) result[workstation.id] = placement
+    }
+    return result
+  }, [editor.placements, scene.workstations])
 
   const statusCounts = useMemo(() => {
     const map = Object.fromEntries(DESK_STATUSES.map((s) => [s, 0])) as Record<DeskStatus, number>
@@ -545,13 +658,16 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
   if (!scene.workstations.length) return <div className="fp-state">{SPATIAL_UNAVAILABLE}</div>
 
   return <main className={`sw-workspace${editing ? ' is-editing' : ''}`}>
-    {searchSlot && createPortal(<FloorSearch index={search} includesPeople onPick={(item) => { selectDesk(item.target.id); reset() }} />, searchSlot)}
+    {searchSlot && createPortal(<FloorSearch index={search} includesPeople onPick={(item) => {
+      if (!editing && activeArea && !activeArea.workstationIds.includes(item.target.id)) changeScope(null)
+      selectDesk(item.target.id)
+    }} />, searchSlot)}
     <div className="sw-main">
       <header className="sw-heading">
         <div>
-          <p className="fp-eyebrow sw-breadcrumb">{dataset.building.name} <span>/</span> {dataset.layout.floor.name} <span>/</span> {SPATIAL_SCOPE_BREADCRUMB}</p>
+          <p className="fp-eyebrow sw-breadcrumb">{dataset.building.name} <span>/</span> {dataset.layout.floor.name} <span>/</span> {overviewScene.resolvedScope.label}{scope.kind === 'bbox' ? <><span>/</span> {scopeLabel}</> : null}</p>
           {/* Seat count and scope live in the side panel's summary, not here. */}
-          <h2 className="fp-page-title">Mô hình &amp; Nền tảng AI</h2>
+          <h2 className="fp-page-title">{overviewScene.resolvedScope.label}</h2>
         </div>
         <div className="sw-heading-actions">
           {editing ? (
@@ -573,39 +689,76 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
               onSave={() => { void editor.save() }}
             />
           ) : (
-            <EnterEditButton onClick={() => changeMode('edit')} />
+            <EnterEditButton
+              onClick={startEditing}
+              title={activeArea ? undefined : (displayAreas.length ? LAYOUT_EDIT.chooseArea : SPATIAL_NO_EDIT_AREAS)}
+            />
           )}
         </div>
       </header>
       <section className="sw-map-panel" aria-label="Không gian bố trí chỗ ngồi">
         <div className="sw-map-top">
-          <span><i /> Khu Mô hình &amp; Nền tảng AI</span>
+          <nav className="sw-scope-nav" aria-label="Phạm vi không gian">
+            <button
+              type="button"
+              className="fp-btn"
+              aria-pressed={scope.kind !== 'bbox'}
+              disabled={editing}
+              onClick={() => changeScope(null)}
+            >Tổng quan</button>
+            <label>
+              <span className="fp-sr-only">Tập trung khu vực</span>
+            <select
+              aria-label="Tập trung khu vực"
+              value={activeArea?.id ?? ''}
+              disabled={editing}
+                onChange={(event) => {
+                  const focus = displayAreas.find((area) => area.id === event.target.value)
+                  if (focus) changeScope(focus.id)
+                }}
+              >
+                <option value="">Khu vực…</option>
+                {displayAreas.map((area) => <option key={area.id} value={area.id}>{area.label}</option>)}
+              </select>
+            </label>
+          </nav>
           {editing
-            ? <span className="sw-edit-caption"><span title={LAYOUT_EDIT.gridNote}>{LAYOUT_EDIT.gridLabel(GRID_CELL_MM)}</span>{desk ? ' · ' : ''}{desk ? <PlacementStatus validation={selectedValidation} codeOf={codeOf} className="is-inline" /> : null}</span>
-            : <span className={desk ? 'sw-selected-caption' : undefined}>{desk ? `Đang chọn ${desk.seat.code}` : 'Góc nhìn cố định'}</span>}
+            ? <span className="sw-edit-caption"><span title={LAYOUT_EDIT.gridNote}>{LAYOUT_EDIT.gridLabel(GRID_CELL_MM)}</span></span>
+            : <span className={desk ? 'sw-selected-caption' : undefined}>{desk ? `Đang chọn ${desk.seat.code}${outsideScope ? ' · ngoài khu vực đang xem' : ''}` : scopeLabel}</span>}
         </div>
         <div className="sw-map-stage" ref={stageRef}>
+          <AreaMinimap
+            window={minimapWindow}
+            departmentPolygons={overviewScene.resolvedScope.polygons}
+            zones={minimapZones}
+            areas={displayAreas}
+            activeAreaId={minimapActiveAreaId}
+            centerPoint={minimapCenter}
+            prompting={areaPrompt}
+          />
           <WorkspaceScene
             scene={scene}
             desks={desks}
-            selectedId={desk?.workstation.id}
+            contextDesks={contextDesks}
+            selectedId={visibleDesk?.workstation.id}
             onSelect={selectDesk}
             svgRef={svgRef}
             viewBox={viewBox}
             origin={origin}
             zoom={zoom}
             pan={pan}
-            ariaLabel={editing ? 'Chỉnh sửa bố trí · khu Mô hình & Nền tảng AI' : undefined}
-            ground={editing ? <EditGround area={area} grid={editor.gridFor(selectedId)} /> : undefined}
+            detailTier={detailTier}
+            ariaLabel={editing ? `Chỉnh sửa bố trí · ${scopeLabel}` : undefined}
+            ground={editing ? <EditGround area={displayArea} grid={editor.gridFor(selectedId)} /> : undefined}
             overlay={editing ? (
               <EditAffordances
-                placements={editor.placements}
-                selectedId={desk?.workstation.id}
+                placements={visiblePlacements}
+                selectedId={visibleDesk?.workstation.id}
                 validation={editor.validation}
                 deskHeight={scene.deskHeight}
                 dragging={editor.drag?.moved === true}
                 onRotate={rotateSelected}
-                obstacles={area.obstacles}
+                obstacles={area.displayObstacles ?? area.obstacles}
               />
             ) : undefined}
             onKeyDown={onKeyDown}
@@ -627,20 +780,25 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
       </section>
     </div>
     <div className="sw-context">
-      {editing && desk && (
+      {editing && !editor.valid && (
+        <div className="sw-edit-sidebar-alert" role="alert">
+          <span aria-hidden="true">⚠</span> {LAYOUT_EDIT.invalidSummary(invalidCount)}
+        </div>
+      )}
+      {editing && visibleDesk && (
         <EditInspector
-          code={desk.seat.code}
-          placement={editor.placements[desk.workstation.id]}
+          code={visibleDesk.seat.code}
+          placement={editor.placements[visibleDesk.workstation.id]}
           validation={selectedValidation}
-          area={area}
+          area={displayArea}
           mmPerPt={dataset.layout.floor.mmPerPt}
           codeOf={codeOf}
           moved={movedFromOriginal}
-          onRotate={() => rotateSelected(desk.workstation.id)}
-          onReset={() => { editor.resetPlacement(desk.workstation.id); svgRef.current?.focus() }}
+          onRotate={() => rotateSelected(visibleDesk.workstation.id)}
+          onReset={() => { editor.resetPlacement(visibleDesk.workstation.id); svgRef.current?.focus() }}
         />
       )}
-      {editing && !desk && (
+      {editing && !visibleDesk && (
         <section className="sw-edit-empty">
           <p className="fp-eyebrow">{LAYOUT_EDIT.selectedTitle}</p>
           <p className="sw-edit-empty-body">{LAYOUT_EDIT.noSelection}</p>
@@ -656,10 +814,10 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
       <ScopeSummary count={desks.size} counts={counts}>
         {/*
           * No "pick a desk" prompt: the map already reads as clickable. This
-          * only speaks up when a deep link points at a desk outside the crop,
+          * only speaks up when a deep link points at a desk outside the scope,
           * where the panel would otherwise look empty for no stated reason.
           */}
-        {outsideCrop && (
+        {outsideScope && (
           <div className="sw-overview">
             <h3 className="sw-empty-title">{SPATIAL_OUT_OF_SCOPE}</h3>
             <p>{SPATIAL_OUT_OF_SCOPE_HINT}</p>
@@ -674,6 +832,6 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
         onDiscard={() => { setExitPrompt(false); editor.cancel() }}
       />
     )}
-    <p className="fp-sr-only" aria-live="polite">{desk ? `Đã chọn bàn ${desk.seat.code} · ${DESK_STATUS[desk.status].label}` : 'Chưa chọn bàn'}</p>
+    <p className="fp-sr-only" aria-live="polite">{areaPrompt ? (displayAreas.length ? LAYOUT_EDIT.chooseArea : SPATIAL_NO_EDIT_AREAS) : desk ? `Đã chọn bàn ${desk.seat.code} · ${DESK_STATUS[desk.status].label}` : 'Chưa chọn bàn'}</p>
   </main>
 }

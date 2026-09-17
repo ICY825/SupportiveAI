@@ -10,7 +10,8 @@ import { buildDeskIndex } from '../domain/desk'
 import { translatePlacement } from '../domain/placement'
 import type { FloorDataset } from '../domain/spatial'
 import { applyPlacements, basePlacements } from '../workspace/layoutDraft'
-import { buildSpikeScene, memoizeSceneGeometry } from '../workspace/scene'
+import { buildWorkspaceScene, memoizeSceneGeometry } from '../workspace/scene'
+import { defaultWorkspaceScope } from '../workspace/scope'
 import { WorkspaceScene } from '../workspace/WorkspaceScene'
 
 let source: FloorDataset
@@ -18,7 +19,7 @@ beforeAll(async () => { source = await FLOORS[0].load() })
 afterEach(cleanup)
 
 const PATTERN: WorkstationClusterPattern = {
-  clusterId: 'cluster-16-authoring-spike',
+  clusterId: 'cluster-16-authoring-scope-test',
   floorId: 'floor-16',
   zoneId: 'zone-16-ai-platform',
   gridRef: 'B-A / 6-5',
@@ -39,7 +40,7 @@ const PATTERN: WorkstationClusterPattern = {
   },
 }
 
-function spikeDataset(): FloorDataset {
+function scopedDataset(): FloorDataset {
   const generated = materializeWorkstationCluster(PATTERN)
   return {
     ...source,
@@ -84,9 +85,9 @@ describe('authoring-time workstation cluster materialization', () => {
   })
 
   it('attaches allocation state and renders/selects all generated desks with the existing scene', () => {
-    const dataset = spikeDataset()
+    const dataset = scopedDataset()
     const generated = dataset.workstations.slice(-18)
-    const baseScene = buildSpikeScene(dataset)
+    const baseScene = buildWorkspaceScene(dataset, defaultWorkspaceScope(dataset))
     const scene = { ...baseScene, workstations: generated }
     const now = new Date('2026-09-16T02:00:00Z')
     const desks = buildDeskIndex(dataset, createDemoAllocation(dataset, now), now)
@@ -107,6 +108,7 @@ describe('authoring-time workstation cluster materialization', () => {
         origin={[31, 40]}
         zoom={1}
         pan={[0, 0]}
+        detailTier="medium"
         ariaLabel="Generated workstation cluster"
         onKeyDown={() => {}}
         onPointerDown={() => {}}
@@ -122,9 +124,9 @@ describe('authoring-time workstation cluster materialization', () => {
   })
 
   it('keeps a materialized desk independently editable and compatible with Desk Inspector', () => {
-    const dataset = spikeDataset()
+    const dataset = scopedDataset()
     const generated = materializeWorkstationCluster(PATTERN)
-    const scene = { ...buildSpikeScene(dataset), workstations: generated.workstations }
+    const scene = { ...buildWorkspaceScene(dataset, defaultWorkspaceScope(dataset)), workstations: generated.workstations }
     const base = basePlacements(scene.workstations)
     const placements = { ...base, 'ws-16-901': translatePlacement(base['ws-16-901'], 0, 11.4) }
     const edited = applyPlacements(scene, base, placements)

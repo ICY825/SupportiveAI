@@ -31,8 +31,9 @@ export interface EditOverlayGeometry {
  * person sees are the positions it can land on — not a decorative overlay.
  */
 export function buildEditOverlay(area: EditableArea, grid: SpatialGrid): EditOverlayGeometry {
-  const inside = (point: Point) => pointInPolygon(point, area.boundary.polygon)
-  const doorClearances: EditOverlayDoorClearance[] = (area.obstacles ?? [])
+  const displayBoundary = area.displayBoundary ?? area.boundary
+  const inside = (point: Point) => pointInPolygon(point, displayBoundary.polygon)
+  const doorClearances: EditOverlayDoorClearance[] = (area.displayObstacles ?? area.obstacles ?? [])
     .filter((o) => o.kind === 'door-clearance')
     .map((o) => ({
       id: o.id,
@@ -42,7 +43,7 @@ export function buildEditOverlay(area: EditableArea, grid: SpatialGrid): EditOve
 
   return {
     dots: gridPoints(area, grid, inside).map((p) => project(p)),
-    boundary: projectedPoints(area.boundary.polygon),
+    boundary: projectedPoints(displayBoundary.polygon),
     doorClearances,
   }
 }

@@ -32,9 +32,9 @@ export function PlacementStatus({
  * lookalike switches a few rows apart read as four peer modes rather than as a
  * view and a task. In edit mode this button is replaced by EditToolbar.
  */
-export function EnterEditButton({ onClick }: { onClick: () => void }) {
+export function EnterEditButton({ onClick, disabled = false, title }: { onClick: () => void; disabled?: boolean; title?: string }) {
   return (
-    <button type="button" className="fp-btn sw-enter-edit" onClick={onClick} title={LAYOUT_EDIT.enterHint}>
+    <button type="button" className="fp-btn sw-enter-edit" onClick={onClick} disabled={disabled} title={title ?? LAYOUT_EDIT.enterHint}>
       <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
         <path d="M10.6 2.4l3 3L6 13H3v-3z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
       </svg>
@@ -122,13 +122,6 @@ export function EditToolbar({
           </button>
         </div>
       )}
-      <p className="sw-edit-state" data-blocked={!valid ? 'invalid' : undefined}>
-        {!valid
-          ? LAYOUT_EDIT.invalidSummary(invalidCount)
-          : dirty
-            ? LAYOUT_EDIT.changed(changedCount)
-            : LAYOUT_EDIT.noChange}
-      </p>
       <button type="button" className="fp-btn" onClick={onCancel}>
         {LAYOUT_EDIT.cancel}
       </button>
@@ -141,6 +134,13 @@ export function EditToolbar({
       >
         {saving ? LAYOUT_EDIT.saving : LAYOUT_EDIT.save}
       </button>
+      <p className="sw-edit-state" data-blocked={!valid ? 'invalid' : undefined}>
+        {!valid
+          ? LAYOUT_EDIT.invalidSummary(invalidCount)
+          : dirty
+            ? LAYOUT_EDIT.changed(changedCount)
+            : LAYOUT_EDIT.noChange}
+      </p>
     </div>
   )
 }
