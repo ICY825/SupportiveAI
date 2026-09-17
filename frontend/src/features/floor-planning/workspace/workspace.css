@@ -62,6 +62,8 @@
 .sw-scene-content { transform-box: view-box; transform-origin: 0 0; will-change: transform; }
 .sw-furniture, .sw-marker { cursor: pointer; }
 .sw-context-furniture { opacity: 0.24; cursor: default; }
+.sw-capacity-answer { display: grid; gap: 3px; margin: 12px 0; padding: 10px 12px; border-left: 3px solid var(--sw-invalid); background: rgba(182, 68, 61, 0.08); font-size: 12px; line-height: 1.4; }
+.sw-capacity-answer span { color: var(--sw-muted); }
 
 .sw-key-context-mark { display: inline-block; width: 18px; height: 10px; border: 1px solid var(--sw-line); background: #eef2f4; opacity: 0.6; }
 .sw-furniture:hover .sw-desktop > g > polygon:last-child { stroke: #527795; stroke-width: 0.3; }
@@ -202,6 +204,8 @@
 
 .sw-edit-footprint { fill: rgba(36, 91, 183, 0.1); stroke: var(--sw-edit); stroke-width: 0.3; stroke-dasharray: 1.6 1.2; }
 .sw-edit-box { fill: none; stroke: var(--sw-edit); stroke-width: 0.5; stroke-linejoin: round; }
+.sw-edit-placement-preview { fill: rgba(36, 91, 183, 0.18); stroke: var(--sw-edit); stroke-width: 0.6; stroke-dasharray: 2 1.2; stroke-linejoin: round; opacity: 0.9; }
+.sw-edit-placement-preview.is-invalid { fill: rgba(182, 68, 61, 0.18); stroke: var(--sw-invalid); }
 .sw-edit-invalid polygon:last-child { fill: none; stroke: var(--sw-invalid); stroke-width: 0.55; stroke-linejoin: round; }
 
 /* Dual conflict styling for colliding obstacles */
@@ -276,7 +280,10 @@
 .sw-edit-coords { font: var(--fp-t-micro) var(--mono); color: var(--sw-muted); }
 .sw-edit-status-label { margin-top: 2px; }
 .sw-edit-rotate { margin-top: 14px; }
+.sw-edit-rotate-hint { margin: 8px 0 0; color: var(--sw-muted); font-size: 11px; line-height: 1.35; }
+.sw-edit-boundary-warning { margin: 8px 0 0; padding: 7px 8px; border-left: 2px solid #c58a24; background: rgba(197, 138, 36, 0.1); color: var(--sw-text); font-size: 11px; line-height: 1.35; }
 .sw-edit-reset { margin-top: 8px; }
+.sw-edit-delete { margin-top: 8px; }
 .sw-edit-rotate kbd { font: 10px var(--mono); border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px; color: var(--sw-muted); }
 .sw-edit-hint { margin: 12px 0 0; font-size: 10px; line-height: 1.7; color: var(--sw-muted); }
 .sw-edit-empty-body { margin: 8px 0 0; font-size: var(--fp-t-small); color: var(--fp-text-2); }

@@ -1,4 +1,5 @@
 import type { DeskStatus } from '../../domain/desk'
+import type { EntitySource } from '../../domain/spatial'
 import type { MenuItem } from './OverflowMenu'
 
 export type DeskAction =
@@ -43,7 +44,7 @@ export const PRIMARY_ACTIONS: Record<DeskStatus, DeskAction[]> = {
   unavailable: ['reopen-seat', 'edit-seat'],
 }
 
-export function overflowItems(status: DeskStatus): MenuItem<DeskAction>[] {
+export function overflowItems(status: DeskStatus, source?: Pick<EntitySource, 'kind'>): MenuItem<DeskAction>[] {
   const items: MenuItem<DeskAction>[] = []
   if (status !== 'unavailable') items.push({ id: 'mark-unavailable', label: DESK_ACTION_LABEL['mark-unavailable'] })
   if (status === 'occupied' || status === 'conflict' || status === 'reserved') {
@@ -53,7 +54,8 @@ export function overflowItems(status: DeskStatus): MenuItem<DeskAction>[] {
     items.push({ id: 'view-history', label: DESK_ACTION_LABEL['view-history'], separated: items.length > 0 })
   }
   items.push({ id: 'view-audit-log', label: DESK_ACTION_LABEL['view-audit-log'] })
-  items.push({ id: 'delete-desk', label: DESK_ACTION_LABEL['delete-desk'], danger: true, separated: true })
+  if (source?.kind === 'user-authored') {
+    items.push({ id: 'delete-desk', label: DESK_ACTION_LABEL['delete-desk'], danger: true, separated: true })
+  }
   return items
 }
-

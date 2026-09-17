@@ -402,7 +402,7 @@ describe('Milestone 2 - Multi-Layer Validation Engine', () => {
   const roomFixture: Room = {
     id: 'room-16-acoustic-01',
     floorId: 'floor-16',
-    type: 'ROOM',
+    type: 'OTHER',
     name: 'Phòng cách âm',
     polygon: [
       [50, 50],

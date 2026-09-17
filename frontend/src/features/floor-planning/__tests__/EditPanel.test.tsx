@@ -37,7 +37,9 @@ describe('PlacementStatus component', () => {
     const p = container.querySelector('.sw-placement-status')!
     expect(p.getAttribute('data-valid')).toBe('false')
     expect(p.textContent).toContain('⚠')
-    expect(p.textContent).toContain('Va chạm (Cột bê tông (>A / 7-6))')
+    expect(p.textContent).toContain('Bàn sẽ chạm cột kết cấu')
+    expect(p.textContent).not.toMatch(/[()]/)
+    expect(p.querySelector('[title*="Cột bê tông (>A / 7-6)"]')).not.toBeNull()
   })
 
   it('renders door clearance conflict with warning glyph and localized message', () => {
@@ -48,7 +50,9 @@ describe('PlacementStatus component', () => {
     const { container } = render(<PlacementStatus validation={validation} codeOf={codeOf} />)
     const p = container.querySelector('.sw-placement-status')!
     expect(p.getAttribute('data-valid')).toBe('false')
-    expect(p.textContent).toContain('Xung đột khoảng mở cửa (Cửa thoát hiểm D54)')
+    expect(p.textContent).toContain('Bàn sẽ chạm khoảng mở cửa')
+    expect(p.textContent).not.toMatch(/[()]/)
+    expect(p.querySelector('[title*="Cửa thoát hiểm D54"]')).not.toBeNull()
   })
 
   it('renders multiple reasons joined by middle dot separator', () => {
@@ -61,7 +65,7 @@ describe('PlacementStatus component', () => {
     }
     const { container } = render(<PlacementStatus validation={validation} codeOf={codeOf} />)
     const p = container.querySelector('.sw-placement-status')!
-    expect(p.textContent).toContain('Chồng lấn bàn 066 · Va chạm cột kết cấu')
+    expect(p.textContent).toContain('Chồng lấn bàn 066 · Bàn sẽ chạm cột kết cấu')
   })
 
   it('renders chair-specific obstacle collision and clearance conflict', () => {
@@ -74,7 +78,7 @@ describe('PlacementStatus component', () => {
     }
     const { container } = render(<PlacementStatus validation={validation} codeOf={codeOf} />)
     const p = container.querySelector('.sw-placement-status')!
-    expect(p.textContent).toContain('Không gian ghế va chạm cột kết cấu · Không gian ghế xung đột khoảng mở cửa')
+    expect(p.textContent).toContain('Ghế sẽ chạm cột kết cấu · Ghế sẽ chạm khoảng mở cửa')
   })
 })
 
@@ -283,6 +287,26 @@ describe('EditInspector component', () => {
     const rotateBtn = screen.getByRole('button', { name: new RegExp(LAYOUT_EDIT.rotate) })
     fireEvent.click(rotateBtn)
     expect(onRotate).toHaveBeenCalledOnce()
+  })
+
+  it('disables rotation and explains why no turn can fit', () => {
+    render(
+      <EditInspector
+        code="065"
+        placement={dummyPlacement}
+        validation={{ valid: true, reasons: [] }}
+        area={dummyArea}
+        mmPerPt={100}
+        moved={false}
+        codeOf={(id) => id}
+        onRotate={vi.fn()}
+        onReset={vi.fn()}
+        rotateDisabled
+        rotateHint={LAYOUT_EDIT.rotateBlocked}
+      />,
+    )
+    expect((screen.getByRole('button', { name: new RegExp(LAYOUT_EDIT.rotate) }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText(LAYOUT_EDIT.rotateBlocked)).toBeTruthy()
   })
 })
 

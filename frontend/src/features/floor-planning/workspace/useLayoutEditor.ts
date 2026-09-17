@@ -16,6 +16,7 @@ import {
   rotatePlacementBy,
   snapPlacementToGrid,
   translatePlacement,
+  validatePlacement,
   type PlacementValidation,
   type SpatialGrid,
   type SpatialPlacement,
@@ -66,10 +67,14 @@ export interface LayoutEditor {
   canUndo: boolean
   canRedo: boolean
   drag: DragState | null
+  canRotate: (entityId: string) => boolean
+  nearBoundary: (entityId: string) => boolean
   enterEdit: () => void
   /** true when it exited; false when the caller must confirm first */
   tryExitEdit: () => boolean
   startDrag: (entityId: string) => void
+  /** Adds a newly authored placement to the active draft. */
+  addPlacement: (placement: SpatialPlacement) => void
   /** `delta` is a displacement in FLOOR coordinates measured from the drag start */
   dragTo: (delta: Point) => void
   endDrag: () => void
@@ -148,7 +153,21 @@ export function useLayoutEditor({
     [pushHistory, setDraft],
   )
 
-  const placements = mode === 'edit' && draft ? draft.placements : committed
+  // Authored entities are persisted separately from layout drafts. In view
+  // mode, merge any newly arrived canonical placements for rendering. In edit
+  // mode, the caller explicitly adds a new placement to the draft so it stays
+  // dirty until Save.
+  const viewPlacements = useMemo(() => {
+    let changed = false
+    const next = { ...committed }
+    for (const [id, placement] of Object.entries(basePlacements)) {
+      if (next[id]) continue
+      next[id] = placement
+      changed = true
+    }
+    return changed ? next : committed
+  }, [basePlacements, committed])
+  const placements = mode === 'edit' && draft ? draft.placements : viewPlacements
 
   const validation = useMemo(
     () => validateDraft({ placements }, area),
@@ -173,6 +192,67 @@ export function useLayoutEditor({
     [area.grid, basePlacements],
   )
 
+  // Rotation is a spatial action, so test each alternate quarter turn against
+  // the same desks, boundaries and obstacles that validateDraft uses. A packed
+  // row should tell the user that rotating in place cannot work before they
+  // cycle through three guaranteed collisions.
+  const rotationAlternatives = useMemo(() => {
+    const result = new Map<string, PlacementValidation[]>()
+    const placementsList = Object.values(placements)
+    const others = area.contextPlacements?.length ? [...placementsList, ...area.contextPlacements] : placementsList
+    for (const placement of placementsList) {
+      if (editableSet && !editableSet.has(placement.entityId)) continue
+      const validations: PlacementValidation[] = []
+      for (const targetRotation of [0, 90, 180, 270] as const) {
+        if (targetRotation === placement.rotation) continue
+        const turns = (targetRotation - placement.rotation + 360) % 360
+        const candidate = snapPlacementToGrid(
+          placementAt(rotatePlacementBy(placement, turns), [placement.x, placement.y]),
+          gridFor(placement.entityId),
+        )
+        validations.push(validatePlacement(candidate, {
+          others,
+          boundary: area.boundary,
+          roomBoundary: area.roomBoundary,
+          departmentZone: area.departmentZone,
+          obstacles: area.obstacles,
+          tolerance: area.tolerance,
+          boundaryTolerance: area.boundaryTolerance,
+          chairTileSize: area.chairTileSize,
+        }))
+      }
+      result.set(placement.entityId, validations)
+    }
+    return result
+  }, [area, editableSet, gridFor, placements])
+
+  const canRotate = useCallback(
+    (entityId: string) => rotationAlternatives.get(entityId)?.some((validation) => validation.valid) ?? true,
+    [rotationAlternatives],
+  )
+
+  const nearBoundary = useCallback((entityId: string) => {
+    const placement = placements[entityId]
+    if (!placement || validation.get(entityId)?.valid === false) return false
+    const others = area.contextPlacements?.length ? [...Object.values(placements), ...area.contextPlacements] : Object.values(placements)
+    return ([[1, 0], [-1, 0], [0, 1], [0, -1]] as const).some(([x, y]) => {
+      const candidate = snapPlacementToGrid(
+        translatePlacement(placement, x * gridFor(entityId).cellSize, y * gridFor(entityId).cellSize),
+        gridFor(entityId),
+      )
+      return validatePlacement(candidate, {
+        others,
+        boundary: area.boundary,
+        roomBoundary: area.roomBoundary,
+        departmentZone: area.departmentZone,
+        obstacles: area.obstacles,
+        tolerance: area.tolerance,
+        boundaryTolerance: area.boundaryTolerance,
+        chairTileSize: area.chairTileSize,
+      }).reasons.some((reason) => reason.type === 'outside-department-zone')
+    })
+  }, [area, gridFor, placements, validation])
+
   /** Live preview during a drag; the whole drag is one history step, not each frame. */
   const update = useCallback(
     (placement: SpatialPlacement) => {
@@ -184,10 +264,10 @@ export function useLayoutEditor({
 
   const enterEdit = useCallback(() => {
     if (editableSet?.size === 0) return
-    if (!draftRef.current) setDraft(createDraft(committed))
+    if (!draftRef.current) setDraft(createDraft(viewPlacements))
     resetHistory()
     setMode('edit')
-  }, [committed, editableSet, setDraft, resetHistory])
+  }, [editableSet, resetHistory, setDraft, viewPlacements])
 
   const clearDrag = useCallback(() => {
     dragRef.current = null
@@ -211,6 +291,11 @@ export function useLayoutEditor({
     dragRef.current = state
     setDrag(state)
   }, [isEditable])
+
+  const addPlacement = useCallback((placement: SpatialPlacement) => {
+    if (mode !== 'edit' || !draftRef.current) return
+    setDraft(setDraftPlacement(draftRef.current, placement))
+  }, [mode, setDraft])
 
   const dragTo = useCallback(
     ([dx, dy]: Point) => {
@@ -360,9 +445,12 @@ export function useLayoutEditor({
     canUndo: mode === 'edit' && past.length > 0,
     canRedo: mode === 'edit' && future.length > 0,
     drag,
+    canRotate,
+    nearBoundary,
     enterEdit,
     tryExitEdit,
     startDrag,
+    addPlacement,
     dragTo,
     endDrag,
     cancelDrag,

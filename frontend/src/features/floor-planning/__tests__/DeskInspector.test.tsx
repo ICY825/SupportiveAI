@@ -29,6 +29,11 @@ const workstation: Workstation = {
   notes: [],
 }
 
+const authoredWorkstation: Workstation = {
+  ...workstation,
+  source: { kind: 'user-authored', authoredBy: 'admin-1', authoredAt: NOW.toISOString() },
+}
+
 const employee = (id: string, name: string, over: Partial<Employee> = {}): Employee => ({
   id,
   employeeCode: `VSF-${id}`,
@@ -142,7 +147,7 @@ describe('DeskInspector', () => {
   it('keeps destructive actions out of the primary row, inside the overflow menu', async () => {
     const user = userEvent.setup()
     const onAction = vi.fn()
-    renderInspector(desk('occupied', { occupants: [person(minh)] }), { onAction })
+    renderInspector(desk('occupied', { workstation: authoredWorkstation, occupants: [person(minh)] }), { onAction })
     expect(screen.queryByRole('button', { name: 'Xóa bàn' })).toBeNull()
 
     await user.click(screen.getByRole('button', { name: 'Thao tác khác' }))
@@ -151,6 +156,13 @@ describe('DeskInspector', () => {
     await user.click(within(menu).getByRole('menuitem', { name: 'Xóa bàn' }))
     expect(onAction).toHaveBeenCalledWith('delete-desk', expect.objectContaining({ status: 'occupied' }))
     expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('does not offer deletion for extracted desks', async () => {
+    const user = userEvent.setup()
+    renderInspector(desk('available'))
+    await user.click(screen.getByRole('button', { name: 'Thao tác khác' }))
+    expect(screen.queryByRole('menuitem', { name: 'Xóa bàn' })).toBeNull()
   })
 
   it('Escape inside the menu closes only the menu', async () => {

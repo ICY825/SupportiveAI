@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { SPATIAL_OUT_OF_SCOPE } from '../labels'
 import { FloorPlanningPage } from '../pages/FloorPlanningPage'
+import { clearSessionLayouts } from '../workspace/layoutDraft'
+import { clearAuthoredEntityStore } from '../domain/authoredEntities'
 
 /**
  * Search results, scoped to the search listbox: the floor picker is a <select>,
@@ -33,6 +35,8 @@ afterEach(() => {
   cleanup()
   window.location.hash = ''
   localStorage.clear()
+  clearSessionLayouts()
+  clearAuthoredEntityStore()
 })
 
 // the AI zone's first desks carry the demo showcase states
@@ -149,6 +153,20 @@ describe('desk selection → workspace inspector', () => {
     expect(screen.getByText('28')).toBeTruthy()
   }, 30000)
 
+  it('answers capacity for a full area and points to the area with the most free seats', async () => {
+    await openWorkspace()
+    const picker = screen.getByRole('combobox', { name: 'Tập trung khu vực' })
+    await userEvent.setup().selectOptions(picker, 'ai-area-f')
+    const fullAnswer = document.querySelector('.sw-capacity-answer')!
+    expect(fullAnswer.textContent).toContain('Khu vực F đã kín. Không còn chỗ trống.')
+    expect(fullAnswer.textContent).toContain('Gần nhất: Khu vực C · 15 chỗ trống')
+
+    await userEvent.setup().selectOptions(picker, 'ai-area-c')
+    const availableAnswer = document.querySelector('.sw-capacity-answer')!
+    expect(availableAnswer.textContent).toContain('Khu vực C còn 15 chỗ trống.')
+    expect(availableAnswer.textContent).not.toContain('Gần nhất:')
+  }, 30000)
+
   it('enters edit mode for the currently focused area instead of a fixed first cluster', async () => {
     await openWorkspace()
     const picker = screen.getByRole('combobox', { name: 'Tập trung khu vực' }) as HTMLSelectElement
@@ -209,7 +227,7 @@ describe('desk selection → workspace inspector', () => {
     expect(document.querySelector('.sw-heading-meta')).toBeNull()
     // still stated exactly once, in the summary
     const summary = document.querySelector('.sw-summary')!
-    expect(summary.textContent).toMatch(/Zone B/)
+    expect(summary.textContent).toMatch(/Khu B · cánh toà nhà/)
     expect(summary.textContent).toMatch(/116/)
     expect(summary.textContent).toMatch(/chỗ ngồi/)
   }, 30000)
@@ -306,6 +324,97 @@ describe('desk selection → workspace inspector', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.getByRole('complementary', { name: /^F16-/ })).toBeTruthy()
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Trợ giúp và phím tắt' }))
+  }, 30000)
+
+  it('keeps adding desks inside layout editing and opens the selected overview desk area', async () => {
+    await openWorkspace()
+    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('116')
+    expect(screen.queryByRole('button', { name: '+ Thêm bàn' })).toBeNull()
+
+    clickDesk(OCCUPIED)
+    await screen.findByRole('complementary', { name: /^F16-.-065$/ })
+    await userEvent.setup().click(screen.getByRole('button', { name: /Chỉnh sửa bố trí/ }))
+    expect(screen.getByRole('combobox', { name: 'Tập trung khu vực' })).toHaveProperty('value', 'ai-area-a')
+    expect(document.querySelector('.sw-edit-inspector')).not.toBeNull()
+    expect(screen.getByRole('button', { name: '+ Thêm bàn' })).toBeTruthy()
+  }, 30000)
+
+  it('deletes a default desk from layout editing and remembers the removal', async () => {
+    await openWorkspace()
+    clickDesk(OCCUPIED)
+    await screen.findByRole('complementary', { name: /^F16-.-065$/ })
+    await userEvent.setup().click(screen.getByRole('button', { name: /Chỉnh sửa bố trí/ }))
+
+    const editInspector = document.querySelector<HTMLElement>('.sw-edit-inspector')
+    expect(editInspector).not.toBeNull()
+    expect(within(editInspector!).getByRole('button', { name: 'Xóa bàn' })).toBeTruthy()
+    await userEvent.setup().click(within(editInspector!).getByRole('button', { name: 'Xóa bàn' }))
+
+    expect(document.querySelector('.sw-edit-inspector')).toBeNull()
+    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('27')
+  }, 30000)
+
+  it('places an authored desk at a valid mouse position instead of the map origin', async () => {
+    await openWorkspace()
+    const picker = screen.getByRole('combobox', { name: 'Tập trung khu vực' })
+    await userEvent.setup().selectOptions(picker, 'ai-area-a')
+    await userEvent.setup().click(screen.getByRole('button', { name: /Chỉnh sửa bố trí/ }))
+    await userEvent.setup().click(screen.getByRole('button', { name: '+ Thêm bàn' }))
+    const map = screen.getByRole('application')
+
+    let placed = false
+    for (const clientY of [100, 220, 340, 460, 580, 700]) {
+      for (const clientX of [100, 300, 500, 700, 900, 1100]) {
+        fireEvent.pointerMove(map, { clientX, clientY, pointerId: 1 })
+        const preview = document.querySelector<SVGPolygonElement>('.sw-edit-placement-preview')
+        if (!preview || preview.classList.contains('is-invalid')) continue
+        fireEvent.pointerDown(map, { button: 0, pointerId: 1, clientX, clientY })
+        fireEvent.pointerUp(map, { button: 0, pointerId: 1, clientX, clientY })
+        placed = true
+        break
+      }
+      if (placed) break
+    }
+
+    expect(placed).toBe(true)
+    expect(await screen.findByRole('complementary', { name: /F16-.-900/ })).toBeTruthy()
+    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('29')
+    const editInspector = document.querySelector<HTMLElement>('.sw-edit-inspector')
+    expect(editInspector).not.toBeNull()
+    expect(within(editInspector!).getByRole('button', { name: 'Xóa bàn' })).toBeTruthy()
+    await userEvent.setup().click(within(editInspector!).getByRole('button', { name: 'Xóa bàn' }))
+    expect(document.querySelector('.sw-edit-inspector')).toBeNull()
+    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('28')
+  }, 30000)
+
+  it('keeps adding desks available in edit mode and saves the new placement with the draft', async () => {
+    await openWorkspace()
+    const picker = screen.getByRole('combobox', { name: 'Tập trung khu vực' })
+    await userEvent.setup().selectOptions(picker, 'ai-area-a')
+    await userEvent.setup().click(screen.getByRole('button', { name: /Chỉnh sửa bố trí/ }))
+    await userEvent.setup().click(screen.getByRole('button', { name: '+ Thêm bàn' }))
+
+    expect(document.querySelector('.sw-edit-placement-preview')).toBeNull()
+    const save = screen.getByRole('button', { name: 'Lưu bố trí' }) as HTMLButtonElement
+    expect(save.disabled).toBe(true)
+    const map = screen.getByRole('application')
+    for (const clientY of [100, 220, 340, 460, 580, 700]) {
+      for (const clientX of [100, 300, 500, 700, 900, 1100]) {
+        fireEvent.pointerMove(map, { clientX, clientY, pointerId: 1 })
+        const preview = document.querySelector<SVGPolygonElement>('.sw-edit-placement-preview')
+        if (!preview || preview.classList.contains('is-invalid')) continue
+        fireEvent.pointerDown(map, { button: 0, pointerId: 1, clientX, clientY })
+        fireEvent.pointerUp(map, { button: 0, pointerId: 1, clientX, clientY })
+        break
+      }
+      if (document.querySelector('.sw-edit-placement-preview') === null) break
+    }
+    expect(await screen.findByRole('complementary', { name: /F16-.-900/ })).toBeTruthy()
+    expect(document.querySelector('.sw-edit-inspector')).not.toBeNull()
+    expect(save.disabled).toBe(false)
+    await userEvent.setup().click(save)
+    await screen.findByRole('button', { name: /Chỉnh sửa bố trí/ })
+    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('29')
   }, 30000)
 })
 

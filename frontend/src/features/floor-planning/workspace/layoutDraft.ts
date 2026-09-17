@@ -14,6 +14,7 @@
  * derives geometry from them. Nothing in this file touches React or the DOM.
  */
 import { bboxOfPoints, pointInPolygon } from '../domain/geometry'
+import { roomParts } from '../domain/roomOutline'
 import {
   normalizeRotation,
   placementBounds,
@@ -235,11 +236,13 @@ export function deriveEditableArea(dataset: FloorDataset, scene: WorkspaceSceneM
 
   const roomIds = new Set(
     scene.workstations
-      .map((workstation) => dataset.rooms.find((candidate) => pointInPolygon(workstation.center, candidate.polygon))?.id)
+      .map((workstation) => dataset.rooms.find((candidate) => roomParts(candidate).some((part) => pointInPolygon(workstation.center, part)))?.id)
       .filter((id): id is string => Boolean(id)),
   )
   const room = roomIds.size === 1 ? dataset.rooms.find((candidate) => candidate.id === [...roomIds][0]) : undefined
-  const clippedRoom = room ? [...room.polygon] : []
+  // A room in several pieces bounds editing by the piece the desks stand in.
+  const roomPart = room && roomParts(room).find((part) => scene.workstations.some((workstation) => pointInPolygon(workstation.center, part)))
+  const clippedRoom = roomPart ? [...roomPart] : []
 
   const departmentZone: PlacementBoundary | null =
     clippedZone.length >= 3

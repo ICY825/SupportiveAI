@@ -97,7 +97,7 @@ describe('Challenger M2-2: Chair Seating Space & Boundary Stress Verification', 
   const roomFixture: Room = {
     id: 'room-acoustic-c1',
     floorId: 'floor-16',
-    type: 'ROOM',
+    type: 'OTHER',
     name: 'Phòng kiểm thử',
     polygon: [
       [50, 50],

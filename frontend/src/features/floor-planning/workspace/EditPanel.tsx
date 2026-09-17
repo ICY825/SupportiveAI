@@ -1,6 +1,6 @@
 import type { PlacementValidation, SpatialPlacement } from '../domain/placement'
 import { placementBounds } from '../domain/placement'
-import { LAYOUT_EDIT, placementIssueText } from '../labels'
+import { LAYOUT_EDIT, placementIssueText, placementIssueTitle, SEAT_ASSIGNMENT } from '../labels'
 import type { EditableArea } from './layoutDraft'
 
 /** Vietnamese decimal separator; these are readings, not inputs. */
@@ -21,7 +21,11 @@ export function PlacementStatus({
       <span aria-hidden="true">{ok ? '✓' : '⚠'}</span>
       {ok
         ? LAYOUT_EDIT.valid
-        : (validation?.reasons ?? []).map((issue) => placementIssueText(issue, codeOf)).join(' · ')}
+        : (validation?.reasons ?? []).map((issue, index) => (
+          <span key={`${issue.type}-${index}`} title={placementIssueTitle(issue, codeOf)}>
+            {index > 0 ? ' · ' : null}{placementIssueText(issue, codeOf)}
+          </span>
+        ))}
     </p>
   )
 }
@@ -158,7 +162,12 @@ export function EditInspector({
   moved,
   codeOf,
   onRotate,
+  rotateDisabled = false,
+  rotateHint,
+  boundaryWarning,
   onReset,
+  canDelete = false,
+  onDelete,
 }: {
   code: string
   placement: SpatialPlacement
@@ -169,7 +178,12 @@ export function EditInspector({
   moved: boolean
   codeOf: (entityId: string) => string
   onRotate: () => void
+  rotateDisabled?: boolean
+  rotateHint?: string
+  boundaryWarning?: string
   onReset: () => void
+  canDelete?: boolean
+  onDelete?: () => void
 }) {
   const [x0, y0] = placementBounds(placement)
   return (
@@ -193,7 +207,9 @@ export function EditInspector({
       </dl>
       <p className="fp-eyebrow sw-edit-status-label">{LAYOUT_EDIT.placementStatus}</p>
       <PlacementStatus validation={validation} codeOf={codeOf} />
-      <button type="button" className="fp-btn is-wide sw-edit-rotate" onClick={onRotate}>
+      {boundaryWarning && <p className="sw-edit-boundary-warning" role="status">{boundaryWarning}</p>}
+      {rotateDisabled && rotateHint && <p className="sw-edit-rotate-hint" role="status">{rotateHint}</p>}
+      <button type="button" className="fp-btn is-wide sw-edit-rotate" onClick={onRotate} disabled={rotateDisabled} title={rotateDisabled ? rotateHint : undefined}>
         {LAYOUT_EDIT.rotate}
         <kbd>R</kbd>
       </button>
@@ -204,6 +220,11 @@ export function EditInspector({
         <button type="button" className="fp-btn is-wide sw-edit-reset" onClick={onReset}>
           {LAYOUT_EDIT.reset}
           <span aria-hidden="true">↺</span>
+        </button>
+      )}
+      {canDelete && onDelete && (
+        <button type="button" className="fp-btn is-wide is-danger sw-edit-delete" onClick={onDelete}>
+          {SEAT_ASSIGNMENT.delete}
         </button>
       )}
       <p className="sw-edit-hint">{LAYOUT_EDIT.hint}</p>

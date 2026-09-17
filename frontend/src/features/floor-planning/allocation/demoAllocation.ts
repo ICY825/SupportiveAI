@@ -155,7 +155,7 @@ export function createDemoAllocation(dataset: FloorDataset, now: Date): FloorAll
 
   for (const w of desks) {
     const def = w.zoneId ? deptByZone.get(w.zoneId) : undefined
-    const num = w.id.replace(/^ws-\d+-/, '')
+    const num = w.source.deskCode?.match(/-(\d+)$/)?.[1] ?? w.id.replace(/^ws-\d+-/, '')
     const role = showcaseRole.get(w.id)
     const r = rand(w.id)
     const seatType: SeatType = role === 'hotdesk' ? 'HOT_DESK' : r > 0.93 ? 'HOT_DESK' : r > 0.9 ? 'SHARED' : 'FIXED'

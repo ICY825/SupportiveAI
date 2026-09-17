@@ -15,6 +15,19 @@ import { DeskStatusIcon } from '../components/desk-inspector/DeskStatusBadge'
 import { FLOORS, FLOOR_INVENTORY, findFloor } from '../data/registry'
 import { validateFloorDataset } from '../data/validateFloorDataset'
 import { buildDeskIndex } from '../domain/desk'
+import {
+  applyAuthoredEntities,
+  authoredEntityStore,
+  authoredRoomFromPolygon,
+  EMPTY_AUTHORED_ENTITIES,
+  mergeAuthoredEntities,
+  nextAuthoredRoomId,
+  validateAuthoredRoom,
+  workstationsOverlappingRoom,
+  type AuthoredEntities,
+  type AuthoredEntityChanges,
+} from '../domain/authoredEntities'
+import type { RoomType } from '../domain/roomTypes'
 import type { BBox, EntityRef, FloorDataset, Point, VerificationState } from '../domain/spatial'
 import {
   applyDatasetZoneCustomizations,
@@ -65,6 +78,7 @@ export function FloorPlanningPage({
   // page has to ask before it unmounts or replaces that component.
   const [layoutDirty, setLayoutDirty] = useState(false)
   const [pendingNav, setPendingNav] = useState<{ floorId?: string; view?: ViewMode } | null>(null)
+  const [authoredByFloor, setAuthoredByFloor] = useState<Record<string, AuthoredEntities>>({})
 
   useEffect(() => {
     let cancelled = false
@@ -182,11 +196,26 @@ export function FloorPlanningPage({
     saveZoneCustomizations(floorId, {})
   }, [floorId])
 
+  const authoredEntities = authoredByFloor[floorId] ?? authoredEntityStore.read(floorId) ?? EMPTY_AUTHORED_ENTITIES
+  const handleAuthoredEntityChange = useCallback(
+    (changes: AuthoredEntityChanges) => {
+      setAuthoredByFloor((prev) => {
+        const current = prev[floorId] ?? authoredEntityStore.read(floorId) ?? EMPTY_AUTHORED_ENTITIES
+        const next = mergeAuthoredEntities(current, changes)
+        void authoredEntityStore.write(floorId, changes)
+        return { ...prev, [floorId]: next }
+      })
+    },
+    [floorId],
+  )
+
   const currentDataset = current?.dataset
   const effectiveDataset = useMemo(() => {
     if (!currentDataset) return undefined
-    return applyDatasetZoneCustomizations(currentDataset, floorCustomizations)
-  }, [currentDataset, floorCustomizations])
+    const customized = applyDatasetZoneCustomizations(currentDataset, floorCustomizations)
+    if (!customized) return undefined
+    return applyAuthoredEntities(customized, authoredEntities)
+  }, [currentDataset, floorCustomizations, authoredEntities])
 
   return (
     <div className={`fp-page${view === 'workspace' ? ' is-spatial-page' : ''}`}>
@@ -235,6 +264,8 @@ export function FloorPlanningPage({
           onVerify={() => navigate({ view: 'verification' })}
           searchSlot={searchSlot}
           onDirtyChange={setLayoutDirty}
+          authoredEntities={authoredEntities}
+          onAuthoredEntityChange={handleAuthoredEntityChange}
         />
       )}
       {effectiveDataset && view === 'verification' && (
@@ -252,6 +283,7 @@ export function FloorPlanningPage({
           onZoneUpdate={handleZoneUpdate}
           onResetZone={handleResetZone}
           onResetAllZones={handleResetAllZones}
+          onAuthoredEntityChange={handleAuthoredEntityChange}
         />
       )}
       {pendingNav && (
@@ -282,6 +314,7 @@ function FloorWorkspace({
   onZoneUpdate,
   onResetZone,
   onResetAllZones,
+  onAuthoredEntityChange,
 }: {
   dataset: FloorDataset
   baseDataset?: FloorDataset
@@ -303,6 +336,7 @@ function FloorWorkspace({
   }) => void
   onResetZone?: (zoneId: string) => void
   onResetAllZones?: () => void
+  onAuthoredEntityChange?: (changes: AuthoredEntityChanges) => void
 }) {
   const [settings, setSettings] = useState<MapSettings>(DEFAULT_SETTINGS)
   const [hovered, setHovered] = useState<EntityRef | null>(null)
@@ -314,6 +348,10 @@ function FloorWorkspace({
   const vp = useViewport(content, home)
   const issues = useMemo(() => validateFloorDataset(dataset), [dataset])
   const mainRef = useRef<HTMLElement>(null)
+  const [roomDrawMode, setRoomDrawMode] = useState(false)
+  // Pieces drawn so far for the room being authored; a lounge split by a corridor has two.
+  const [roomDraft, setRoomDraft] = useState<Point[][] | null>(null)
+  const [roomError, setRoomError] = useState<string | null>(null)
 
   // Allocation is attached, never merged: demo fixtures until the HR/Admin API exists.
   const workspace = view === 'workspace'
@@ -383,6 +421,71 @@ function FloorWorkspace({
     const hh = Math.max(b[3] - b[1], FOCUS_MIN_PT) / 2
     vp.focus([cx - hw, cy - hh, cx + hw, cy + hh])
   }
+
+  const beginRoomDraw = useCallback(() => {
+    setRoomDrawMode(true)
+    setRoomDraft(null)
+    setRoomError(null)
+    onSelect(null)
+  }, [onSelect])
+
+  const cancelRoomDraw = useCallback(() => {
+    setRoomDrawMode(false)
+    setRoomDraft(null)
+    setRoomError(null)
+  }, [])
+
+  const handleRoomDraw = useCallback((polygon: Point[]) => {
+    setRoomDrawMode(false)
+    setRoomDraft((parts) => [...(parts ?? []), polygon])
+    setRoomError(null)
+  }, [])
+
+  const beginRoomPart = useCallback(() => {
+    setRoomDrawMode(true)
+    setRoomError(null)
+  }, [])
+
+  const removeLastRoomPart = useCallback(() => {
+    setRoomDraft((parts) => (parts && parts.length > 1 ? parts.slice(0, -1) : parts))
+    setRoomError(null)
+  }, [])
+
+  const saveAuthoredRoom = useCallback((payload: { polygons: Point[][]; name: string; type: RoomType }) => {
+    if (!onAuthoredEntityChange) return 'Không thể lưu phòng ở chế độ hiện tại.'
+    const room = authoredRoomFromPolygon({
+      dataset,
+      polygon: payload.polygons,
+      id: nextAuthoredRoomId(dataset.layout.floor.id, dataset.rooms),
+      name: payload.name,
+      type: payload.type,
+      authoredBy: 'demo-admin',
+      authoredAt: new Date().toISOString(),
+    })
+    const validation = validateAuthoredRoom(room, dataset)
+    if (validation.length > 0) {
+      const message = validation.map((issue) => {
+        if (issue.type === 'self-intersecting') return 'Đường viền phòng không được tự cắt nhau.'
+        if (issue.type === 'parts-overlap') return 'Các phần của phòng không được chồng lên nhau.'
+        if (issue.type === 'too-small') return 'Phòng phải có diện tích tối thiểu 2 m².'
+        if (issue.type === 'outside-floor') return 'Phòng phải nằm hoàn toàn trong mặt bằng.'
+        return `Phòng chồng lên ${issue.roomName}.`
+      }).join(' ')
+      setRoomError(message)
+      return message
+    }
+    onAuthoredEntityChange({ rooms: [room], sourcePdfSha256: dataset.layout.sourcePdfSha256 })
+    setRoomDraft(null)
+    setRoomError(null)
+    return null
+  }, [dataset, onAuthoredEntityChange])
+
+  const deleteAuthoredRoom = useCallback((roomId: string) => {
+    const room = dataset.rooms.find((item) => item.id === roomId)
+    if (!room || room.source.kind !== 'user-authored' || !onAuthoredEntityChange) return
+    onAuthoredEntityChange({ removeRoomIds: [roomId] })
+    if (selected?.kind === 'room' && selected.id === roomId) onSelect(null)
+  }, [dataset.rooms, onAuthoredEntityChange, onSelect, selected])
 
   const pickSearchResult = (item: SearchItem) => {
     onSelect(item.target)
@@ -465,6 +568,10 @@ function FloorWorkspace({
           deskStatuses={deskStatuses}
           onKeyDown={onMapKeyDown}
           onZoneUpdate={onZoneUpdate}
+          roomDrawMode={roomDrawMode}
+          roomDraft={roomDraft}
+          onRoomDraw={handleRoomDraw}
+          onRoomDrawCancel={cancelRoomDraw}
         />
         {callout && selectedDesk && (
           <div className="fp-desk-callout" style={{ left: callout.left, top: callout.top }} data-desk-status={selectedDesk.status} aria-hidden="true">
@@ -522,6 +629,16 @@ function FloorWorkspace({
           onZoneUpdate={onZoneUpdate}
           onResetZone={onResetZone}
           onResetAllZones={onResetAllZones}
+          onBeginRoomDraw={beginRoomDraw}
+          pendingRoom={roomDraft}
+          roomOverlapCount={roomDraft ? workstationsOverlappingRoom({ polygon: roomDraft[0], extraPolygons: roomDraft.slice(1) }, dataset.workstations).length : 0}
+          onAddRoomPart={beginRoomPart}
+          onRemoveLastRoomPart={removeLastRoomPart}
+          roomDrawing={roomDrawMode}
+          roomError={roomError}
+          onCancelRoomDraw={cancelRoomDraw}
+          onSaveAuthoredRoom={saveAuthoredRoom}
+          onDeleteAuthoredRoom={deleteAuthoredRoom}
         />
       )}
     </div>

@@ -1,4 +1,5 @@
 import { bboxOfPoints, rectangle } from '../domain/geometry'
+import { roomLabelPoint } from '../domain/roomOutline'
 import type { BaseLayer, BBox, FloorDataset, FloorObstacle, Point, Room, Workstation, Zone } from '../domain/spatial'
 import { resolveWorkspaceScope, workstationInScope, type ResolvedWorkspaceScope, type WorkspaceScope } from './scope'
 
@@ -131,8 +132,8 @@ export const MARKER_RADIUS = 1.85
 export const labelAnchorInView = ([x, y]: Point, [x0, y0, x1, y1]: BBox) =>
   x >= x0 && x <= x1 && y >= y0 && y <= y1
 
-/** Rooms are captioned at the middle of their extent, not at an authored anchor. */
-export const roomLabelAnchor = (bbox: BBox): Point => [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2]
+/** Rooms are captioned inside their own outline, not at an authored anchor. */
+export const roomLabelAnchor = (room: Pick<Room, 'polygon' | 'extraPolygons'>): Point => roomLabelPoint(room)
 
 const addTextAllowance = (add: (point: Point) => void, anchor: Point, text: string, size = 1.6) => {
   const [x, y] = project(anchor)
@@ -160,7 +161,7 @@ export function sceneBounds(scene: WorkspaceSceneModel): BBox {
     }
   }
   for (const room of scene.rooms) {
-    const anchor = roomLabelAnchor(room.bbox)
+    const anchor = roomLabelAnchor(room)
     if (labelAnchorInView(anchor, scene.contextBounds)) addTextAllowance(add, anchor, room.name, 1.35)
   }
 

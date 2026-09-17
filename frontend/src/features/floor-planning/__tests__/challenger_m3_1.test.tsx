@@ -212,7 +212,7 @@ describe('Challenger M3-1: Adversarial Affordance & Conflict Suite', () => {
       expect(saveButton().disabled).toBe(true)
       const status = container.querySelector('.sw-edit-inspector .sw-placement-status')!
       expect(status.getAttribute('data-valid')).toBe('false')
-      expect(status.textContent).toMatch(/Va chạm.*cột/i)
+      expect(status.textContent).toMatch(/chạm cột/i)
 
       // E. Nudge back to unchanged clean position -> both highlights clear.
       fireEvent.keyDown(scene(container), { key: 'ArrowLeft' })

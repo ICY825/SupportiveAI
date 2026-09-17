@@ -10,6 +10,7 @@ import type {
   Workstation,
   Zone,
 } from '../domain/spatial'
+import { normalizeRoomType } from '../domain/roomTypes'
 
 /** Raw file contents as produced by tools/floorplan_extract/extract_floor.py. */
 export interface FloorFiles {
@@ -56,7 +57,10 @@ export function buildDataset(files: FloorFiles, meta: FloorMeta): FloorDataset {
     sourceName: meta.sourceName,
     layout: layout as unknown as FloorLayout,
     zones: arr<Zone>(zones.zones, 'zones.zones'),
-    rooms: arr<Room>(zones.rooms, 'zones.rooms'),
+    rooms: arr<Room>(zones.rooms, 'zones.rooms').map((room) => ({
+      ...room,
+      type: normalizeRoomType(room.type, room.name),
+    })),
     obstacles: obstacles ? arr<FloorObstacle>(obstacles.obstacles, 'obstacles.obstacles') : [],
     clusters: arr<DeskCluster>(ws.clusters, 'workstations.clusters'),
     workstations: arr<Workstation>(ws.workstations, 'workstations.workstations'),

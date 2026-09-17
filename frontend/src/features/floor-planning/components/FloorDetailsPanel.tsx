@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import type { AllocationSource } from '../domain/allocation'
 import type { DeskRecord } from '../domain/desk'
-import type { EntityRef, FloorDataset, Point, VerificationState, Zone } from '../domain/spatial'
+import type { EntityRef, FloorDataset, Point, Room, VerificationState, Zone } from '../domain/spatial'
+import { ROOM_TYPES, ROOM_TYPE_LABEL, type RoomType } from '../domain/roomTypes'
 import { polygonCentroid } from '../domain/zoneCustomization'
 import type { ValidationIssue } from '../data/validateFloorDataset'
 import {
@@ -33,6 +34,16 @@ interface FloorDetailsPanelProps {
   }) => void
   onResetZone?: (zoneId: string) => void
   onResetAllZones?: () => void
+  onBeginRoomDraw?: () => void
+  pendingRoom?: Point[][] | null
+  roomDrawing?: boolean
+  roomOverlapCount?: number
+  roomError?: string | null
+  onCancelRoomDraw?: () => void
+  onAddRoomPart?: () => void
+  onRemoveLastRoomPart?: () => void
+  onSaveAuthoredRoom?: (payload: { polygons: Point[][]; name: string; type: RoomType }) => string | null | undefined
+  onDeleteAuthoredRoom?: (roomId: string) => void
 }
 
 const DASH = '—'
@@ -408,6 +419,116 @@ function ZoneLabelSection({
   )
 }
 
+function AuthoredRoomControls({
+  rooms,
+  pendingRoom,
+  roomDrawing,
+  roomOverlapCount,
+  roomError,
+  onBeginRoomDraw,
+  onCancelRoomDraw,
+  onAddRoomPart,
+  onRemoveLastRoomPart,
+  onSaveAuthoredRoom,
+  onDeleteAuthoredRoom,
+}: {
+  rooms: readonly Room[]
+  pendingRoom?: Point[][] | null
+  roomDrawing?: boolean
+  roomOverlapCount?: number
+  roomError?: string | null
+  onBeginRoomDraw?: () => void
+  onCancelRoomDraw?: () => void
+  onAddRoomPart?: () => void
+  onRemoveLastRoomPart?: () => void
+  onSaveAuthoredRoom?: (payload: { polygons: Point[][]; name: string; type: RoomType }) => string | null | undefined
+  onDeleteAuthoredRoom?: (roomId: string) => void
+}) {
+  const [name, setName] = useState('')
+  const [type, setType] = useState<RoomType>('OTHER')
+  const [formError, setFormError] = useState<string | null>(null)
+  const authoredRooms = rooms.filter((room) => room.source.kind === 'user-authored')
+
+  const save = () => {
+    if (!pendingRoom || !onSaveAuthoredRoom) return
+    const trimmed = name.trim()
+    if (!trimmed) {
+      setFormError('Nhập tên phòng trước khi lưu.')
+      return
+    }
+    const error = onSaveAuthoredRoom({ polygons: pendingRoom, name: trimmed, type })
+    if (error) {
+      setFormError(error)
+      return
+    }
+    setName('')
+    setType('OTHER')
+    setFormError(null)
+  }
+
+  return (
+    <section className="fp-authored-tools" aria-label="Thực thể do người dùng tạo">
+      <div className="fp-authored-tools-head">
+        <div>
+          <p className="fp-eyebrow">Tạo trên mặt bằng</p>
+          <h3>Phòng do người dùng tạo</h3>
+        </div>
+        {!pendingRoom && !roomDrawing && onBeginRoomDraw && (
+          <button type="button" className="fp-action-btn is-primary" onClick={onBeginRoomDraw}>+ Tạo phòng</button>
+        )}
+      </div>
+      {roomDrawing && (
+        <div className="fp-authored-room-form" role="status">
+          {pendingRoom && <p className="fp-sub"><strong>Đang vẽ phần {pendingRoom.length + 1} của phòng.</strong></p>}
+          <p className="fp-sub">
+            Kéo để vẽ phòng hình chữ nhật, hoặc nhấp từng góc cho phòng có hình dạng khác. Cạnh tự bám theo góc 0°, 45° và 90°; giữ Shift để vẽ tự do.
+          </p>
+          <p className="fp-sub">Nhấp lại góc đầu tiên, nhấp đúp hoặc nhấn Enter để khép kín. Backspace xóa góc vừa đặt.</p>
+          <div className="fp-zone-form-actions">
+            <button type="button" className="fp-btn-sm" onClick={() => onCancelRoomDraw?.()}>Hủy</button>
+          </div>
+        </div>
+      )}
+      {pendingRoom && !roomDrawing && (
+        <div className="fp-authored-room-form">
+          <p className="fp-sub">Đặt tên và loại cho phòng vừa vẽ.</p>
+          <div className="fp-room-parts" role="group" aria-label="Các phần của phòng">
+            <span>{pendingRoom.length === 1 ? '1 phần' : `${pendingRoom.length} phần · một phòng, một nhãn`}</span>
+            {onAddRoomPart && <button type="button" className="fp-btn-sm" onClick={onAddRoomPart}>+ Thêm phần</button>}
+            {onRemoveLastRoomPart && pendingRoom.length > 1 && <button type="button" className="fp-btn-sm" onClick={onRemoveLastRoomPart}>Bỏ phần cuối</button>}
+          </div>
+          {roomOverlapCount ? (
+            <p className="fp-form-warning" role="status">
+              {roomOverlapCount} chỗ ngồi nằm trong phòng này. Tạo phòng không thay đổi trạng thái bàn.
+            </p>
+          ) : null}
+          <label className="fp-form-label" htmlFor="authored-room-name">Tên phòng</label>
+          <input id="authored-room-name" className="fp-input" value={name} onChange={(event) => setName(event.target.value)} placeholder="Ví dụ: Phòng họp nhỏ" autoFocus />
+          <label className="fp-form-label" htmlFor="authored-room-type">Loại phòng</label>
+          <select id="authored-room-type" className="fp-input" value={type} onChange={(event) => setType(event.target.value as RoomType)}>
+            {ROOM_TYPES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+          {(formError || roomError) && <p className="fp-form-error" role="alert">{formError ?? roomError}</p>}
+          <div className="fp-zone-form-actions">
+            <button type="button" className="fp-btn-sm is-primary" onClick={save}>Lưu phòng</button>
+            <button type="button" className="fp-btn-sm" onClick={() => { setFormError(null); onCancelRoomDraw?.() }}>Hủy</button>
+          </div>
+        </div>
+      )}
+      {authoredRooms.length > 0 && (
+        <ul className="fp-authored-entity-list">
+          {authoredRooms.map((room) => (
+            <li key={room.id}>
+              <span><strong>{room.name}</strong><small>{ROOM_TYPE_LABEL[room.type]}</small></span>
+              {onDeleteAuthoredRoom && <button type="button" className="fp-action-btn is-danger" onClick={() => onDeleteAuthoredRoom(room.id)}>Xóa</button>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 export function FloorDetailsPanel({
   dataset,
   baseDataset,
@@ -418,6 +539,16 @@ export function FloorDetailsPanel({
   onZoneUpdate,
   onResetZone,
   onResetAllZones,
+  onBeginRoomDraw,
+  pendingRoom,
+  roomDrawing,
+  roomOverlapCount,
+  roomError,
+  onCancelRoomDraw,
+  onAddRoomPart,
+  onRemoveLastRoomPart,
+  onSaveAuthoredRoom,
+  onDeleteAuthoredRoom,
 }: FloorDetailsPanelProps) {
   const { layout } = dataset
   const floor = layout.floor
@@ -472,6 +603,21 @@ export function FloorDetailsPanel({
             <dd>{dataset.objects.filter((o) => o.classification === 'FACILITY').length}</dd>
           </div>
         </dl>
+        {(onBeginRoomDraw || pendingRoom || roomDrawing || dataset.rooms.some((room) => room.source.kind === 'user-authored')) && (
+          <AuthoredRoomControls
+            rooms={dataset.rooms}
+            pendingRoom={pendingRoom}
+            roomDrawing={roomDrawing}
+            roomOverlapCount={roomOverlapCount}
+            roomError={roomError}
+            onBeginRoomDraw={onBeginRoomDraw}
+            onCancelRoomDraw={onCancelRoomDraw}
+            onAddRoomPart={onAddRoomPart}
+            onRemoveLastRoomPart={onRemoveLastRoomPart}
+            onSaveAuthoredRoom={onSaveAuthoredRoom}
+            onDeleteAuthoredRoom={onDeleteAuthoredRoom}
+          />
+        )}
         {unknownCount > 0 && (
           <p className="fp-callout" data-verification="UNKNOWN">
             <span aria-hidden="true">?</span> {unknownCount} đối tượng chưa xác định cần Admin làm rõ
@@ -528,7 +674,7 @@ export function FloorDetailsPanel({
             zone={z}
             baseDataset={baseDataset}
             onZoneUpdate={onZoneUpdate}
-            onResetZone={onResetZone}
+          onResetZone={onResetZone}
           />
           <dl>
             <Row label="Vị trí làm việc vật lý" hint="Bàn có ký hiệu ghế, tâm nằm trong đường viền khu vực">
@@ -621,6 +767,14 @@ export function FloorDetailsPanel({
       body = (
         <>
           <Head kicker="Phòng" title={r.name} state={r.verification} />
+          <dl>
+            <Row label="Loại phòng">{ROOM_TYPE_LABEL[r.type]}</Row>
+          </dl>
+          {r.source.kind === 'user-authored' && onDeleteAuthoredRoom && (
+            <div className="fp-authored-delete-row">
+              <button type="button" className="fp-action-btn is-danger" onClick={() => onDeleteAuthoredRoom(r.id)}>Xóa phòng</button>
+            </div>
+          )}
           <dl>
             <Row label="Khu vực">{zoneName(r.zoneId)}</Row>
             <Row label="Diện tích ước tính">{nf.format(r.areaM2)} m²</Row>

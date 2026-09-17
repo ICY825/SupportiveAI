@@ -75,7 +75,7 @@ export function DeskInspector({ desk, source, now, onClose, onAction, onShowWork
               <path d={collapsed ? 'M4 10l4-4 4 4' : 'M4 6l4 4 4-4'} fill="none" stroke="currentColor" strokeWidth="1.6" />
             </svg>
           </button>
-          <OverflowMenu label="Thao tác khác" items={overflowItems(status)} onSelect={run} />
+          <OverflowMenu label="Thao tác khác" items={overflowItems(status, desk.workstation.source)} onSelect={run} />
           <button type="button" className="fp-icon-btn" aria-label="Đóng bảng thông tin bàn" title="Đóng (Esc)" onClick={onClose}>
             <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
               <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />

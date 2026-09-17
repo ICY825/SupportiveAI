@@ -4,12 +4,14 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { FLOORS } from '../data/registry'
 import type { SpatialPlacement } from '../domain/placement'
 import type { FloorDataset } from '../domain/spatial'
+import { LAYOUT_EDIT } from '../labels'
 import { clearSessionLayouts, type LayoutStore } from '../workspace/layoutDraft'
 import { SpatialWorkspace } from '../workspace/SpatialWorkspace'
 
 let dataset: FloorDataset
 /** A desk in the middle of a cluster, so a short drag lands on its neighbour. */
 const DESK = 'ws-16-065'
+const ROTATABLE_DESK = 'ws-16-094'
 
 beforeAll(async () => {
   dataset = await FLOORS[0].load()
@@ -231,7 +233,7 @@ describe('edit mode', () => {
   it('rotates the selected desk by a quarter turn with R and with the button', () => {
     const { container } = setup()
     enterEdit()
-    clickDesk(container)
+    clickDesk(container, ROTATABLE_DESK)
 
     const angle = () => within(container.querySelector<HTMLElement>('.sw-edit-inspector')!).getByText(/^\d+°$/).textContent
     expect(angle()).toBe('0°')
@@ -239,6 +241,22 @@ describe('edit mode', () => {
     expect(angle()).toBe('90°')
     fireEvent.click(container.querySelector<HTMLButtonElement>('.sw-edit-rotate')!)
     expect(angle()).toBe('180°')
+  })
+
+  it('disables rotation when a packed desk has no valid quarter-turn in place', () => {
+    const { container } = setup()
+    enterEdit(6)
+    clickDesk(container, 'ws-16-367')
+    const rotate = container.querySelector<HTMLButtonElement>('.sw-edit-rotate')!
+    expect(rotate.disabled).toBe(true)
+    expect(container.querySelector('.sw-edit-rotate-hint')?.textContent).toBe(LAYOUT_EDIT.rotateBlocked)
+  })
+
+  it('warns while a valid desk is one nudge from the department edge', () => {
+    const { container } = setup()
+    enterEdit(6)
+    clickDesk(container, 'ws-16-367')
+    expect(container.querySelector('.sw-edit-boundary-warning')?.textContent).toBe(LAYOUT_EDIT.boundaryWarning)
   })
 
   it('nudges the selected desk one grid cell per arrow press', () => {
@@ -454,7 +472,7 @@ describe('undo and redo', () => {
   it('undoes a rotation', () => {
     const { container } = setup()
     enterEdit()
-    clickDesk(container)
+    clickDesk(container, ROTATABLE_DESK)
     const angle = () => within(container.querySelector<HTMLElement>('.sw-edit-inspector')!).getByText(/^\d+°$/).textContent
 
     fireEvent.keyDown(scene(container), { key: 'r' })
@@ -516,7 +534,7 @@ describe('Milestone 3: Visual Affordances & Dual Conflict Highlighting', () => {
 
     const status = container.querySelector('.sw-edit-inspector .sw-placement-status')!
     expect(status.getAttribute('data-valid')).toBe('false')
-    expect(status.textContent).toMatch(/Va chạm.*cột/i)
+    expect(status.textContent).toMatch(/chạm cột/i)
 
     // Dual conflict highlighting: both workstation and column obstacle are highlighted
     expect(container.querySelector('.sw-edit-invalid')).not.toBeNull()

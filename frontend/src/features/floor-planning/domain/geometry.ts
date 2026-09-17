@@ -165,3 +165,186 @@ export function rotateQuarter([x, y]: Point, [cx, cy]: Point, deg: 0 | 90 | 180 
       return [x, y]
   }
 }
+
+/** Twice the signed area. Positive is clockwise on screen, where y points down. */
+function signedDoubleArea(points: readonly Point[]): number {
+  let area = 0
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    area += points[j][0] * points[i][1] - points[i][0] * points[j][1]
+  }
+  return area
+}
+
+/**
+ * True when no two non-adjacent edges touch and no edge doubles back on its
+ * neighbour. A room outline clicked corner by corner can cross itself, and the
+ * area and containment helpers above give meaningless answers for one that does.
+ */
+export function polygonIsSimple(polygon: readonly Point[], epsilon = GEOMETRY_EPSILON): boolean {
+  const n = polygon.length
+  if (n < 3 || polygonArea(polygon) <= epsilon) return false
+  for (let i = 0; i < n; i++) {
+    const a1 = polygon[i]
+    const a2 = polygon[(i + 1) % n]
+    if (Math.hypot(a2[0] - a1[0], a2[1] - a1[1]) <= epsilon) return false
+    for (let k = i + 1; k < n; k++) {
+      const adjacent = k === i + 1 || (i === 0 && k === n - 1)
+      const b1 = polygon[k]
+      const b2 = polygon[(k + 1) % n]
+      if (!adjacent && (segmentsCross(a1, a2, b1, b2, epsilon) || segmentsTouch(a1, a2, b1, b2, epsilon))) return false
+      if (adjacent && foldsBack(a1, a2, b1, b2, epsilon)) return false
+    }
+  }
+  return true
+}
+
+function onSegment(p: Point, a: Point, b: Point, epsilon: number): boolean {
+  if (Math.abs(cross(a, b, p)) > epsilon * Math.max(1, Math.hypot(b[0] - a[0], b[1] - a[1]))) return false
+  return (
+    p[0] >= Math.min(a[0], b[0]) - epsilon &&
+    p[0] <= Math.max(a[0], b[0]) + epsilon &&
+    p[1] >= Math.min(a[1], b[1]) - epsilon &&
+    p[1] <= Math.max(a[1], b[1]) + epsilon
+  )
+}
+
+/** Any contact short of a proper crossing: an endpoint lying on the other segment. */
+function segmentsTouch(a1: Point, a2: Point, b1: Point, b2: Point, epsilon: number): boolean {
+  return onSegment(a1, b1, b2, epsilon) || onSegment(a2, b1, b2, epsilon) || onSegment(b1, a1, a2, epsilon) || onSegment(b2, a1, a2, epsilon)
+}
+
+/** Adjacent edges share one vertex; they fold back when they are collinear and point opposite ways. */
+function foldsBack(a1: Point, a2: Point, b1: Point, b2: Point, epsilon: number): boolean {
+  const shared = a2 === b1 || (a2[0] === b1[0] && a2[1] === b1[1]) ? a2 : a1
+  const u = shared === a2 ? a1 : a2
+  const v = shared === a2 ? b2 : b1
+  const ux = u[0] - shared[0]
+  const uy = u[1] - shared[1]
+  const vx = v[0] - shared[0]
+  const vy = v[1] - shared[1]
+  const lengths = Math.hypot(ux, uy) * Math.hypot(vx, vy)
+  return Math.abs(ux * vy - uy * vx) <= epsilon * lengths && ux * vx + uy * vy > 0
+}
+
+/**
+ * Points just inside a simple polygon, one beside the middle of each edge.
+ * Flush neighbours share edges, so testing these instead of vertices keeps
+ * touching from counting as overlapping.
+ */
+function interiorSamples(polygon: readonly Point[], inset: number): Point[] {
+  const orientation = signedDoubleArea(polygon) >= 0 ? 1 : -1
+  const samples: Point[] = []
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i]
+    const b = polygon[(i + 1) % polygon.length]
+    const length = Math.hypot(b[0] - a[0], b[1] - a[1])
+    if (length === 0) continue
+    // With y pointing down, the interior of a clockwise outline is to the right of travel.
+    const nx = (-(b[1] - a[1]) / length) * orientation
+    const ny = ((b[0] - a[0]) / length) * orientation
+    samples.push([(a[0] + b[0]) / 2 + nx * inset, (a[1] + b[1]) / 2 + ny * inset])
+  }
+  return samples
+}
+
+/**
+ * True only when two simple polygons share area. Bounding boxes cannot answer
+ * this for L-shaped or diagonal rooms: their boxes cover floor the room does not.
+ */
+export function polygonsOverlap(a: readonly Point[], b: readonly Point[], epsilon = GEOMETRY_EPSILON): boolean {
+  if (a.length < 3 || b.length < 3 || !bboxesOverlap(bboxOfPoints(a), bboxOfPoints(b), epsilon)) return false
+  for (let i = 0; i < a.length; i++) {
+    for (let k = 0; k < b.length; k++) {
+      if (segmentsCross(a[i], a[(i + 1) % a.length], b[k], b[(k + 1) % b.length], epsilon)) return true
+    }
+  }
+  // Small next to any real drawing error, far above float noise.
+  const inset = 1e-3
+  return interiorSamples(a, inset).some((p) => pointInPolygon(p, b)) || interiorSamples(b, inset).some((p) => pointInPolygon(p, a))
+}
+
+/**
+ * Where to write a polygon's name. The centroid when it falls inside; for a
+ * shape that wraps around its own centroid (an L or U), the middle of the
+ * widest horizontal run through the centroid's height, then through the
+ * bounding box's.
+ */
+export function polygonLabelPoint(polygon: readonly Point[]): Point {
+  if (polygon.length === 0) return [0, 0]
+  const box = bboxOfPoints(polygon)
+  const twiceArea = signedDoubleArea(polygon)
+  let centroid: Point = [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2]
+  if (Math.abs(twiceArea) > GEOMETRY_EPSILON) {
+    let cx = 0
+    let cy = 0
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const f = polygon[j][0] * polygon[i][1] - polygon[i][0] * polygon[j][1]
+      cx += (polygon[j][0] + polygon[i][0]) * f
+      cy += (polygon[j][1] + polygon[i][1]) * f
+    }
+    centroid = [cx / (3 * twiceArea), cy / (3 * twiceArea)]
+  }
+  if (pointInPolygon(centroid, polygon)) return centroid
+  for (const y of [centroid[1], (box[1] + box[3]) / 2]) {
+    const run = widestRunAt(polygon, y)
+    if (run) return [(run[0] + run[1]) / 2, y]
+  }
+  return centroid
+}
+
+function widestRunAt(polygon: readonly Point[], y: number): [number, number] | null {
+  const xs: number[] = []
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [xi, yi] = polygon[i]
+    const [xj, yj] = polygon[j]
+    if (yi > y !== yj > y) xs.push(xi + ((y - yi) * (xj - xi)) / (yj - yi))
+  }
+  xs.sort((p, q) => p - q)
+  let best: [number, number] | null = null
+  for (let i = 0; i + 1 < xs.length; i += 2) {
+    if (!best || xs[i + 1] - xs[i] > best[1] - best[0]) best = [xs[i], xs[i + 1]]
+  }
+  return best
+}
+
+function distanceToSegment([px, py]: Point, [ax, ay]: Point, [bx, by]: Point): number {
+  const dx = bx - ax
+  const dy = by - ay
+  const lengthSquared = dx * dx + dy * dy
+  const t = lengthSquared === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSquared))
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+}
+
+function distanceToBoundary(point: Point, polygon: readonly Point[]): number {
+  let best = Infinity
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) best = Math.min(best, distanceToSegment(point, polygon[j], polygon[i]))
+  return best
+}
+
+/**
+ * True when two simple polygons share floor deeper than `tolerance` from both
+ * outlines. Outlines clicked by hand along the same wall never land on exactly
+ * the same line; the sliver between them is drawing error, not overlap.
+ *
+ * Samples the shared bounding box on a grid finer than the tolerance, so any
+ * overlap wider than twice the tolerance is always caught.
+ */
+export function polygonsOverlapBeyond(a: readonly Point[], b: readonly Point[], tolerance: number): boolean {
+  if (tolerance <= 0) return polygonsOverlap(a, b)
+  if (!polygonsOverlap(a, b)) return false
+  const [ax0, ay0, ax1, ay1] = bboxOfPoints(a)
+  const [bx0, by0, bx1, by1] = bboxOfPoints(b)
+  const x0 = Math.max(ax0, bx0)
+  const y0 = Math.max(ay0, by0)
+  const x1 = Math.min(ax1, bx1)
+  const y1 = Math.min(ay1, by1)
+  // Cap the grid so a huge shared box stays cheap; the cap only coarsens very large overlaps.
+  const step = Math.max(tolerance / 2, (x1 - x0) / 400, (y1 - y0) / 400)
+  for (let y = y0 + step / 2; y < y1; y += step) {
+    for (let x = x0 + step / 2; x < x1; x += step) {
+      const p: Point = [x, y]
+      if (pointInPolygon(p, a) && pointInPolygon(p, b) && distanceToBoundary(p, a) > tolerance && distanceToBoundary(p, b) > tolerance) return true
+    }
+  }
+  return false
+}

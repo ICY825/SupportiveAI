@@ -1044,6 +1044,60 @@
   fill: rgba(43, 42, 107, 0.15);
 }
 
+.fp-room[data-source-kind='user-authored'] {
+  fill: rgba(210, 24, 31, 0.08);
+  stroke: var(--vsf-red);
+  stroke-dasharray: 2 1.4;
+}
+
+.fp-room-parts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.fp-room-parts span {
+  flex: 1 1 100%;
+  color: var(--fp-text-2);
+}
+
+.fp-room-path polyline {
+  fill: none;
+  stroke: var(--vsf-red);
+  stroke-width: 0.8;
+  stroke-dasharray: 2 1.4;
+}
+
+.fp-room-path circle {
+  fill: #fff;
+  stroke: var(--vsf-red);
+  stroke-width: 0.6;
+}
+
+.fp-room-path circle.is-first {
+  fill: var(--vsf-red);
+}
+
+.fp-room-label {
+  font-size: 7px;
+  font-weight: 600;
+  fill: var(--vsf-red);
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 2px;
+  pointer-events: none;
+}
+
+.fp-room-draft {
+  fill: rgba(210, 24, 31, 0.1);
+  stroke: var(--vsf-red);
+  stroke-width: 0.8;
+  stroke-dasharray: 2 1.4;
+  pointer-events: none;
+}
+
 .fp-object {
   fill: rgba(106, 76, 147, 0.12);
   stroke: var(--fp-facility);
@@ -1173,6 +1227,44 @@
 }
 
 /* ---------------------------------------------------------------- department manager & PDF title controls */
+
+.fp-authored-tools {
+  margin: 14px 0 16px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--fp-r);
+  background: var(--canvas-2);
+}
+
+.fp-authored-tools-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.fp-authored-tools-head h3 {
+  margin: 3px 0 0;
+  font-size: var(--fp-t-section);
+  font-weight: 600;
+}
+
+.fp-authored-room-form {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.fp-authored-room-form .fp-sub { margin: 0 0 4px; }
+.fp-form-warning { margin: 0; padding: 7px 8px; border-left: 2px solid var(--vsf-red); background: rgba(210, 24, 31, 0.06); color: var(--ink); font-size: var(--fp-t-small); }
+.fp-form-error { margin: 0; color: var(--vsf-red); font-size: var(--fp-t-small); }
+.fp-authored-entity-list { display: grid; gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; }
+.fp-authored-entity-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 7px; border-top: 1px solid var(--line); }
+.fp-authored-entity-list strong, .fp-authored-entity-list small { display: block; }
+.fp-authored-entity-list small { margin-top: 2px; color: var(--muted); font-size: var(--fp-t-micro); }
+.fp-authored-delete-row { margin: 10px 0 14px; }
 
 .fp-zone-actions-wrap {
   margin: 8px 0 14px;
@@ -1464,6 +1556,8 @@
   outline: none;
   box-shadow: var(--fp-focus-inset);
 }
+
+.fp-svg.is-room-drawing { cursor: crosshair; }
 
 /* physical workstation outlines give way to desk status fills */
 .has-desk-status .fp-ws {

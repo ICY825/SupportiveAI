@@ -2,6 +2,7 @@ import { memo, useId, useMemo, type KeyboardEvent, type ReactNode, type RefObjec
 import { initials } from '../components/desk-inspector/format'
 import type { DeskRecord, DeskStatus } from '../domain/desk'
 import type { Point, Workstation } from '../domain/spatial'
+import { roomParts } from '../domain/roomOutline'
 import { DESK_STATUS } from '../labels'
 import {
   MARKER_RADIUS,
@@ -91,7 +92,7 @@ const Architecture = memo(function Architecture({ scene, clipId }: { scene: Work
       <g transform={planeTransform()} clipPath={`url(#${clipId})`}>
         <polygon points={points(contextPlane)} fill="#f5f7f8" />
         {scene.zones.map((zone) => <polygon key={zone.id} points={points(zone.polygon)} fill="#e5edf4" stroke="#7c9bb6" strokeWidth={0.35} strokeDasharray="1.5 1" />)}
-        {scene.rooms.map((room) => <polygon key={room.id} points={points(room.polygon)} fill="#edf0f2" stroke="#8d9ba6" strokeWidth={0.35} />)}
+        {scene.rooms.flatMap((room) => roomParts(room).map((part, i) => <polygon key={`${room.id}:${i}`} points={points(part)} fill="#edf0f2" stroke="#8d9ba6" strokeWidth={0.35} />))}
         {scene.obstacles.filter((obstacle) => obstacle.category === 'solid').map((obstacle) => (
           <polygon key={obstacle.id} points={points(obstacle.polygon)} fill="#b8c4cc" stroke="#74838e" strokeWidth={0.35} />
         ))}
@@ -110,7 +111,7 @@ const Architecture = memo(function Architecture({ scene, clipId }: { scene: Work
         <text key={`label-${zone.id}`} x={project(zone.labelAnchor)[0]} y={project(zone.labelAnchor)[1]} className="sw-plane-label" textAnchor="middle">{zone.name}</text>
       ) : null)}
       {scene.rooms.map((room) => {
-        const center = roomLabelAnchor(room.bbox)
+        const center = roomLabelAnchor(room)
         if (!labelAnchorInView(center, scene.contextBounds)) return null
         const label = project(center)
         return <text key={`room-label-${room.id}`} x={label[0]} y={label[1]} className="sw-room-label" textAnchor="middle">{room.name}</text>

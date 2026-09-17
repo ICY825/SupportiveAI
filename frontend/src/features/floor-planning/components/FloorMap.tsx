@@ -1,7 +1,9 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import type { DeskStatus } from '../domain/desk'
-import type { BaseLayer, EntityKind, EntityRef, FloorDataset, Point } from '../domain/spatial'
+import type { BaseLayer, BBox, EntityKind, EntityRef, FloorDataset, Point } from '../domain/spatial'
 import { zoneDisplayPolygon } from '../domain/zoneGeometry'
+import { rectangle } from '../domain/geometry'
+import { closesOutline, roomLabelPoint, roomParts, simplifyOutline, snapOutlineCorner } from '../domain/roomOutline'
 import { gridRefAt } from '../map/grid'
 import { isSheetAnnotation } from '../map/sheetLabels'
 import { UNLABELED_ZONE, objectName } from '../labels'
@@ -25,7 +27,16 @@ interface FloorMapProps {
   onKeyDown?: (e: ReactKeyboardEvent<SVGSVGElement>) => void
   /** callback when a zone label is dragged/repositioned or updated */
   onZoneUpdate?: (update: { zoneId: string; labelAnchor?: Point; name?: string | null }) => void
+  /** outline authoring mode for user-created rooms: drag a rectangle or click corners */
+  roomDrawMode?: boolean
+  /** pieces of the room being authored that are already drawn */
+  roomDraft?: readonly Point[][] | null
+  onRoomDraw?: (polygon: Point[]) => void
+  onRoomDrawCancel?: () => void
 }
+
+/** Screen distance within which a corner snaps to a guide or closes the outline. */
+const ROOM_SNAP_PX = 10
 
 const DRAG_THRESHOLD_PX = 4
 
@@ -53,11 +64,26 @@ export function FloorMap({
   deskStatuses,
   onKeyDown,
   onZoneUpdate,
+  roomDrawMode = false,
+  roomDraft = null,
+  onRoomDraw,
+  onRoomDrawCancel,
 }: FloorMapProps) {
   const svgRef = useRef<SVGSVGElement | null>(null)
   const drag = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null)
   const [cursor, setCursor] = useState<Point | null>(null)
   const [draggedLabel, setDraggedLabel] = useState<{ zoneId: string; anchor: Point } | null>(null)
+  const roomDrag = useRef<{ pointerId: number; start: Point; current: Point; startX: number; startY: number; moved: boolean } | null>(null)
+  // Corners placed so far when a room is clicked corner by corner, and where the next one would go.
+  const [roomPath, setRoomPath] = useState<Point[]>([])
+  const [roomNextCorner, setRoomNextCorner] = useState<Point | null>(null)
+  // Corners of pieces and rooms already drawn, which a new corner snaps onto.
+  const roomSnapCorners = useMemo(
+    () => (roomDrawMode ? [...(roomDraft ?? []).flat(), ...dataset.rooms.flatMap((room) => roomParts(room).flat())] : []),
+    [roomDrawMode, roomDraft, dataset.rooms],
+  )
+  // The rectangle under a drag in progress.
+  const [roomRectangle, setRoomRectangle] = useState<Point[] | null>(null)
   const labelDrag = useRef<{
     pointerId: number
     zoneId: string
@@ -149,6 +175,15 @@ export function FloorMap({
   // Window blur cleans up any active drag to prevent stuck pointer lockouts
   useEffect(() => {
     const onBlur = () => {
+      if (roomDrag.current) {
+        try {
+          if (svgRef.current?.hasPointerCapture?.(roomDrag.current.pointerId)) {
+            svgRef.current.releasePointerCapture(roomDrag.current.pointerId)
+          }
+        } catch {}
+        if (roomDrag.current.moved) setRoomRectangle(null)
+        roomDrag.current = null
+      }
       if (labelDrag.current) {
         try {
           if (svgRef.current?.hasPointerCapture?.(labelDrag.current.pointerId)) {
@@ -213,9 +248,66 @@ export function FloorMap({
     }
   }, [scheduleFrame, updateCachedRect])
 
+  const finishRoomPath = useCallback(
+    (path: readonly Point[]) => {
+      const outline = simplifyOutline(path)
+      if (outline.length < 3) return
+      setRoomPath([])
+      setRoomNextCorner(null)
+      onRoomDraw?.(outline)
+    },
+    [onRoomDraw],
+  )
+
+  // Entering or leaving draw mode from anywhere (panel cancel, save) drops a half-clicked outline.
+  const [roomPathMode, setRoomPathMode] = useState(roomDrawMode)
+  if (roomPathMode !== roomDrawMode) {
+    setRoomPathMode(roomDrawMode)
+    setRoomPath([])
+    setRoomNextCorner(null)
+  }
+
+  useEffect(() => {
+    if (!roomDrawMode) return
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.defaultPrevented) return
+      const target = e.target as HTMLElement | null
+      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return
+      if (e.key === 'Enter' && roomPath.length >= 3) {
+        e.preventDefault()
+        finishRoomPath(roomPath)
+      } else if (e.key === 'Backspace' && roomPath.length > 0) {
+        e.preventDefault()
+        const next = roomPath.slice(0, -1)
+        setRoomPath(next)
+        setRoomNextCorner(next.length ? next[next.length - 1] : null)
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        if (roomPath.length > 0) {
+          setRoomPath([])
+          setRoomNextCorner(null)
+        } else onRoomDrawCancel?.()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [roomDrawMode, roomPath, finishRoomPath, onRoomDrawCancel])
+
   const onPointerDown = (e: ReactPointerEvent<SVGSVGElement>) => {
     if (e.button !== 0) return
     if (!Number.isFinite(e.clientX) || !Number.isFinite(e.clientY)) return
+
+    if (roomDrawMode) {
+      updateCachedRect()
+      const rect = cachedRect.current
+      const start = screenToFloor(viewport, e.clientX - rect.left, e.clientY - rect.top)
+      roomDrag.current = { pointerId: e.pointerId, start, current: start, startX: e.clientX, startY: e.clientY, moved: false }
+      onSelect(null)
+      try {
+        svgRef.current?.setPointerCapture(e.pointerId)
+      } catch {}
+      return
+    }
 
     // PDF tool affordance: dragging or clicking a zone title/label
     const labelEl = (e.target as Element | null)?.closest?.('[data-zone-label="true"]')
@@ -255,6 +347,21 @@ export function FloorMap({
   }
 
   const onPointerMove = (e: ReactPointerEvent<SVGSVGElement>) => {
+    const rd = roomDrag.current
+    if (rd && rd.pointerId === e.pointerId) {
+      const rect = cachedRect.current
+      const current = screenToFloor(viewport, e.clientX - rect.left, e.clientY - rect.top)
+      rd.current = current
+      // Once corners are being clicked, a slipped drag is still a click, not a rectangle.
+      if (!rd.moved && roomPath.length === 0 && Math.hypot(e.clientX - rd.startX, e.clientY - rd.startY) > DRAG_THRESHOLD_PX) rd.moved = true
+      if (rd.moved) setRoomRectangle(rectangle(bboxFromCorners(rd.start, current)))
+      return
+    }
+    if (roomDrawMode && roomPath.length > 0) {
+      const rect = cachedRect.current
+      const pointer = screenToFloor(viewport, e.clientX - rect.left, e.clientY - rect.top)
+      setRoomNextCorner(snapOutlineCorner(roomPath, pointer, ROOM_SNAP_PX / viewport.scale, e.shiftKey, roomSnapCorners))
+    }
     const ld = labelDrag.current
     if (ld && ld.pointerId === e.pointerId) {
       const dx = e.clientX - ld.startX
@@ -315,6 +422,30 @@ export function FloorMap({
   }
 
   const onPointerUp = (e: ReactPointerEvent<SVGSVGElement>) => {
+    const rd = roomDrag.current
+    if (rd && rd.pointerId === e.pointerId) {
+      roomDrag.current = null
+      if (rd.moved) {
+        const bbox = bboxFromCorners(rd.start, rd.current)
+        setRoomRectangle(null)
+        if (bbox[2] > bbox[0] && bbox[3] > bbox[1]) onRoomDraw?.(rectangle(bbox))
+      } else {
+        const tolerance = ROOM_SNAP_PX / viewport.scale
+        const corner = snapOutlineCorner(roomPath, rd.start, tolerance, e.shiftKey, roomSnapCorners)
+        const last = roomPath[roomPath.length - 1]
+        // Clicking the first corner closes; so does the second click of a double-click.
+        const repeated = last !== undefined && roomPath.length >= 3 && Math.hypot(corner[0] - last[0], corner[1] - last[1]) <= tolerance
+        if (closesOutline(roomPath, corner, tolerance) || repeated) finishRoomPath(roomPath)
+        else if (!last || corner[0] !== last[0] || corner[1] !== last[1]) {
+          setRoomPath([...roomPath, corner])
+          setRoomNextCorner(corner)
+        }
+      }
+      try {
+        if (svgRef.current?.hasPointerCapture?.(e.pointerId)) svgRef.current.releasePointerCapture(e.pointerId)
+      } catch {}
+      return
+    }
     const ld = labelDrag.current
     if (ld && ld.pointerId === e.pointerId) {
       labelDrag.current = null
@@ -357,6 +488,12 @@ export function FloorMap({
   }
 
   const onPointerCancel = (e: ReactPointerEvent<SVGSVGElement>) => {
+    const rd = roomDrag.current
+    if (rd && rd.pointerId === e.pointerId) {
+      roomDrag.current = null
+      if (rd.moved) setRoomRectangle(null)
+      return
+    }
     const ld = labelDrag.current
     if (ld && ld.pointerId === e.pointerId) {
       try {
@@ -393,7 +530,7 @@ export function FloorMap({
     <div ref={containerRef} className="fp-map">
       <svg
         ref={svgRef}
-        className={`fp-svg${panning ? ' is-panning' : ''}${debug ? ' is-debug' : ''}${deskStatuses ? ' has-desk-status' : ''}${deskSelected ? ' has-desk-selection' : ''}`}
+        className={`fp-svg${panning ? ' is-panning' : ''}${debug ? ' is-debug' : ''}${deskStatuses ? ' has-desk-status' : ''}${deskSelected ? ' has-desk-selection' : ''}${roomDrawMode ? ' is-room-drawing' : ''}`}
         role="application"
         aria-label={`Bản đồ mặt bằng ${layout.floor.name}`}
         aria-roledescription="bản đồ tương tác"
@@ -454,6 +591,18 @@ export function FloorMap({
           )}
 
           <EntityLayer dataset={dataset} />
+
+          {roomDraft?.map((part, i) => <polygon key={i} className="fp-room-draft" points={points(part)} pointerEvents="none" />)}
+          {roomRectangle && <polygon className="fp-room-draft" points={points(roomRectangle)} pointerEvents="none" />}
+
+          {roomDrawMode && roomPath.length > 0 && (
+            <g className="fp-room-path" pointerEvents="none">
+              <polyline points={points(roomNextCorner ? [...roomPath, roomNextCorner] : roomPath)} />
+              {roomPath.map(([x, y], i) => (
+                <circle key={i} cx={x} cy={y} r={(i === 0 ? 5 : 3.5) / viewport.scale} className={i === 0 ? 'is-first' : undefined} />
+              ))}
+            </g>
+          )}
 
           {settings.labels && showDigital && (
             <Labels
@@ -559,18 +708,19 @@ const EntityLayer = memo(function EntityLayer({ dataset }: { dataset: FloorDatas
         ))}
       </g>
       <g className="fp-rooms">
-        {dataset.rooms.map((r) => (
+        {dataset.rooms.flatMap((r) => roomParts(r).map((part, i) => (
           <polygon
-            key={r.id}
+            key={`${r.id}:${i}`}
             className="fp-room"
-            points={points(r.polygon)}
+            points={points(part)}
             data-entity-kind="room"
             data-entity-id={r.id}
             data-verification={r.verification}
+            data-source-kind={r.source.kind}
           >
             <title>{r.name}</title>
           </polygon>
-        ))}
+        )))}
       </g>
       <g className="fp-objects">
         {dataset.objects.map((o) => (
@@ -597,6 +747,7 @@ const EntityLayer = memo(function EntityLayer({ dataset }: { dataset: FloorDatas
             data-entity-id={w.id}
             data-verification={w.verification}
             data-classification={w.classification}
+            data-source-kind={w.source.kind}
           >
             <title>{w.id}</title>
           </polygon>
@@ -660,6 +811,15 @@ const Labels = memo(function Labels({
   const { layout, zones } = dataset
   return (
     <g className="fp-labels">
+      {/* Extracted rooms are already named by the drawing's own CAD text. */}
+      {dataset.rooms.filter((r) => r.source.kind === 'user-authored').map((r) => {
+        const [x, y] = roomLabelPoint(r)
+        return (
+          <text key={r.id} className="fp-room-label" x={x} y={y} textAnchor="middle" dominantBaseline="middle" aria-hidden="true">
+            {r.name}
+          </text>
+        )
+      })}
       {layout.labels.filter((l) => !isSheetAnnotation(l)).map((l, i) => (
         <text
           key={i}
@@ -732,7 +892,7 @@ const Selection = memo(function Selection({ dataset, selected }: { dataset: Floo
       case 'zone':
         return dataset.zones.filter((z) => z.id === selected.id).map((z) => z.polygon)
       case 'room':
-        return dataset.rooms.filter((r) => r.id === selected.id).map((r) => r.polygon)
+        return dataset.rooms.filter((r) => r.id === selected.id).flatMap(roomParts)
       case 'object':
         return dataset.objects.filter((o) => o.id === selected.id).map((o) => o.polygon)
       case 'workstation':
@@ -811,3 +971,7 @@ const DebugLayer = memo(function DebugLayer({ dataset, settings }: { dataset: Fl
     </g>
   )
 })
+
+function bboxFromCorners(a: Point, b: Point): BBox {
+  return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])]
+}

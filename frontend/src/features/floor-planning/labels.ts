@@ -200,6 +200,7 @@ export const SEAT_ASSIGNMENT = {
   assign: 'Gán nhân sự',
   reassign: 'Đổi chỗ',
   release: 'Giải phóng chỗ ngồi',
+  delete: 'Xóa bàn',
   undo: 'Hoàn tác',
   assigned: (name: string) => `Đã gán ${name}`,
   released: 'Đã giải phóng chỗ ngồi',
@@ -246,6 +247,8 @@ export const LAYOUT_EDIT = {
   undo: 'Hoàn tác',
   redo: 'Làm lại',
   reset: 'Về vị trí gốc',
+  rotateBlocked: 'Hàng bàn đã kín, không xoay được tại chỗ',
+  boundaryWarning: 'Bước tiếp theo sẽ đưa bàn ra ngoài ranh giới khu vực.',
   save: 'Lưu bố trí',
   cancel: 'Hủy',
   saving: 'Đang lưu…',
@@ -257,8 +260,6 @@ export const LAYOUT_EDIT = {
   noChange: 'Chưa có thay đổi',
   invalidSummary: (n: number) => `${n} bàn chưa hợp lệ`,
   gridLabel: (mm: number) => `Lưới ${mm} mm`,
-  /** Said plainly: a committed layout does not survive a reload yet. */
-  persistenceNote: 'Bố trí đã lưu chỉ tồn tại trong phiên làm việc này; chưa kết nối máy chủ.',
   boundaryNote:
     'Phạm vi bố trí lấy theo ranh giới khu vực được đánh dấu trên bản vẽ nguồn, không phải ranh giới tường thực tế.',
   dirtyTitle: 'Bố trí hiện tại có thay đổi chưa được lưu.',
@@ -272,25 +273,13 @@ export const PLACEMENT_ISSUE = {
   overlap: (code: string, target?: 'desk' | 'chair') =>
     target === 'chair' ? `Không gian ghế chồng lấn bàn ${code}` : `Chồng lấn bàn ${code}`,
   outsideBoundary: 'Ngoài phạm vi bố trí',
-  outsideRoomBoundary: (roomName?: string, target?: 'desk' | 'chair') => {
-    const base = roomName ? `Ngoài ranh giới phòng ${roomName}` : 'Ngoài ranh giới phòng'
-    return target === 'chair' ? `Không gian ghế ${base.toLowerCase()}` : base
+  outsideRoomBoundary: (_roomName?: string, target?: 'desk' | 'chair') => target === 'chair' ? 'Ghế nằm ngoài ranh giới phòng' : 'Bàn nằm ngoài ranh giới phòng',
+  outsideDepartmentZone: (_zoneName?: string, target?: 'desk' | 'chair') => target === 'chair' ? 'Ghế nằm ngoài phạm vi khu vực' : 'Bàn nằm ngoài phạm vi khu vực',
+  obstacleCollision: (_obstacleName?: string, obstacleKind?: 'column' | 'wall', target?: 'desk' | 'chair') => {
+    const kindText = obstacleKind === 'column' ? 'cột kết cấu' : 'lõi thang máy'
+    return target === 'chair' ? `Ghế sẽ chạm ${kindText}` : `Bàn sẽ chạm ${kindText}`
   },
-  outsideDepartmentZone: (zoneName?: string, target?: 'desk' | 'chair') => {
-    const base = zoneName ? `Ngoài phạm vi khu vực ${zoneName}` : 'Ngoài phạm vi khu vực'
-    return target === 'chair' ? `Không gian ghế ${base.toLowerCase()}` : base
-  },
-  obstacleCollision: (obstacleName?: string, obstacleKind?: 'column' | 'wall', target?: 'desk' | 'chair') => {
-    const kindText = obstacleKind === 'column' ? 'cột kết cấu' : 'tường bê tông'
-    const nameText = obstacleName ? ` (${obstacleName})` : ` ${kindText}`
-    return target === 'chair' ? `Không gian ghế va chạm${nameText}` : `Va chạm${nameText}`
-  },
-  clearanceConflict: (obstacleName?: string, target?: 'desk' | 'chair') => {
-    const nameText = obstacleName ? ` (${obstacleName})` : ''
-    return target === 'chair'
-      ? `Không gian ghế xung đột khoảng mở cửa${nameText}`
-      : `Xung đột khoảng mở cửa${nameText}`
-  },
+  clearanceConflict: (_obstacleName?: string, target?: 'desk' | 'chair') => target === 'chair' ? 'Ghế sẽ chạm khoảng mở cửa' : 'Bàn sẽ chạm khoảng mở cửa',
 } as const
 
 /** Geometry reports issues as data; the wording is chosen here. */
@@ -308,5 +297,18 @@ export function placementIssueText(issue: PlacementIssue, codeOf: (entityId: str
       return PLACEMENT_ISSUE.obstacleCollision(issue.obstacleName, issue.obstacleKind, issue.target)
     case 'clearance-conflict':
       return PLACEMENT_ISSUE.clearanceConflict(issue.obstacleName, issue.target)
+  }
+}
+
+/** Keeps CAD names and ids available on hover without making the warning hard to read. */
+export function placementIssueTitle(issue: PlacementIssue, codeOf: (entityId: string) => string): string {
+  const visible = placementIssueText(issue, codeOf)
+  switch (issue.type) {
+    case 'overlap': return `${visible} · Mã bàn: ${issue.entityId}`
+    case 'outside-room-boundary': return `${visible} · Phòng: ${issue.roomName ?? issue.roomId ?? 'không xác định'} · Mã: ${issue.roomId ?? 'không xác định'}`
+    case 'outside-department-zone': return `${visible} · Khu vực: ${issue.zoneName ?? issue.zoneId ?? 'không xác định'} · Mã: ${issue.zoneId ?? 'không xác định'}`
+    case 'obstacle-collision': return `${visible} · Chướng ngại: ${issue.obstacleName ?? issue.obstacleId} · Mã: ${issue.obstacleId}`
+    case 'clearance-conflict': return `${visible} · Khoảng mở cửa: ${issue.obstacleName ?? issue.obstacleId} · Mã: ${issue.obstacleId}`
+    case 'outside-boundary': return `${visible} · Ranh giới bố trí của khu vực`
   }
 }

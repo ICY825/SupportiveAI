@@ -104,7 +104,7 @@ export interface FloorLayout {
 }
 
 export interface EntitySource {
-  kind: 'pdf-annotation' | 'pdf-vector' | 'pdf-text' | 'authoring-rule'
+  kind: 'pdf-annotation' | 'pdf-vector' | 'pdf-text' | 'authoring-rule' | 'user-authored'
   geometry?: string
   annotationId?: string
   annotationType?: string
@@ -115,6 +115,11 @@ export interface EntitySource {
   /** Authoring-time template only; runtime rendering never evaluates it. */
   templateId?: string
   text?: string
+  /** Provenance for user-authored entities and future re-extraction reconciliation. */
+  authoredBy?: string
+  authoredAt?: string
+  sourcePdfSha256?: string
+  deskCode?: string
 }
 
 export interface SpatialEntity {
@@ -161,10 +166,16 @@ export interface Zone extends SpatialEntity {
 }
 
 export interface Room extends SpatialEntity {
-  type: 'ROOM'
+  type: import('./roomTypes').RoomType
   zoneId: string | null
   name: string
+  /** The room's outline; for a room in several pieces, its first piece. */
   polygon: Point[]
+  /**
+   * Further pieces of the same room, such as a lounge split by a corridor.
+   * Read the shape through `roomParts`, never `polygon` alone.
+   */
+  extraPolygons?: Point[][]
   areaM2: number
   source: EntitySource
 }

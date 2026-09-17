@@ -1,6 +1,8 @@
 import { memo, useId, useMemo } from 'react'
+import { placementBounds } from '../domain/placement'
+import { clipPolygonToBBox } from '../domain/geometry'
 import type { PlacementValidation, SpatialGrid, SpatialPlacement } from '../domain/placement'
-import type { FloorObstacle } from '../domain/spatial'
+import type { BBox, FloorObstacle } from '../domain/spatial'
 import { LAYOUT_EDIT } from '../labels'
 import { buildEditOverlay, placementOutline, rotateHandleAnchor } from './editGeometry'
 import type { EditableArea } from './layoutDraft'
@@ -42,7 +44,9 @@ export interface EditAffordancesProps {
   placements: Record<string, SpatialPlacement>
   selectedId: string | undefined
   validation: ReadonlyMap<string, PlacementValidation>
+  preview?: { placement: SpatialPlacement; valid: boolean }
   deskHeight: number
+  mmPerPt: number
   dragging: boolean
   onRotate: (entityId: string) => void
   obstacles?: readonly FloorObstacle[]
@@ -52,7 +56,9 @@ export function EditAffordances({
   placements,
   selectedId,
   validation,
+  preview,
   deskHeight,
+  mmPerPt,
   dragging,
   onRotate,
   obstacles,
@@ -71,8 +77,9 @@ export function EditAffordances({
 
   const collidingObstacles = useMemo(() => {
     if (obstacleMap.size === 0) return []
-    const collidingMap = new Map<string, FloorObstacle>()
-    for (const val of validation.values()) {
+    const collidingMap = new Map<string, { obstacle: FloorObstacle; clips: BBox[] }>()
+    const margin = 1000 / mmPerPt
+    for (const [entityId, val] of validation) {
       if (val.valid) continue
       for (const reason of val.reasons) {
         if (
@@ -80,12 +87,19 @@ export function EditAffordances({
           reason.obstacleId
         ) {
           const obs = obstacleMap.get(reason.obstacleId)
-          if (obs) collidingMap.set(obs.id, obs)
+          const placement = placements[entityId]
+          if (obs && placement) {
+            const [x0, y0, x1, y1] = placementBounds(placement)
+            const clippedTo: BBox = [x0 - margin, y0 - margin, x1 + margin, y1 + margin]
+            const current = collidingMap.get(obs.id) ?? { obstacle: obs, clips: [] }
+            current.clips.push(clippedTo)
+            collidingMap.set(obs.id, current)
+          }
         }
       }
     }
     return Array.from(collidingMap.values())
-  }, [validation, obstacleMap])
+  }, [mmPerPt, obstacleMap, placements, validation])
 
   const handle = selected && !dragging ? rotateHandleAnchor(selected, deskHeight) : null
 
@@ -98,7 +112,14 @@ export function EditAffordances({
         </pattern>
       </defs>
       <g pointerEvents="none" aria-hidden="true">
-        {collidingObstacles.map((obs) => (
+        {preview && (
+          <polygon
+            className={`sw-edit-placement-preview${preview.valid ? '' : ' is-invalid'}`}
+            data-pending-workstation-id={preview.placement.entityId}
+            points={placementOutline(preview.placement, deskHeight)}
+          />
+        )}
+        {collidingObstacles.map(({ obstacle: obs, clips }) => (
           <g
             key={obs.id}
             className={`sw-edit-invalid sw-edit-obstacle-conflict sw-edit-conflict-obstacle sw-edit-obstacle-${obs.kind}`}
@@ -106,12 +127,12 @@ export function EditAffordances({
             data-conflict-obstacle={obs.id}
             data-obstacle-kind={obs.kind}
           >
-            <polygon
-              className="sw-edit-obstacle-hatch"
-              points={projectedPoints(obs.polygon, 0)}
-              fill={`url(#${hatchId})`}
-              opacity={0.45}
-            />
+            {clips.map((clip, index) => {
+              const points = clipPolygonToBBox(obs.polygon, clip)
+              return points.length >= 3 ? (
+                <polygon key={index} className="sw-edit-obstacle-hatch" points={projectedPoints(points, 0)} fill={`url(#${hatchId})`} opacity={0.45} />
+              ) : null
+            })}
             <polygon
               className="sw-edit-obstacle-outline"
               points={projectedPoints(obs.polygon, 0)}

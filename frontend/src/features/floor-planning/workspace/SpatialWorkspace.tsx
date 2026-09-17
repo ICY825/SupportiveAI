@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import type { FloorAllocationData } from '../domain/allocation'
+import type { FloorAllocationData, Seat } from '../domain/allocation'
 import { createDemoAllocation } from '../allocation/demoAllocation'
 import {
   applyAllocationMutations,
@@ -15,8 +15,15 @@ import { isMac, isTypingTarget } from '../components/keyboard'
 import { formatDate, initials } from '../components/desk-inspector/format'
 import { EmployeePicker } from '../components/desk-inspector/EmployeePicker'
 import { OverflowMenu } from '../components/desk-inspector/OverflowMenu'
+import {
+  authoredDeskId,
+  authoredWorkstationFromPlacement,
+  nextAuthoredDeskNumber,
+  type AuthoredEntities,
+  type AuthoredEntityChanges,
+} from '../domain/authoredEntities'
 import { buildDeskIndex, DESK_STATUSES, type DeskRecord, type DeskStatus } from '../domain/desk'
-import { placementsEqual, type SpatialPlacement } from '../domain/placement'
+import { placementsEqual, snapPlacementToGrid, validatePlacement, type SpatialPlacement } from '../domain/placement'
 import type { BBox, EntityRef, FloorDataset, Point } from '../domain/spatial'
 import {
   DESK_STATUS,
@@ -44,7 +51,7 @@ import {
   type LayoutStore,
 } from './layoutDraft'
 import { buildWorkspaceDisplayAreas } from './displayAreas'
-import { buildWorkspaceScene, detailTierForZoom, effectiveZoom, fitViewBox, project, sceneBounds, unprojectDelta } from './scene'
+import { buildWorkspaceScene, detailTierForZoom, effectiveZoom, fitViewBox, project, sceneBounds, unproject, unprojectDelta } from './scene'
 import { defaultWorkspaceScope, resolveDepartmentWingZone } from './scope'
 import { useLayoutEditor, NUDGE_COARSE_CELLS, type WorkspaceMode } from './useLayoutEditor'
 import { SeatSymbol, WorkspaceScene } from './WorkspaceScene'
@@ -85,20 +92,23 @@ function LegendMark({ status }: { status: DeskStatus }) {
  * Seat counts and the map key for the current scope. Stays in the panel whether
  * or not a desk is selected: it describes the scope, not the selection.
  */
-function ScopeSummary({ dataset, departmentZone, count, counts, children }: {
+function ScopeSummary({ dataset, areaLabel, departmentZone, count, counts, capacityAnswer, children }: {
   dataset: FloorDataset
+  areaLabel: string
   departmentZone: string
   count: number
   counts: (status: DeskStatus) => number
+  capacityAnswer?: ReactNode
   /** empty-state prompt, shown between the counts and the key when nothing is selected */
   children?: ReactNode
 }) {
   const { floor } = dataset.layout
+  const wingLabel = departmentZone.replace(/^Zone\s+/, 'Khu ')
   return (
     <section className="sw-summary" aria-labelledby="sw-summary-title">
       <header className="fp-panel-head">
         <h2 id="sw-summary-title">{floor.name}</h2>
-        <p className="fp-head-meta">{departmentZone}</p>
+        <p className="fp-head-meta">{areaLabel} · {wingLabel} · cánh toà nhà</p>
       </header>
       <dl className="fp-stats">
         <div>
@@ -112,6 +122,7 @@ function ScopeSummary({ dataset, departmentZone, count, counts, children }: {
           </div>
         ))}
       </dl>
+      {capacityAnswer}
       {children}
       <details className="fp-section sw-key-block" open>
         <summary>
@@ -145,6 +156,8 @@ function CompactInspector({
   canUndo,
   onApplyMutations,
   onUndo,
+  onDelete,
+  canDelete = false,
   onClose,
   onVerify,
   showHeader = true,
@@ -155,6 +168,8 @@ function CompactInspector({
   canUndo: boolean
   onApplyMutations: (mutations: readonly AllocationMutation[]) => void
   onUndo: () => void
+  onDelete: (workstationId: string) => void
+  canDelete?: boolean
   onClose: () => void
   onVerify: () => void
   showHeader?: boolean
@@ -171,9 +186,12 @@ function CompactInspector({
   const assignmentNotice = currentAssignmentState.notice
   const people = desk.status === 'reserved' && desk.reservation ? [desk.reservation] : desk.occupants
   const canAssign = desk.status === 'available' || desk.status === 'occupied'
-  const releaseItems = desk.status === 'occupied' || desk.status === 'conflict'
+  const releaseItems: Array<{ id: 'release-seat' | 'delete-desk'; label: string; danger?: boolean; separated?: boolean }> = desk.status === 'occupied' || desk.status === 'conflict'
     ? [{ id: 'release-seat' as const, label: SEAT_ASSIGNMENT.release }]
     : []
+  if (canDelete) {
+    releaseItems.push({ id: 'delete-desk' as const, label: SEAT_ASSIGNMENT.delete, danger: true, separated: true })
+  }
 
   const updateAssignmentState = (update: Partial<typeof currentAssignmentState>) => {
     setAssignmentState({ ...currentAssignmentState, ...update, seatId: desk.seat.id })
@@ -207,7 +225,7 @@ function CompactInspector({
     {showHeader && <header className="fp-card-head"><div><p className="fp-eyebrow">Bàn đang chọn</p><h2 id="sw-desk-title" className="fp-card-title">{desk.seat.code}</h2></div><div className="sw-inspector-actions">{releaseItems.length > 0 && <OverflowMenu
       label="Thao tác khác"
       items={releaseItems}
-      onSelect={releaseSeat}
+      onSelect={(action) => action === 'delete-desk' ? onDelete(desk.workstation.id) : releaseSeat()}
     />}<button type="button" className="fp-icon-btn" onClick={onClose} aria-label="Đóng bảng thông tin bàn" title="Đóng (Esc)"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg></button></div></header>}
     <Status desk={desk} />
     <section className="sw-person-section">
@@ -260,14 +278,25 @@ function CompactInspector({
 /** What a pointer press is doing. Panning and moving an object never mix. */
 interface DragSession {
   id: number
-  kind: 'pan' | 'object'
+  kind: 'pan' | 'object' | 'place'
   entityId?: string
   start: Point
   last: Point
   moved: boolean
 }
 
-export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, searchSlot, onDirtyChange, layoutStore = sessionLayoutStore }: {
+interface PendingDesk {
+  workstationId: string
+  number: number
+  zoneId: string | null
+  clusterId: string
+  width: number
+  depth: number
+  rotation: SpatialPlacement['rotation']
+  placement: SpatialPlacement | null
+}
+
+export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, searchSlot, onDirtyChange, authoredEntities, onAuthoredEntityChange, layoutStore = sessionLayoutStore }: {
   dataset: FloorDataset
   selected: EntityRef | null
   onSelect: (ref: EntityRef | null) => void
@@ -275,6 +304,8 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
   searchSlot: HTMLElement | null
   /** lets the page guard floor and view changes while a layout draft is open */
   onDirtyChange?: (dirty: boolean) => void
+  authoredEntities?: AuthoredEntities
+  onAuthoredEntityChange?: (changes: AuthoredEntityChanges) => void
   /** swap for an API-backed store once a layout endpoint exists */
   layoutStore?: LayoutStore
 }) {
@@ -284,6 +315,35 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     return applyAllocationMutations(baseAllocation, sessionAllocationStore.read(dataset.layout.floor.id) ?? [])
   })
   const allocationRef = useRef(allocation)
+
+  // Authored desks arrive through the spatial dataset after the demo
+  // allocation was initially generated. Add their seats without resetting
+  // existing assignments or in-session allocation mutations.
+  useEffect(() => {
+    const zoneLetters = new Map(dataset.zones.map((zone, index) => [zone.id, String.fromCharCode(65 + index)]))
+    const missing: Seat[] = dataset.workstations
+      .filter((workstation) => workstation.classification === 'WORKSTATION')
+      .filter((workstation) => !allocationRef.current.seats.some((seat) => seat.workstationId === workstation.id))
+      .map((workstation) => ({
+        id: `seat-${workstation.id}`,
+        code: workstation.source.deskCode ?? `F${dataset.layout.floor.level}-${workstation.zoneId ? zoneLetters.get(workstation.zoneId) : 'X'}-${workstation.id.split('-').at(-1)}`,
+        workstationId: workstation.id,
+        status: 'ACTIVE',
+        seatType: 'FIXED',
+        departmentId: null,
+        capabilities: { power: true, monitor: false, dockingStation: false },
+        verifiedBy: null,
+        verifiedAt: null,
+        layoutVersion: `${dataset.layout.floor.id}@demo`,
+      }))
+    if (!missing.length) return
+    setAllocation((current) => {
+      const next = { ...current, seats: [...current.seats, ...missing] }
+      allocationRef.current = next
+      return next
+    })
+  }, [dataset.layout.floor.id, dataset.layout.floor.level, dataset.workstations, dataset.zones])
+
   const undoMutationsRef = useRef<readonly AllocationMutation[] | null>(null)
   const [canUndo, setCanUndo] = useState(false)
 
@@ -348,6 +408,39 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
   const displayArea = baseArea
   const editor = useLayoutEditor({ floorId: dataset.layout.floor.id, basePlacements: base, area, store: layoutStore })
   const editing = editor.mode === 'edit'
+  const [areaPrompt, setAreaPrompt] = useState(false)
+  const [pendingDesk, setPendingDeskState] = useState<PendingDesk | null>(null)
+  const pendingDeskRef = useRef<PendingDesk | null>(null)
+  const setPendingDesk = useCallback((next: PendingDesk | null) => {
+    pendingDeskRef.current = next
+    setPendingDeskState(next)
+  }, [])
+
+  const addAuthoredDesk = useCallback(() => {
+    if (!onAuthoredEntityChange || !editing || !activeArea) return
+    const targetArea = activeArea
+    const template = dataset.workstations.find((workstation) => workstation.id === targetArea.workstationIds[0]) ?? dataset.workstations[0]
+    if (!template) return
+    const templatePlacement = placementFromWorkstation(template)
+    const issuedNumber = nextAuthoredDeskNumber(authoredEntities ?? { workstations: [], issuedDeskNumbers: [] })
+    setPendingDesk({
+      workstationId: authoredDeskId(dataset.layout.floor.level, issuedNumber),
+      number: issuedNumber,
+      zoneId: template.zoneId,
+      clusterId: template.clusterId,
+      width: templatePlacement.width,
+      depth: templatePlacement.depth,
+      rotation: templatePlacement.rotation,
+      placement: null,
+    })
+  }, [activeArea, authoredEntities, dataset, editing, onAuthoredEntityChange, setPendingDesk])
+
+  const deleteDesk = useCallback((workstationId: string) => {
+    const workstation = dataset.workstations.find((item) => item.id === workstationId)
+    if (!workstation || !onAuthoredEntityChange) return
+    onAuthoredEntityChange({ removeWorkstationIds: [workstationId] })
+    if (selected?.kind === 'workstation' && selected.id === workstationId) onSelect(null)
+  }, [dataset.workstations, onAuthoredEntityChange, onSelect, selected])
 
   // What is drawn: the authoritative geometry moved to its current placements.
   const scene = useMemo(() => applyPlacements(scopedBaseScene, base, editor.placements), [scopedBaseScene, base, editor.placements])
@@ -394,7 +487,6 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState<Point>([0, 0])
   const [exitPrompt, setExitPrompt] = useState(false)
-  const [areaPrompt, setAreaPrompt] = useState(false)
   const drag = useRef<DragSession | null>(null)
   const pendingPan = useRef<{ dx: number; dy: number }>({ dx: 0, dy: 0 })
   const pendingZoomFactor = useRef(1)
@@ -410,6 +502,13 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
   useEffect(() => {
     editorRef.current = editor
   }, [editor])
+  const pendingEditAreaRef = useRef<string | null>(null)
+  useEffect(() => {
+    const areaToOpen = pendingEditAreaRef.current
+    if (!areaToOpen || activeArea?.id !== areaToOpen || editorRef.current.mode !== 'view') return
+    pendingEditAreaRef.current = null
+    editorRef.current.enterEdit()
+  }, [activeArea])
 
   const codeOf = useCallback(
     (entityId: string) => (departmentDesks.get(entityId) ?? allDesks.get(entityId))?.seat.code.split('-').at(-1) ?? entityId,
@@ -417,6 +516,7 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
   )
   /** Rotating from the map keeps the keyboard on the map, where R and the arrows live. */
   const rotateSelected = useCallback((entityId: string) => {
+    if (!editorRef.current.canRotate(entityId)) return
     editorRef.current.rotate(entityId)
     svgRef.current?.focus()
   }, [])
@@ -442,6 +542,9 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     onDirtyChange?.(editor.dirty)
   }, [onDirtyChange, editor.dirty])
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange])
+  useEffect(() => {
+    if (!editing && pendingDeskRef.current) setPendingDesk(null)
+  }, [editing, setPendingDesk])
 
   // The scene is framed from its own geometry, so it fills whatever stage it gets.
   const bounds = useMemo<BBox>(() => sceneBounds(scopedBaseScene), [scopedBaseScene])
@@ -483,6 +586,78 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
   useEffect(() => {
     zoomRef.current = zoom
   }, [zoom])
+
+  const pointerFloorPoint = useCallback((clientX: number, clientY: number): Point | null => {
+    const rect = svgRef.current?.getBoundingClientRect()
+    const width = rect?.width || stage?.width || 0
+    const height = rect?.height || stage?.height || 0
+    if (!(width > 0) || !(height > 0)) return null
+    const projected: Point = [
+      frame[0] + ((clientX - (rect?.left ?? 0)) / width) * frame[2],
+      frame[1] + ((clientY - (rect?.top ?? 0)) / height) * frame[3],
+    ]
+    const safeZoom = zoom > 0 ? zoom : 1
+    return unproject([
+      origin[0] + (projected[0] - pan[0] - origin[0]) / safeZoom,
+      origin[1] + (projected[1] - pan[1] - origin[1]) / safeZoom,
+    ])
+  }, [frame, origin, pan, stage, svgRef, zoom])
+
+  const placementForPointer = useCallback((pending: PendingDesk, clientX: number, clientY: number) => {
+    const point = pointerFloorPoint(clientX, clientY)
+    if (!point) return null
+    return snapPlacementToGrid({
+      entityId: pending.workstationId,
+      x: point[0],
+      y: point[1],
+      width: pending.width,
+      depth: pending.depth,
+      rotation: pending.rotation,
+    }, area.grid)
+  }, [area.grid, pointerFloorPoint])
+
+  const validateNewPlacement = useCallback((placement: SpatialPlacement) => {
+    const others = area.contextPlacements?.length
+      ? [...Object.values(editor.placements), ...area.contextPlacements]
+      : Object.values(editor.placements)
+    return validatePlacement(placement, {
+      others,
+      boundary: area.boundary,
+      roomBoundary: area.roomBoundary,
+      departmentZone: area.departmentZone,
+      obstacles: area.obstacles,
+      tolerance: area.tolerance,
+      boundaryTolerance: area.boundaryTolerance,
+      chairTileSize: area.chairTileSize,
+    })
+  }, [area, editor.placements])
+
+  const pendingValidation = useMemo(() => {
+    if (!pendingDesk?.placement) return undefined
+    return validateNewPlacement(pendingDesk.placement)
+  }, [pendingDesk, validateNewPlacement])
+
+  const commitPendingDesk = useCallback((pending: PendingDesk, placement: SpatialPlacement) => {
+    if (!onAuthoredEntityChange || !validateNewPlacement(placement).valid) return false
+    const workstation = authoredWorkstationFromPlacement({
+      dataset,
+      placement,
+      number: pending.number,
+      zoneId: pending.zoneId,
+      clusterId: pending.clusterId,
+      authoredBy: 'demo-admin',
+      authoredAt: new Date().toISOString(),
+    })
+    onAuthoredEntityChange({
+      workstations: [workstation],
+      issuedDeskNumbers: [pending.number],
+      sourcePdfSha256: dataset.layout.sourcePdfSha256,
+    })
+    editorRef.current.addPlacement(placement)
+    setPendingDesk(null)
+    onSelect({ kind: 'workstation', id: workstation.id })
+    return true
+  }, [dataset, onAuthoredEntityChange, onSelect, setPendingDesk, validateNewPlacement])
 
   const flushFrame = useCallback(() => {
     rafId.current = null
@@ -599,6 +774,10 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
         return
       }
       if (e.key !== 'Escape') return
+      if (pendingDeskRef.current) {
+        setPendingDesk(null)
+        return
+      }
       if (drag.current?.kind === 'object') {
         releaseDrag(true)
         return
@@ -607,7 +786,7 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onSelect, releaseDrag, editing])
+  }, [onSelect, releaseDrag, editing, setPendingDesk])
 
   // Window blur cleans up any active drag to prevent stuck pointer lockouts
   useEffect(() => {
@@ -682,6 +861,13 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
         return
       }
     }
+    const pending = pendingDeskRef.current
+    if (editing && pending) {
+      const placement = placementForPointer(pending, e.clientX, e.clientY)
+      if (placement) setPendingDesk({ ...pending, placement })
+      drag.current = { id: e.pointerId, kind: 'place', start: [e.clientX, e.clientY], last: [e.clientX, e.clientY], moved: false }
+      return
+    }
     const targetEl = e.target instanceof Element ? e.target : (e.target as Node | null)?.parentElement
     const hit = targetEl?.closest?.('[data-workstation-id]')?.getAttribute('data-workstation-id') ?? undefined
     // In edit mode a press that lands on an object moves that object; a press
@@ -696,12 +882,28 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
 
   const pointerMove = (e: PointerEvent<SVGSVGElement>) => {
     const d = drag.current
-    if (!d || d.id !== e.pointerId) return
+    if (!d) {
+      const pending = pendingDeskRef.current
+      if (editing && pending) {
+        const placement = placementForPointer(pending, e.clientX, e.clientY)
+        if (placement) setPendingDesk({ ...pending, placement })
+      }
+      return
+    }
+    if (d.id !== e.pointerId) return
     if (!d.moved && Math.hypot(e.clientX - d.start[0], e.clientY - d.start[1]) > DRAG_THRESHOLD_PX) {
       d.moved = true
       try {
         e.currentTarget.setPointerCapture(e.pointerId)
       } catch {}
+    }
+    if (d.kind === 'place') {
+      const pending = pendingDeskRef.current
+      if (pending) {
+        const placement = placementForPointer(pending, e.clientX, e.clientY)
+        if (placement) setPendingDesk({ ...pending, placement })
+      }
+      return
     }
     if (!d.moved) return
     // Read cached scale without forcing layout query (getScreenCTM)
@@ -735,6 +937,13 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
   const pointerUp = (e: PointerEvent<SVGSVGElement>) => {
     const d = drag.current
     if (!d || d.id !== e.pointerId) return
+    if (d.kind === 'place') {
+      const pending = pendingDeskRef.current
+      const placement = pending ? placementForPointer(pending, e.clientX, e.clientY) ?? pending.placement : null
+      drag.current = null
+      if (placement && pending) commitPendingDesk(pending, placement)
+      return
+    }
     const moved = d.moved
     if (rafId.current !== null) {
       cancelAnimationFrame(rafId.current)
@@ -751,6 +960,10 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
   const pointerCancel = (e: PointerEvent<SVGSVGElement>) => {
     const d = drag.current
     if (!d || d.id !== e.pointerId) return
+    if (d.kind === 'place') {
+      drag.current = null
+      return
+    }
     if (rafId.current !== null) {
       cancelAnimationFrame(rafId.current)
       flushFrame()
@@ -762,6 +975,16 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     if (next === editorRef.current.mode) return
     if (next === 'edit') {
       if (!activeArea) {
+        const selectedArea = selected?.kind === 'workstation'
+          ? displayAreas.find((candidate) => candidate.workstationIds.includes(selected.id))
+          : undefined
+        if (selectedArea) {
+          pendingEditAreaRef.current = selectedArea.id
+          setAreaId(selectedArea.id)
+          setAreaPrompt(false)
+          reset()
+          return
+        }
         setAreaPrompt(true)
         return
       }
@@ -769,7 +992,7 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
       return
     }
     if (!editorRef.current.tryExitEdit()) setExitPrompt(true)
-  }, [activeArea])
+  }, [activeArea, displayAreas, reset, selected])
 
   const startEditing = useCallback(() => {
     changeMode('edit')
@@ -790,6 +1013,24 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     return map
   }, [desks])
   const counts = useCallback((status: DeskStatus) => statusCounts[status] ?? 0, [statusCounts])
+  const capacityAnswer = useMemo(() => {
+    if (!activeArea) return null
+    const freeSeats = activeArea.workstationIds.filter((id) => departmentDesks.get(id)?.status === 'available').length
+    if (freeSeats > 0) {
+      return <p className="sw-capacity-answer" role="status"><strong>{activeArea.label} còn {freeSeats} chỗ trống.</strong></p>
+    }
+    const nearest = displayAreas
+      .filter((area) => area.id !== activeArea.id)
+      .map((area) => ({ area, free: area.workstationIds.filter((id) => departmentDesks.get(id)?.status === 'available').length }))
+      .filter(({ free }) => free > 0)
+      .sort((a, b) => b.free - a.free || a.area.label.localeCompare(b.area.label, 'vi'))[0]
+    return (
+      <div className="sw-capacity-answer" role="status">
+        <strong>{activeArea.label} đã kín. Không còn chỗ trống.</strong>
+        {nearest && <span>Gần nhất: {nearest.area.label} · {nearest.free} chỗ trống</span>}
+      </div>
+    )
+  }, [activeArea, departmentDesks, displayAreas])
 
   if (!scene.workstations.length) return <div className="fp-state">{SPATIAL_UNAVAILABLE}</div>
 
@@ -803,27 +1044,34 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
         <div>
           <p className="fp-eyebrow sw-breadcrumb">{dataset.building.name} <span>/</span> {dataset.layout.floor.name} <span>/</span> {overviewScene.resolvedScope.label}{scope.kind === 'bbox' ? <><span>/</span> {scopeLabel}</> : null}</p>
           {/* Seat count and scope live in the side panel's summary, not here. */}
-          <h2 className="fp-page-title">{overviewScene.resolvedScope.label}</h2>
+          <h2 className="fp-page-title">{scopeLabel}</h2>
         </div>
         <div className="sw-heading-actions">
-          {editing ? (
-            <EditToolbar
-              dirty={editor.dirty}
-              valid={editor.valid}
-              saving={editor.saving}
-              changedCount={editor.changedCount}
-              invalidCount={invalidCount}
-              canUndo={editor.canUndo}
-              canRedo={editor.canRedo}
-              undoHint={UNDO_HINT}
-              redoHint={REDO_HINT}
-              onUndo={undoStep}
-              onRedo={redoStep}
-              /* Hủy throws away a session's work, so it asks first when there
-                 is work to lose — the same confirmation the page uses. */
-              onCancel={() => changeMode('view')}
-              onSave={() => { void editor.save() }}
-            />
+            {editing ? (
+            <>
+              {onAuthoredEntityChange && (
+                <button type="button" className="fp-btn" onClick={addAuthoredDesk}>
+                  + Thêm bàn
+                </button>
+              )}
+              <EditToolbar
+                dirty={editor.dirty && !pendingDesk}
+                valid={editor.valid && !pendingDesk}
+                saving={editor.saving}
+                changedCount={editor.changedCount}
+                invalidCount={invalidCount}
+                canUndo={editor.canUndo}
+                canRedo={editor.canRedo}
+                undoHint={UNDO_HINT}
+                redoHint={REDO_HINT}
+                onUndo={undoStep}
+                onRedo={redoStep}
+                /* Hủy throws away a session's work, so it asks first when there
+                   is work to lose — the same confirmation the page uses. */
+                onCancel={() => changeMode('view')}
+                onSave={() => { void editor.save() }}
+              />
+            </>
           ) : (
             <EnterEditButton
               onClick={startEditing}
@@ -859,7 +1107,7 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
             </label>
           </nav>
           {editing
-            ? <span className="sw-edit-caption"><span title={LAYOUT_EDIT.gridNote}>{LAYOUT_EDIT.gridLabel(GRID_CELL_MM)}</span></span>
+            ? <span className="sw-edit-caption">{pendingDesk ? 'Di chuyển chuột trên bản đồ, nhấp để đặt bàn · Esc để hủy' : <span title={LAYOUT_EDIT.gridNote}>{LAYOUT_EDIT.gridLabel(GRID_CELL_MM)}</span>}</span>
             : desk ? <span className="sw-selected-caption">{`Đang chọn ${desk.seat.code}${outsideScope ? ' · ngoài khu vực đang xem' : ''}`}</span> : null}
         </div>
         <div className="sw-map-stage" ref={stageRef}>
@@ -882,7 +1130,9 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
                 placements={visiblePlacements}
                 selectedId={visibleDesk?.workstation.id}
                 validation={editor.validation}
+                preview={pendingDesk?.placement ? { placement: pendingDesk.placement, valid: pendingValidation?.valid === true } : undefined}
                 deskHeight={scene.deskHeight}
+                mmPerPt={dataset.layout.floor.mmPerPt}
                 dragging={editor.drag?.moved === true}
                 onRotate={rotateSelected}
                 obstacles={area.displayObstacles ?? area.obstacles}
@@ -921,7 +1171,12 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
           codeOf={codeOf}
           moved={movedFromOriginal}
           onRotate={() => rotateSelected(visibleDesk.workstation.id)}
+          rotateDisabled={!editor.canRotate(visibleDesk.workstation.id)}
+          rotateHint={LAYOUT_EDIT.rotateBlocked}
+          boundaryWarning={editor.nearBoundary(visibleDesk.workstation.id) ? LAYOUT_EDIT.boundaryWarning : undefined}
           onReset={() => { editor.resetPlacement(visibleDesk.workstation.id); svgRef.current?.focus() }}
+          canDelete={Boolean(onAuthoredEntityChange)}
+          onDelete={() => deleteDesk(visibleDesk.workstation.id)}
         />
       )}
       {editing && !visibleDesk && (
@@ -938,16 +1193,18 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
         canUndo={canUndo}
         onApplyMutations={applyAllocationChange}
         onUndo={undoAllocationChange}
+        onDelete={deleteDesk}
+        canDelete={Boolean(onAuthoredEntityChange)}
         showHeader={!editing}
         onClose={() => { onSelect(null); svgRef.current?.focus() }}
         onVerify={onVerify}
       />}
       {editing && (
         <p className="sw-edit-note">
-          {LAYOUT_EDIT.boundaryNote} {LAYOUT_EDIT.persistenceNote}
+          {LAYOUT_EDIT.boundaryNote}
         </p>
       )}
-      <ScopeSummary dataset={dataset} departmentZone={departmentZone} count={desks.size} counts={counts}>
+      <ScopeSummary dataset={dataset} areaLabel={scopeLabel} departmentZone={departmentZone} count={desks.size} counts={counts} capacityAnswer={capacityAnswer}>
         {/*
           * No "pick a desk" prompt: the map already reads as clickable. This
           * only speaks up when a deep link points at a desk outside the scope,

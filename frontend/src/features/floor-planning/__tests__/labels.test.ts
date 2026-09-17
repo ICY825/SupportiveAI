@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { FLOORS } from '../data/registry'
 import type { FloorDataset } from '../domain/spatial'
-import { generated, objectName, placementIssueText } from '../labels'
+import { generated, objectName, placementIssueText, placementIssueTitle } from '../labels'
 
 
 let ds: FloorDataset
@@ -44,21 +44,21 @@ describe('Vietnamese display text', () => {
   it('formats outside room boundary with room name or generic fallback', () => {
     expect(
       placementIssueText({ type: 'outside-room-boundary', roomName: 'Phòng cách âm' }, () => ''),
-    ).toBe('Ngoài ranh giới phòng Phòng cách âm')
-    expect(placementIssueText({ type: 'outside-room-boundary' }, () => '')).toBe('Ngoài ranh giới phòng')
+    ).toBe('Bàn nằm ngoài ranh giới phòng')
+    expect(placementIssueText({ type: 'outside-room-boundary' }, () => '')).toBe('Bàn nằm ngoài ranh giới phòng')
     expect(
       placementIssueText({ type: 'outside-room-boundary', roomName: 'Phòng họp', target: 'chair' }, () => ''),
-    ).toBe('Không gian ghế ngoài ranh giới phòng phòng họp')
+    ).toBe('Ghế nằm ngoài ranh giới phòng')
   })
 
   it('formats outside department zone with zone name or generic fallback', () => {
     expect(
       placementIssueText({ type: 'outside-department-zone', zoneName: 'MÔ HÌNH AI' }, () => ''),
-    ).toBe('Ngoài phạm vi khu vực MÔ HÌNH AI')
-    expect(placementIssueText({ type: 'outside-department-zone' }, () => '')).toBe('Ngoài phạm vi khu vực')
+    ).toBe('Bàn nằm ngoài phạm vi khu vực')
+    expect(placementIssueText({ type: 'outside-department-zone' }, () => '')).toBe('Bàn nằm ngoài phạm vi khu vực')
     expect(
       placementIssueText({ type: 'outside-department-zone', zoneName: 'MÔ HÌNH AI', target: 'chair' }, () => ''),
-    ).toBe('Không gian ghế ngoài phạm vi khu vực mô hình ai')
+    ).toBe('Ghế nằm ngoài phạm vi khu vực')
   })
 
   it('formats obstacle collision and door clearance conflict with details', () => {
@@ -67,19 +67,19 @@ describe('Vietnamese display text', () => {
         { type: 'obstacle-collision', obstacleId: 'col-1', obstacleKind: 'column', obstacleName: 'Cột C1' },
         () => '',
       ),
-    ).toBe('Va chạm (Cột C1)')
+    ).toBe('Bàn sẽ chạm cột kết cấu')
     expect(
       placementIssueText(
         { type: 'obstacle-collision', obstacleId: 'col-1', obstacleKind: 'column' },
         () => '',
       ),
-    ).toBe('Va chạm cột kết cấu')
+    ).toBe('Bàn sẽ chạm cột kết cấu')
     expect(
       placementIssueText(
         { type: 'obstacle-collision', obstacleId: 'wall-1', obstacleKind: 'wall' },
         () => '',
       ),
-    ).toBe('Va chạm tường bê tông')
+    ).toBe('Bàn sẽ chạm lõi thang máy')
     expect(
       placementIssueText(
         {
@@ -91,19 +91,21 @@ describe('Vietnamese display text', () => {
         },
         () => '',
       ),
-    ).toBe('Không gian ghế va chạm (Cột C1)')
+    ).toBe('Ghế sẽ chạm cột kết cấu')
     expect(
       placementIssueText(
         { type: 'clearance-conflict', obstacleId: 'door-1', obstacleKind: 'door-clearance', obstacleName: 'Cửa thoát hiểm' },
         () => '',
       ),
-    ).toBe('Xung đột khoảng mở cửa (Cửa thoát hiểm)')
+    ).toBe('Bàn sẽ chạm khoảng mở cửa')
     expect(
       placementIssueText(
         { type: 'clearance-conflict', obstacleId: 'door-1', obstacleKind: 'door-clearance', target: 'chair' },
         () => '',
       ),
-    ).toBe('Không gian ghế xung đột khoảng mở cửa')
+    ).toBe('Ghế sẽ chạm khoảng mở cửa')
+    const obstacle = { type: 'obstacle-collision' as const, obstacleId: 'col-1', obstacleKind: 'column' as const, obstacleName: 'Cột C1' }
+    expect(placementIssueTitle(obstacle, () => '')).toContain('Cột C1')
+    expect(placementIssueTitle(obstacle, () => '')).toContain('col-1')
   })
 })
-
