@@ -105,6 +105,8 @@ class BatchSummary(BaseModel):
 
     total_rows: int
     total_parcels: int
+    # Số dòng đi được ngay trong đợt gửi tới. CR-001 §7.3: nút gửi **luôn
+    # bật** khi con số này > 0 — không chặn cả lô vì một dòng chưa rõ.
     confirmed: int
     review: int
     choose: int
@@ -116,15 +118,6 @@ class BatchSummary(BaseModel):
     missing_email: int = 0
     # Ngày trong file mơ hồ, HC phải xác nhận (CR-001 §3.4).
     ambiguous_date: bool = False
-
-    @property
-    def ready_to_send(self) -> int:
-        """Số dòng đi được ngay trong đợt gửi tới.
-
-        CR-001 §7.3: nút gửi **luôn bật** khi con số này > 0 — không chặn
-        cả lô vì một dòng chưa rõ.
-        """
-        return self.confirmed
 
 
 class SameDateBatch(BaseModel):

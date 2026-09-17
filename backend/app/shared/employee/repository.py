@@ -9,11 +9,16 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.shared.employee.models import Employee, EmployeeStatus
-from app.shared.employee.normalization import normalize_name, normalize_phone, phone_last4
+from app.shared.employee.normalization import (
+    normalize_name,
+    normalize_phone,
+    phone_last4,
+    strip_accents,
+)
 
 
 class EmployeeRepository:
@@ -89,26 +94,38 @@ class EmployeeRepository:
     def search(
         self, term: str, *, limit: int = 20, active_only: bool = True
     ) -> Sequence[Employee]:
-        """Gợi ý cho ô tìm nhân sự ở màn hình soát (mail-tracking.md §5.2)."""
+        """Gợi ý cho ô tìm nhân sự ở màn hình soát (mail-tracking.md §5.2).
+
+        **Bỏ dấu cả hai vế trước khi so.** Đây là ô HC gõ khi máy không khớp
+        được, tức là chỗ tốn thời gian nhất của cả quy trình — mà không ai
+        gõ đủ dấu khi đang làm nhanh. Bắt gõ "Mạnh" mới ra "Trần Hùng Mạnh
+        Quân" thì ô tìm này vô dụng đúng lúc cần nó nhất.
+
+        Khác với khớp tự động ở `matcher.py`: chỗ đó **giữ dấu** vì máy tự
+        quyết nên "Hà" và "Hạ" phải phân biệt được. Ở đây người đang nhìn
+        và tự chọn, nên rộng tay hơn là đúng.
+
+        Lọc trong Python chứ không trong SQL vì cột `full_name_normalized`
+        lưu bản có dấu, không so trực tiếp với chuỗi đã bỏ dấu được. Chấp
+        nhận được ở quy mô pilot (vài trăm tới vài nghìn nhân sự); nếu danh
+        mục lớn hơn nhiều thì thêm cột `full_name_ascii` có index, đừng nới
+        vòng lặp này ra.
+        """
         cleaned = (term or "").strip()
         if not cleaned:
             return []
-        name_pattern = f"%{normalize_name(cleaned)}%"
-        code_pattern = f"{cleaned.upper()}%"
-        stmt = (
-            select(Employee)
-            .where(
-                or_(
-                    Employee.full_name_normalized.like(name_pattern),
-                    func.upper(Employee.employee_code).like(code_pattern),
-                )
-            )
-            .order_by(Employee.full_name)
-            .limit(limit)
-        )
-        if active_only:
-            stmt = stmt.where(Employee.status == EmployeeStatus.ACTIVE)
-        return self.db.execute(stmt).scalars().all()
+
+        needle = strip_accents(cleaned) or ""
+        code_prefix = cleaned.upper()
+
+        matched = [
+            employee
+            for employee in self.list_all(active_only=active_only)
+            if (needle and needle in (strip_accents(employee.full_name) or ""))
+            or employee.employee_code.upper().startswith(code_prefix)
+        ]
+        matched.sort(key=lambda e: e.full_name.casefold())
+        return matched[:limit]
 
     # --- Ghi ---
 

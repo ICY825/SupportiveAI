@@ -102,6 +102,9 @@ out/
 .tox/
 .nox/
 
+# Tài liệu tham khảo tải về, không thuộc repo (main thêm 17/09)
+docs/references/
+
 # Dữ liệu thật (danh sách nhân sự, file mẫu chấm KPI) - chỉ giữ .gitkeep
 /data/
 docs/kpi/ground-truth/*

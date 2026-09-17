@@ -8,15 +8,29 @@ from __future__ import annotations
 
 from datetime import time
 from functools import lru_cache
+from pathlib import Path
 from typing import Annotated
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+# Neo vào cây thư mục, không vào thư mục đang đứng.
+#
+# `env_file=".env"` tính theo chỗ chạy lệnh, nên `uvicorn` khởi động từ
+# `backend/` sẽ đi tìm `backend/.env` và **âm thầm bỏ qua** `.env` ở gốc
+# repo. Sửa `DATABASE_URL` mà không thấy gì đổi là vì thế — cấu hình rơi
+# về giá trị mặc định bên dưới mà không có một lời cảnh báo nào.
+_BACKEND_DIR = Path(__file__).resolve().parents[2]
+_REPO_ROOT = _BACKEND_DIR.parent
+
+# Đọc gốc trước, `backend/.env` sau — file sau đè file trước, để ai muốn
+# đặt cấu hình riêng cho backend vẫn làm được.
+_ENV_FILES = (_REPO_ROOT / ".env", _BACKEND_DIR / ".env")
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+        env_file=_ENV_FILES, env_file_encoding="utf-8", extra="ignore"
     )
 
     # --- Ứng dụng ---

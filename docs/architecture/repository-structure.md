@@ -2,7 +2,7 @@
 
 > Cấu trúc mã nguồn và nguyên tắc phân chia module
 
-**Trạng thái:** `Draft` — chờ chốt công nghệ frontend
+**Trạng thái:** `Draft` — cấu trúc frontend đã chốt và dựng (17/09/2026)
 **Phiên bản:** 0.1
 **Cập nhật:** 15/09/2026
 
@@ -297,25 +297,42 @@ Quy ước đặt tên bảng: `mail_item`, `mail_batch`, `locker`, `seat`, `doc
 
 ## 9. Frontend
 
-> ⚠️ Chưa chốt công nghệ. Cấu trúc dưới đây là nguyên tắc, áp dụng được cho React hoặc Vue.
+> ✅ **Chốt: React 19 + TypeScript + Vite** ([ADR 0001](../decisions/0001-floor-planning-web-stack-and-floor-data.md), 15/09/2026).
+>
+> ⚠️ Màn hình Đề 3 đã dựng ngày 17/09 trên **Next.js 14 App Router**, lệch với ADR. Cây thư
+> mục dưới đây mô tả đúng mã hiện có; xem [`frontend/README.md`](../../frontend/README.md)
+> để biết chỗ nào dính Next và thay bằng gì nếu chuyển sang Vite.
 
 ```text
 frontend/
 ├── src/
-│   ├── api/                # client gọi backend
-│   ├── components/         # component dùng chung
-│   ├── layouts/
-│   ├── features/           # ← chia dọc giống backend
+│   ├── app/                # route — Next định tuyến theo file
+│   │   ├── (admin)/        # nhóm cần đăng nhập, bọc trong AdminShell
+│   │   │   └── mail/       # Đề 3
+│   │   ├── login/
+│   │   └── station/        # CÔNG KHAI, không shell — quét QR tại khu để đơn
+│   ├── api/                # client gọi backend + DTO chép từ schemas.py
+│   ├── components/         # ui.tsx, EmployeePicker
+│   ├── features/           # ← chia dọc giống backend, khi mã đủ lớn
 │   │   ├── seat/
 │   │   ├── locker/
 │   │   ├── mail/
 │   │   └── document/
-│   ├── shared/             # employee picker, department select...
-│   └── router/
+│   ├── layouts/            # AdminShell
+│   └── shared/             # auth, format, nhãn tiếng Việt
 └── package.json
 ```
 
 Nguyên tắc giống backend: **`features/` phản ánh đúng 4 đề bài**, và các feature không import lẫn nhau. Thứ gì hai feature cùng dùng thì đẩy lên `shared/` hoặc `components/`.
+
+Hai ghi chú về Next:
+
+- **Không có `router/`.** Next định tuyến theo cây thư mục `app/`, nên thư mục đó của bản nháp cũ không dùng tới.
+- **`features/` hiện còn trống.** Mã Đề 3 đủ nhỏ để nằm gọn trong `app/(admin)/mail/`; tách sang `features/` khi có đề thứ hai, hoặc khi một màn hình cần dùng lại logic của màn hình khác. Tách sớm hơn chỉ là thêm một lớp thư mục để đi qua.
+
+**Ranh giới với backend:** `src/api/types.ts` chép tay DTO từ `schemas.py`, chưa sinh tự động từ OpenAPI. Sửa một bên thì phải sửa bên kia — chấp nhận được khi mới có một phân hệ, nhưng tới đề thứ hai thì nên sinh tự động.
+
+**Không bật CORS ở backend.** Next proxy `/api/*` sang FastAPI (`next.config.mjs`), nên trình duyệt chỉ thấy một origin.
 
 ---
 
@@ -404,4 +421,4 @@ Unit test đặt cạnh module để khi xóa module thì test đi theo luôn.
 
 ---
 
-*Tài liệu ở trạng thái Draft. Phần frontend sẽ cập nhật sau khi chốt công nghệ.*
+*Tài liệu ở trạng thái Draft. Phần frontend đã cập nhật theo bản dựng thật của Đề 3 (17/09/2026).*

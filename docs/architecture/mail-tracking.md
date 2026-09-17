@@ -464,7 +464,29 @@ Khóa nhận dạng dùng **4 số cuối điện thoại**, đã có sẵn cộ
 
 ### 7.3. HC đối chiếu, không phải HC trao
 
-HC **không** xác nhận thay người nhận trong luồng thường. Nhưng trong pilot, quy trình cũ vẫn chạy song song (README §2) nên tờ giấy ký vẫn còn — HC dùng màn hình quá hạn để đối chiếu cuối ngày và tick những kiện đã ký giấy mà chưa ai bấm.
+HC **không** xác nhận thay người nhận trong luồng thường. Nhưng trong pilot, quy trình cũ vẫn chạy song song (README §2) nên tờ giấy ký vẫn còn — HC dùng màn hình kiện hàng (mục “Chưa nhận”) để đối chiếu cuối ngày và tick những kiện đã ký giấy mà chưa ai bấm.
+
+**Nút "Đã trao tay" trong pilot không phải việc mới.** Nó thay thao tác HC vốn vẫn làm bằng mắt: đọc tờ giấy rồi gạch tên. Khác ở chỗ bây giờ có chỗ ghi lại.
+
+#### Bỏ tờ giấy thì nút này còn nghĩa gì?
+
+Đây là chỗ dễ hiểu nhầm nhất của cả thiết kế. Nút đang mang **hai nghĩa khác nhau**, và chỉ một nghĩa sống sót sau pilot:
+
+| Nghĩa | Căn cứ | Còn sau khi bỏ giấy? |
+| --- | --- | --- |
+| "Tờ giấy có chữ ký mà chưa ai bấm" | Chữ ký trên giấy | ❌ Mất luôn cùng tờ giấy |
+| "HC tự tay trao kiện cho người vào hỏi" | HC chứng kiến tận mắt | ✅ Vẫn còn — [§7.1](#71-quy-trình-thật-tại-chỗ-để-đơn) ghi nhận có người vào hỏi khi không tìm thấy kiện |
+
+> ⚠️ **Không được dùng nút này để dọn danh sách cho gọn.** Bỏ giấy rồi mà HC vẫn tick những dòng "chắc là họ lấy rồi" thì hệ thống ghi nhận một sự việc không ai chứng kiến — tệ hơn hẳn việc để dòng đó nằm lại, vì số liệu trông sạch trong khi thực tế không ai biết kiện ở đâu.
+
+**Và đây mới là điều quan trọng: không thể quyết định trước là sẽ bỏ tờ giấy.**
+
+Tỷ lệ `hc_reconciled` trong pilot chính là thứ trả lời câu hỏi đó ([§7.4](#74-phân-biệt-nguồn-xác-nhận)):
+
+- Tỷ lệ **thấp** → phần lớn người nhận tự quét QR → bỏ giấy được.
+- Tỷ lệ **cao** → phần lớn kiện chỉ được ghi nhận nhờ HC đọc giấy. Bỏ giấy thì đúng ngần ấy kiện sẽ nằm mãi ở `Đã thông báo`, bị nhắc ở T+2 và chuyển `Tồn đọng` ở T+5 — **dù người ta đã lấy hàng từ lâu**. Danh sách tồn đọng đầy báo động giả, và HC quay về đối chiếu tay, chỉ là không còn tờ giấy để đối chiếu.
+
+Nói cách khác: bỏ giấy là **kết luận rút ra từ pilot**, không phải giả định đưa vào pilot. Xem [checklist mục D4](../checklist-truoc-khi-chay.md).
 
 ### 7.4. Phân biệt nguồn xác nhận
 
@@ -535,7 +557,7 @@ Engine vẫn hỗ trợ cả hai cách (`SLA(business_time=...)`); Đề 2 và �
 > ✅ **Chốt 16/09/2026.**
 
 Chỉ nhắc **đúng hai lần** (lúc gửi và sau 2 ngày). Sau đó dừng hẳn — kiện
-nằm lại trong màn hình quá hạn của HC cho tới khi có người nhận.
+nằm lại ở mục “Chưa nhận” của màn hình kiện hàng cho tới khi có người nhận.
 
 Sau **5 ngày** vẫn chưa nhận thì chuyển `Tồn đọng`, để HC nắm và xử lý.
 Đây là chuyển trạng thái tự động duy nhất theo thời gian trong phân hệ.
@@ -548,9 +570,40 @@ tồn đọng ở T+5.
 
 ## 9. Báo cáo
 
-### 9.1. Màn hình quá hạn (ưu tiên cao nhất)
+### 9.1. Màn hình kiện hàng (ưu tiên cao nhất)
 
-HC dùng hằng ngày, nên làm **trước** cả phần báo cáo theo kỳ. Nội dung: danh sách kiện đang ở `Đã thông báo` và đã quá SLA, sắp xếp theo số ngày quá hạn giảm dần, có nút nhắc lại thủ công và nút chuyển `Tồn đọng`.
+HC dùng hằng ngày, nên làm **trước** cả phần báo cáo theo kỳ.
+
+Bản 0.3 gọi đây là "màn hình quá hạn" và chỉ hiện kiện chưa lấy. Sai hai chỗ, sửa ở bản 0.4:
+
+1. **"Quá hạn" không phải một trạng thái** mà là thuộc tính suy ra từ `notified_at` ([§8.2](#82-quá-hạn-không-phải-trạng-thái)) — lấy nó đặt tên cho màn hình là lẫn cách hiển thị với cách lưu trữ.
+2. Kiện `Đã nhận` **biến mất khỏi giao diện**, nên không có chỗ nào trả lời câu hỏi HC gặp thường xuyên nhất: *"kiện của anh A đã lấy chưa?"*.
+
+Nên đây là màn hình của **mọi kiện**, lọc theo trạng thái:
+
+| Mục lọc | Trạng thái | Dùng khi |
+| --- | --- | --- |
+| **Chưa nhận** (mặc định) | `Đã thông báo` + `Tồn đọng` | Việc hằng ngày — chờ lâu nhất lên đầu |
+| Đã thông báo | `Đã thông báo` | Chưa tới mốc tồn đọng |
+| Tồn đọng | `Tồn đọng` | Quá 5 ngày không ai lấy |
+| Đã nhận | `Đã nhận` | Tra cứu — mới nhất lên đầu |
+| Tất cả | cả ba | Nhìn toàn cảnh |
+
+Kèm ô tìm theo tên người nhận hoặc người gửi (bỏ dấu cả hai vế).
+
+> Dòng ở `Chờ khớp` **không** nằm ở đây — chúng chưa có người nhận nên không có gì để theo dõi SLA. Chỗ của chúng là màn hình riêng ở [§6.4](#64-gửi-một-phần).
+
+#### Nút "Đã trao tay" chỉ hiện khi chưa ai xác nhận
+
+Kiện đã có người quét QR thì **không hiện nút nữa** — thay bằng dòng ghi đã nhận lúc nào và qua đường nào (`Quét QR` / `Bấm link` / `HC đối chiếu`).
+
+`confirm_collect` vốn bỏ qua lần bấm thứ hai nên bấm lại không hỏng dữ liệu — `collected_at` và `handover_method` giữ nguyên, không bị ghi đè. Nhưng để nút ở đó thì HC tưởng còn việc phải làm, và tệ hơn là tưởng mình cần tick cho những kiện người ta đã tự xác nhận.
+
+#### Tự làm mới
+
+Đây là màn hình **duy nhất** mà dữ liệu đổi do người ngoài: ai đó vừa ra hành lang lấy kiện rồi quét QR. HC mở màn hình cả buổi, nên nó tự tải lại mỗi 45 giây và hiện rõ "cập nhật lúc mấy giờ". Tạm dừng khi tab bị ẩn và khi HC đang bấm dở một dòng.
+
+Các màn hình còn lại không cần — chúng chỉ đổi khi chính HC thao tác.
 
 ### 9.2. Báo cáo theo kỳ
 
@@ -692,7 +745,7 @@ Workflow, notification và audit log dùng chung của nền tảng. `workflow_i
 | `POST` | `/mail/station/collect/{id}` | Xác nhận đã nhận tại khu để đơn — **công khai** |
 | `POST` | `/mail/items/{id}/collect` | HC đối chiếu tờ ký giấy |
 | `POST` | `/mail/items/{id}/collect-mine` | Người nhận tự xác nhận qua link trong email |
-| `GET` | `/mail/items` | Danh sách, lọc theo trạng thái/phòng ban (`?status=pending_match`) |
+| `GET` | `/mail/items` | Mọi kiện, lọc theo trạng thái/phòng ban. Lặp `?status=` để lấy nhiều trạng thái |
 | `GET` | `/mail/items/mine` | Kiện của chính mình |
 | `GET` | `/mail/reports` | Báo cáo tổng hợp |
 
@@ -726,14 +779,16 @@ Màn hình "Chờ khớp" xuyên lô ([§6.4](#64-gửi-một-phần)) và endpo
 | **Đọc file, ánh xạ cột** | 0.7 | ✅ xong — CR-001, đã có file mẫu thật |
 | **CR-001: khớp theo tên + bảng alias** | 0.5 | ✅ xong |
 | **CR-001: khử trùng mềm + gửi một phần** | 0.5 | ✅ xong |
-| Màn hình soát (frontend) | 1.2 | chưa làm — tăng 0.2 vì phân ba mức và nút giữ dòng nghi trùng |
-| **Màn hình "Chờ khớp" xuyên lô (frontend)** | 0.4 | chưa làm — mới theo CR-001 §6.4 |
-| Trang quét QR tại khu để đơn (frontend) | 0.4 | chưa làm |
-| Nút HC đối chiếu tờ ký giấy | 0.1 | chưa làm |
-| Báo cáo + màn hình quá hạn (frontend) | 1.0 | chưa làm |
-| **Tổng** | **~6.9 ngày** | backend đã xong toàn bộ |
+| Màn hình soát (frontend) | 1.2 | ✅ xong 17/09 |
+| **Màn hình "Chờ khớp" xuyên lô (frontend)** | 0.4 | ✅ xong 17/09 |
+| Trang quét QR tại khu để đơn (frontend) | 0.4 | ✅ xong 17/09 |
+| Nút HC đối chiếu tờ ký giấy | 0.1 | ✅ xong 17/09 |
+| Báo cáo + màn hình kiện hàng (frontend) | 1.0 | ✅ xong 17/09 |
+| **Tổng** | **~6.9 ngày** | backend và frontend đã xong; còn UAT |
 
-Tăng so với bản 0.3 (5.3 ngày) vì CR-001 thêm bảng alias, khử trùng mềm, gửi một phần và một màn hình frontend mới. Phần backend của những mục đó **đã làm xong**; phần còn lại là frontend (3.1 ngày).
+Tăng so với bản 0.3 (5.3 ngày) vì CR-001 thêm bảng alias, khử trùng mềm, gửi một phần và một màn hình frontend mới.
+
+Tới 17/09/2026 **cả backend lẫn frontend đã xong**. Việc còn lại không phải code: ba mục chặn cứng ở [checklist](../checklist-truoc-khi-chay.md) (danh mục nhân sự, thông số SMTP, mạng và nơi triển khai), đo baseline thủ công, và UAT.
 
 ---
 
@@ -793,7 +848,7 @@ Wireframe artboard `1d` (`docs/wireframe/`) được dựng sớm hơn tài li�
 | 4   | Không có màn hình xác nhận đã nhận                           | [7.2](#72-phương-án-chọn): QR dán tại khu để đơn là đường chính                                        | **Phải có.** Không phải màn hình quầy như bản 0.1 — là trang web người nhận tự mở trên điện thoại |
 | 5   | Có tab "Gửi đi 42"                                           | [1.2](#12-phạm-vi-phân-hệ): phạm vi chỉ có thư **đến**                                                 | **Bỏ khỏi pilot.** Cùng nhóm vấn đề với README B1 (công văn đi)                              |
 | 6   | "Nhắc lại sau 24h", "quá 3 ngày chưa nhận"                   | [8.3](#83-sla): nhắc lại sau **2 ngày**, tồn đọng sau **5 ngày**, tính theo giờ đồng hồ                | **Theo tài liệu.** Cả wireframe lẫn bản 0.1 đều không còn đúng; con số phải cấu hình được, không hard-code |
-| 7   | Hiển thị "Quá hạn nhận" như một trạng thái                   | [8.2](#82-quá-hạn-không-phải-trạng-thái): quá hạn là thuộc tính **suy ra**                             | Không mâu thuẫn — wireframe nói cách **hiển thị**, tài liệu nói cách **lưu trữ**. Giữ cả hai |
+| 7   | Hiển thị "Quá hạn nhận" như một trạng thái                   | [8.2](#82-quá-hạn-không-phải-trạng-thái): quá hạn là thuộc tính **suy ra**                             | Không mâu thuẫn — wireframe nói cách **hiển thị**, tài liệu nói cách **lưu trữ**. Giữ cả hai, nhưng màn hình lọc theo **trạng thái thật** ([9.1](#91-màn-hình-kiện-hàng-ưu-tiên-cao-nhất)), không lọc theo "quá hạn" |
 
 | 8 | Không có màn hình "Chờ khớp" xuyên lô | [6.4](#64-gửi-một-phần): **bắt buộc** từ CR-001 | **Phải thêm.** Gửi một phần chỉ có nghĩa khi có chỗ xử lý phần còn lại |
 | 9 | Bảng soát chỉ tô màu theo mức tin cậy | [5.2](#52-nội-dung-màn-hình): phân ba mức bằng **ký hiệu và màu** | **Theo tài liệu.** Chỉ dùng màu thì người khó phân biệt màu không dùng được |
@@ -813,4 +868,4 @@ Wireframe vẫn dùng được cho phần nó làm tốt: bảng màu, quy ướ
 
 ---
 
-_Tài liệu đã chốt. Phần backend đã implement xong (341 test xanh); phần còn lại là frontend — xem [§13](#13-ước-lượng-công-sức) và [`../checklist-truoc-khi-chay.md`](../checklist-truoc-khi-chay.md)._
+_Tài liệu đã chốt. Backend (354 test xanh) và frontend đều đã implement xong; việc còn lại không phải code — xem [§13](#13-ước-lượng-công-sức) và [`../checklist-truoc-khi-chay.md`](../checklist-truoc-khi-chay.md)._

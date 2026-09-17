@@ -54,13 +54,37 @@ Khi một mục được trả lời: đổi ❓ thành ✅, ghi câu trả lờ
 | A3 | Mạng và nơi triển khai | 🔴 | IT | ❓ |
 | ~~B1~~ | ~~Khử trùng lặp khi không có mã vận đơn~~ | ~~🟠~~ | — | ✅ **đã giải 17/09** |
 | ~~C1~~ | ~~File mẫu thật~~ | ~~🟡~~ | — | ✅ **đã giải 17/09** |
-| C2 | Frontend **5** màn hình | 🟡 | Dev | chưa làm |
+| C2 | Frontend 5 màn hình | 🟡 | Dev | ✅ **đã dựng 17/09** — chờ UAT |
 | C3 | Đo baseline thủ công | 🟡 | HC | ❓ **có hạn chót** |
-| D1–D5 | Năm mục chất lượng | ⚪ | HC / Lễ tân | ❓ |
+| D1–D7 | Bảy mục chất lượng | ⚪ | HC / Lễ tân | ❓ |
+| D8 | Khi nào bỏ được tờ ký giấy | 🟠 | HC | ❓ **chờ số liệu pilot** |
 
-**Đã xong:** backend Đề 3 và toàn bộ lõi chung — **341 test**, gồm cả phần đọc file mẫu thật.
+**Đã xong:** backend Đề 3, lõi chung, và frontend 6 màn hình — **354 test** backend, và một lượt chạy thật xuyên hai tầng trên `mau.xlsx`.
 
-> ⚠️ Con số 341 đo trên SQLite in-memory. **Cần chạy lại một lượt trên PostgreSQL thật** trước khi lên môi trường chung, và chạy `alembic upgrade head` tới bản `0004`.
+> ✅ **Đã chạy trên PostgreSQL thật 17/09/2026:** `alembic upgrade head` lên tới `0004` sạch,
+> và một lượt đi hết luồng (tải `mau.xlsx` → soát → gửi một phần → chờ khớp → khu để đơn →
+> báo cáo) đạt 22/22 bước. Bộ 354 test vẫn chạy trên SQLite in-memory — đó là chủ ý, để test
+> nhanh và không cần hạ tầng; phần nào phụ thuộc đặc thù Postgres thì kiểm bằng lượt chạy thật.
+
+### Cơ sở dữ liệu ở đâu
+
+Postgres của dự án chạy trong Docker, **cổng 5433** — không phải 5432:
+
+```bash
+docker compose up -d                    # dựng/bật container
+cd backend && alembic upgrade head      # tạo bảng, tới bản 0004
+```
+
+| | |
+|---|---|
+| Host / cổng | `localhost` / **5433** |
+| Database | `supportive_ai` |
+| User / mật khẩu | `supportive` / `supportive` |
+
+> ⚠️ **pgAdmin mặc định nối vào cổng 5432** — đó là bản PostgreSQL cài sẵn trên máy, hoàn
+> toàn không liên quan tới dự án. Phải khai một server mới trỏ vào **5433** mới thấy dữ liệu.
+> `docker-compose.yml` cố ý chọn 5433 vì nhiều máy dev đã có Postgres chiếm sẵn 5432, và khi
+> đó ứng dụng sẽ lặng lẽ nối nhầm vào bản local.
 
 ---
 
@@ -101,6 +125,23 @@ Bảng `employee` đã dựng xong, đủ cột, có index — nhưng **chưa c�
 | ❓ | Đồng bộ một lần hay định kỳ? Ai cập nhật, bao lâu một lần? | Người mới vào, nghỉ việc, đổi số (`README B3`) |
 
 > **Lưu ý về Teams:** nếu chuyển sang Teams thì vẫn cần email — đó là cách tra ra tài khoản Azure AD của từng người. Teams **không** tra người bằng số điện thoại.
+
+**Tài khoản đăng nhập.** Chỉ nhân viên HC mới cần — người nhận thư không đăng
+nhập, họ quét QR ở khu để đơn. Hệ thống **không có trang tự đăng ký**, nên tài
+khoản đầu tiên tạo từ dòng lệnh:
+
+```bash
+cd backend
+python ../scripts/create_user.py --code HC001 --name "Phạm Thị Duyên" \
+    --email duyen@congty.vn --phone 0911111111
+```
+
+Đăng nhập bằng **mã nhân viên**, không phải email. Đổi mật khẩu: thêm
+`--set-password`.
+
+> ⚠️ Script đọc `DATABASE_URL` giống hệt ứng dụng — chạy nhầm một phát là tạo
+> tài khoản vào cơ sở dữ liệu khác. Script in ra chuỗi kết nối trước khi ghi,
+> nhìn dòng đó rồi hãy gõ mật khẩu.
 
 ### 🔴 A2. Kênh thông báo
 
@@ -210,17 +251,30 @@ Chi tiết: [mail-tracking §3.3](architecture/mail-tracking.md#33-khử-trùng-
 2. **Không có phòng ban** → không còn tín hiệu phụ để tách người trùng tên. Thay bằng lịch sử "ai từng nhận hàng từ người gửi này".
 3. **Một dòng không phải một kiện** → mọi con số phải nói rõ đang đếm dòng hay đếm kiện.
 
-### 🟡 C2. Frontend — khối việc lớn nhất còn lại
+### ✅ C2. Frontend — **đã dựng 17/09/2026**
 
-Đã chốt React + Next.js + TypeScript, **chưa viết dòng nào**. API đã xong cả 17 endpoint nên có sẵn cái để gọi.
+Next.js App Router + TypeScript. Sáu màn hình, `npm run build` sạch, đã chạy
+thật end-to-end với backend (22/22 bước đạt, gồm cả đọc `mau.xlsx` thật).
 
-| Màn hình | Ngày công | Ghi chú |
+| Màn hình | Đường dẫn | Ghi chú |
 |---|---|---|
-| Soát trước khi gửi | 1.2 | [§5](architecture/mail-tracking.md#5-màn-hình-soát-trước-khi-gửi) gọi là chốt chặn quan trọng nhất. Phải phân ba mức bằng **ký hiệu và màu**, không chỉ màu |
-| **"Chờ khớp" xuyên lô** | 0.4 | **Mới theo CR-001** ([§6.4](architecture/mail-tracking.md#64-gửi-một-phần)). Gửi một phần chỉ có nghĩa khi có chỗ xử lý phần còn lại |
-| Quét QR tại khu để đơn | 0.4 | Phụ thuộc [A3](#-a3-mạng-và-nơi-triển-khai) |
-| Kiện quá hạn | 0.6 | HC dùng hằng ngày |
-| Báo cáo | 0.5 | Tỷ lệ khớp tự động phải vẽ **theo tuần**, không phải một con số |
+| Soát trước khi gửi | `/mail/batches/[id]` | [§5](architecture/mail-tracking.md#5-màn-hình-soát-trước-khi-gửi) gọi là chốt chặn quan trọng nhất |
+| Lô thư + tải file | `/mail/batches` | Cảnh báo lô cùng ngày, ngày mơ hồ, thiếu email |
+| "Chờ khớp" xuyên lô | `/mail/pending-match` | [§6.4](architecture/mail-tracking.md#64-gửi-một-phần) |
+| Kiện hàng | `/mail/items` | HC dùng hằng ngày. Lọc theo trạng thái, tự làm mới mỗi 45s |
+| Báo cáo | `/mail/reports` | Tỷ lệ khớp tự động vẽ **theo tuần** |
+| Quét QR tại khu để đơn | `/station` | **Công khai**, thiết kế cho điện thoại. Phụ thuộc [A3](#-a3-mạng-và-nơi-triển-khai) |
+
+Màu và kiểu chữ lấy từ wireframe artboard `0a` để đồng bộ với ba đề còn lại.
+
+| ❓ | Còn lại |
+|---|---|
+| ❓ | **UAT**: ai thử, thử cái gì, tiêu chí nghiệm thu? (`README C6`) |
+| ❓ | Mã QR dán tại khu để đơn phải trỏ tới `https://<host>/station?t=<MAIL_STATION_TOKEN>` — chưa có host thật ([A3](#-a3-mạng-và-nơi-triển-khai)) |
+
+> ⚠️ **Chưa ai dùng thử trên trình duyệt thật.** Kiểm chứng tới giờ là build sạch,
+> lint sạch, và chạy hết luồng qua HTTP. Cái chưa đo được là thao tác thật của HC
+> có nhanh hơn quy trình cũ không — đó là việc của UAT, và cần [C3](#-c3-đo-baseline-thủ-công--có-hạn-chót) làm trước để có gì mà so.
 
 ### 🟡 C3. Đo baseline thủ công — **có hạn chót**
 
@@ -250,6 +304,26 @@ Chi tiết: [mail-tracking §3.3](architecture/mail-tracking.md#33-khử-trùng-
 | ⚪ D5 | **Lưu lượng thực tế** mỗi ngày bao nhiêu kiện | Chưa biết | Lễ tân |
 | ⚪ D6 | **Ngưỡng cảnh báo dòng `Chờ khớp`** 2 ngày (`MAIL_PENDING_MATCH_ALERT_DAYS`) | Tự đặt. Chỉ đẩy lên đầu màn hình, **không** tự chuyển `Tồn đọng` | HC |
 | ⚪ D7 | **Cột `nội dung`** (`"phong bì"`, …) | Chưa biết là bộ giá trị cố định hay ghi tự do. Nếu cố định thì dùng được để nhận diện kiện giá trị cao | Lễ tân |
+| 🟠 D8 | **Bỏ tờ ký giấy sau pilot** | Xem khung bên dưới — đây là quyết định **phải chờ số liệu pilot**, không chốt trước được | HC |
+
+### 🟠 D8. Khi nào bỏ được tờ ký giấy
+
+Câu hỏi đã đặt ra: *"đi vào hoạt động sẽ bỏ bước ký tên trên giấy, vậy nút 'Đã trao tay' còn cần không?"*
+
+**Không quyết trước được — tỷ lệ `hc_reconciled` trong pilot mới là câu trả lời.**
+
+| Tỷ lệ `hc_reconciled` | Nghĩa | Bỏ giấy được chưa |
+|---|---|---|
+| Thấp | Người nhận tự quét QR sau khi lấy hàng | ✅ Bỏ được |
+| Cao | Kiện chỉ được ghi nhận nhờ HC đọc tờ giấy | ❌ Bỏ giấy = đúng ngần ấy kiện nằm mãi ở `Đã thông báo`, bị nhắc T+2 rồi chuyển `Tồn đọng` T+5 **dù đã có người lấy**. Danh sách tồn đọng đầy báo động giả |
+
+Sau khi bỏ giấy, nút "Đã trao tay" **vẫn còn nghĩa nhưng hẹp lại**: chỉ dùng khi HC **tự tay trao kiện** cho người vào hỏi ([§7.1](architecture/mail-tracking.md#71-quy-trình-thật-tại-chỗ-để-đơn) ghi nhận tình huống này có thật). Không dùng để tick cho danh sách gọn mắt — ghi nhận một việc không ai chứng kiến thì số liệu trông sạch trong khi thực tế không ai biết kiện ở đâu.
+
+| ❓ | Câu hỏi cho Phòng HC |
+|---|---|
+| ❓ | Đặt ngưỡng `hc_reconciled` bao nhiêu thì đồng ý bỏ giấy? (đề xuất: dưới 10% trong 2 tuần liền) |
+| ❓ | Nếu tỷ lệ cứ cao mãi: đổi vị trí/kích thước biển QR, hay giữ giấy luôn? |
+| ❓ | Ai được bấm "Đã trao tay", và có bắt ghi lý do không? |
 
 ---
 
@@ -319,7 +393,7 @@ Nếu chỉ làm được ba việc, làm đúng ba việc này — **đều là
 | 2 | **Hỏi IT câu 10** — điện thoại cá nhân có vào được không | Nếu "không" thì phải thiết kế lại §7 **ngay**, đừng để phát hiện lúc chạy thật |
 | 3 | **Nhờ lễ tân câu 11** — giữ nguyên `.xlsx` | Một câu nhắn, gỡ luôn rủi ro đọc sai ngày |
 
-Sau đó theo thứ tự: A2 (thông số SMTP) → C3 (baseline, làm sớm vì có hạn chót) → C2 (frontend).
+Sau đó theo thứ tự: A2 (thông số SMTP) → C3 (baseline, **làm sớm vì có hạn chót**) → UAT.
 
 ### Việc cần làm **sau** 1–2 tuần chạy thật
 

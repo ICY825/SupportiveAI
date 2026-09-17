@@ -80,6 +80,24 @@ class TestTraCuu:
         assert [e.id for e in repo.search("duyên")] == [duyen.id]
         assert [e.id for e in repo.search("NV00")] == [duyen.id]
 
+    @pytest.mark.parametrize("cach_go", ["duyen", "Duyen", "thi duyen", "PHAM THI DUYEN"])
+    def test_go_khong_dau_van_tim_ra(self, db, duyen, cach_go):
+        """Ô tìm nhân sự phải chịu được cách gõ nhanh (mail-tracking.md §5.2).
+
+        Đây là ô HC dùng khi máy không khớp được — tức là chỗ tốn thời gian
+        nhất của cả quy trình. Bắt gõ đủ dấu thì nó vô dụng đúng lúc cần
+        nhất, và HC sẽ quay về đối chiếu tay.
+        """
+        assert [e.id for e in EmployeeRepository(db).search(cach_go)] == [duyen.id]
+
+    def test_khop_giua_ten_chu_khong_chi_dau_ten(self, db, duyen):
+        """Tên trên phong bì hay thiếu họ, nên phải tìm được bằng phần giữa."""
+        assert [e.id for e in EmployeeRepository(db).search("thi")] == [duyen.id]
+
+    def test_nguoi_da_nghi_khong_hien_trong_goi_y(self, db, service, duyen):
+        service.deactivate(duyen.id)
+        assert EmployeeRepository(db).search("duyen") == []
+
     def test_bo_qua_nguoi_da_nghi_khi_khop(self, db, service, duyen):
         service.deactivate(duyen.id)
         assert EmployeeRepository(db).find_by_phone("0912345678") is None
