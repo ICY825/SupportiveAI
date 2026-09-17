@@ -70,6 +70,36 @@ class Settings(BaseSettings):
     mail_from: str = ""
     mail_from_name: str = "Phòng Hành chính"
 
+    # --- Đề 3: chuyển phát nhanh ---
+    # ⚠️ Ghi rõ tầng và vị trí khi chốt. Chuỗi này in thẳng vào email nên
+    #    mơ hồ là người nhận đi tìm nhầm chỗ.
+    mail_pickup_location: str = "Khu vực chuyển phát nhanh"
+    # Mã nhúng trong QR dán tại khu để đơn. Để trống thì bỏ qua kiểm tra
+    # — xem ghi chú ⚠️ ở đầu mail/router.py.
+    mail_station_token: str = ""
+    # Chu kỳ quét mốc nhắc hạn / tồn đọng. Mốc "sau 2 ngày" trên thực tế
+    # là "lần quét đầu tiên sau khi quá 2 ngày", nên chu kỳ càng ngắn thì
+    # càng sát. Mỗi ngày chỉ vài chục kiện nên quét mỗi giờ là thoải mái.
+    mail_job_interval_minutes: int = 60
+    # D7 — bậc khớp theo số điện thoại. File lễ tân hiện **không có** cột
+    # này, nhưng nhánh khớp vẫn nằm trong mã: khi nào lễ tân thêm cột thì
+    # bật lên bằng biến môi trường, không phải sửa code (CR-001 §4.2 bậc 0).
+    mail_match_by_phone: bool = False
+    # Ngưỡng "tên gần đúng" ở bậc fuzzy (CR-001 §4.2 bậc 4-5).
+    # ⚠️ TẠM ĐẶT — hiệu chỉnh sau vài lô thật, dựa vào bảng phản hồi ở §8.1.
+    mail_name_fuzzy_threshold: float = 0.85
+    # Dòng nằm ở `Chờ khớp` quá ngần này ngày thì đẩy lên đầu màn hình và
+    # cảnh báo trên bảng điều khiển HC (CR-001 §6.3). Không tự chuyển trạng thái.
+    mail_pending_match_alert_days: int = 2
+
+    # --- Danh mục nhân sự ---
+    # Tên miền của **tài khoản AD** (UPN), ví dụ "vingroup.net". Nếu cột
+    # `email` nhập vào trùng tên miền này thì gần như chắc chắn HR lấy nhầm
+    # cột tài khoản sang cột hộp thư (CR-001 §3.5, D8). Đây là lỗi im lặng
+    # nguy hiểm nhất: thư không tới ai nhưng hệ thống vẫn báo gửi thành công.
+    # Để trống thì bỏ qua kiểm tra.
+    upn_domain_hint: str = ""
+
     # --- Lưu trữ file ---
     storage_root: str = "./var/storage"
 

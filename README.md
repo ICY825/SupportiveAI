@@ -172,36 +172,47 @@ Thư chuyển phát và công văn đến đi theo cùng một vòng đời: _nh
 > **Phạm vi:** Đề bài này **không có thành phần AI**. Lễ tân đã phân loại và cung cấp dữ liệu có cấu trúc, nên bài toán thuần túy là tự động hóa quy trình. Đây không phải điểm yếu — rủi ro kỹ thuật thấp, giá trị vận hành thấy ngay, và phân hệ này chạy qua _toàn bộ_ lõi chung nên là phép thử tốt nhất cho nền tảng trước khi làm Đề 4. Cần thống nhất trước với ban lãnh đạo về cách đánh giá (xem [mục 12](#12-vấn-đề-chưa-chốt), A6).
 >
 > **Chốt 16/09/2026:** luồng nghiệp vụ Đề 3 theo [`docs/architecture/mail-tracking.md`](docs/architecture/mail-tracking.md). Wireframe chỉ là bản tham chiếu thị giác giai đoạn đầu; panel "AI · Nhận diện vận đơn" và tab "Gửi đi" trong wireframe **không thuộc phạm vi** — xem mục 16 của tài liệu đó.
+>
+> **Cập nhật 17/09/2026 — [CR-001](docs/architecture/CR-001-de3-cap-nhat-theo-file-that.md):** đã có file mẫu thật từ lễ tân. File **không có** số điện thoại, mã vận đơn và phòng ban, nên khóa khớp và khóa khử trùng lặp đều đổi. Tài liệu thiết kế lên bản **0.4**.
 
 **Hiện trạng:** Lễ tân nhận kiện, phân loại và gửi file danh sách lên Phòng HC. Phòng HC phải đọc file, soạn thông báo cho từng người, rồi tự theo dõi ai đã lấy ai chưa. Toàn bộ khúc này đang làm tay.
 
 **Luồng nghiệp vụ**
 
 ```
-Lễ tân gửi file danh sách
-  → HC tải lên, hệ thống khớp nhân sự và khử trùng lặp
+Lễ tân gửi file danh sách (.xlsx, 6 cột)
+  → HC tải lên, hệ thống khớp nhân sự theo tên và đánh dấu dòng nghi trùng
   → HC soát lại trên màn hình trước khi gửi
-  → Gửi thông báo hàng loạt
-  → Người nhận xuống lấy, xác nhận bằng QR tại quầy
+  → Gửi thông báo hàng loạt cho các dòng đã sẵn sàng, gộp theo người
+      · dòng chưa khớp được nằm lại ở "Chờ khớp", KHÔNG chặn cả lô
+      · HC xử lý dần ở màn hình "Chờ khớp" xuyên lô, gán xong thì gửi ngay
+  → Người nhận xuống lấy, xác nhận bằng QR dán tại khu để đơn
   → Nhắc tự động các trường hợp chưa nhận theo SLA
   → Báo cáo tổng hợp theo kỳ
 ```
 
 **Chức năng**
 
-- Tiếp nhận file danh sách từ lễ tân; khử trùng lặp theo mã vận đơn.
-- Khớp người nhận với danh mục nhân sự, ưu tiên theo số điện thoại.
+- Tiếp nhận file `.xlsx`/`.csv` từ lễ tân; khử trùng lặp bằng khóa tổ hợp, dạng **cảnh báo mềm** — trùng thì đánh dấu để HC quyết, không tự bỏ dòng.
+- Khớp người nhận với danh mục nhân sự **theo tên**, có bảng alias học từ mỗi lần HC chọn.
 - Màn hình soát trước khi gửi — bắt buộc có người xác nhận, không gửi thẳng từ file.
 - Tự động gửi thông báo tới người nhận, gộp theo người (một người nhiều kiện chỉ nhận một thông báo).
-- Xác nhận đã nhận bằng QR tại quầy (đường chính) hoặc link trong thông báo (đường phụ).
+- **Gửi một phần:** dòng chưa khớp được không chặn phần còn lại của lô; có màn hình "Chờ khớp" xuyên lô để xử lý dần.
+- Xác nhận đã nhận bằng QR dán tại khu để đơn (đường chính) hoặc link trong thông báo (đường phụ).
 - Theo dõi trạng thái: `Chờ khớp` / `Đã thông báo` / `Đã nhận` / `Tồn đọng`.
-- Tự động nhắc lại các trường hợp chưa nhận theo ngưỡng SLA, tính theo giờ làm việc.
+- Tự động nhắc lại các trường hợp chưa nhận theo ngưỡng SLA, tính theo giờ đồng hồ.
 - Màn hình danh sách quá hạn cho HC dùng hằng ngày.
 - Báo cáo tổng hợp tình trạng nhận thư theo kỳ.
 
-**Dữ liệu đầu vào:** File danh sách từ lễ tân — tên người nhận, số điện thoại, đơn vị, mã/vận đơn, thời gian nhận.
+**Dữ liệu đầu vào:** File danh sách từ lễ tân — **sáu cột**: `stt`, `người gửi`, `ngày nhận`, `số lượng`, `nội dung`, `người nhận`.
 
-**KPI:** Thời gian xử lý; tỷ lệ thông báo tự động; tỷ lệ khớp tự động; tỷ lệ thư chưa nhận.
+> ⚠️ File **không có** số điện thoại, mã vận đơn hay phòng ban. Vì vậy:
+>
+> - **Khớp theo tên là chính.** Tên trên phong bì viết không chuẩn — thiếu họ, hoa thường lẫn lộn — nên không quy tắc nào khớp được lần đầu. Cái khớp được là bảng `matching_alias` **học từ mỗi lần HC chọn**: tỷ lệ khớp tự động thấp ở tuần đầu rồi tăng dần. Đó là hành vi đúng của thiết kế, nên KPI phải báo **theo tuần**, không phải trung bình cả kỳ.
+> - **Một dòng không phải một kiện.** Lễ tân gộp nhiều kiện cùng nguồn trong cùng ngày vào một dòng rồi ghi `số lượng`, nên mọi con số phải nói rõ đang đếm dòng hay đếm kiện.
+> - Nhánh khớp theo số điện thoại vẫn nằm trong mã. Khi lễ tân thêm cột, bật bằng `MAIL_MATCH_BY_PHONE=true` — không phải sửa code.
+
+**KPI:** Thời gian xử lý; tỷ lệ thông báo tự động; **tỷ lệ khớp tự động theo tuần**; số thao tác HC mỗi lô; tỷ lệ thư chưa nhận.
 
 **Ngoài phạm vi pilot** ⏭
 
@@ -210,7 +221,7 @@ Lễ tân gửi file danh sách
 - Ký điện tử.
 - Tích hợp API hãng vận chuyển — API được thiết kế cho bên gửi, không phục vụ được bên nhận.
 
-**Ước lượng:** ~5.5 ngày công, vừa với Tuần 2 (với điều kiện lõi chung đã xong ở Tuần 1).
+**Ước lượng:** ~6.9 ngày công. **Backend đã xong toàn bộ**; phần còn lại là 5 màn hình frontend (~3.1 ngày).
 
 ## 📄 Thiết kế chi tiết: [`docs/architecture/mail-tracking.md`](docs/architecture/mail-tracking.md)
 
@@ -345,7 +356,9 @@ OCR tiếng Việt với công văn hành chính: dấu thanh, dấu đỏ chồ
 `resource_assignment` (lịch sử cấp phát)
 
 **Luồng đến/đi**
-`mail_item` (thư/kiện: mã vận đơn, đơn vị vận chuyển, người nhận)
+`mail_item` (một dòng trong file lễ tân: người gửi, người nhận, ngày nhận, số lượng, nội dung)
+`matching_alias` (tên thô trên phong bì → nhân sự, học từ mỗi lần HC chọn)
+`mail_match_feedback` (HC sửa gì, máy đề xuất gì — mẫu số KPI của Đề 3)
 `document` (công văn: số/ký hiệu, loại, chủ đề, deadline)
 `document_attachment`
 
@@ -493,6 +506,8 @@ Mọi KPI trong đề bài đều là **so sánh** ("giảm bao nhiêu", "nhanh 
 ## 12. Vấn đề chưa chốt
 
 Đây là phần quan trọng nhất của tài liệu ở giai đoạn này. Mỗi mục cần một người trả lời trước khi bắt đầu build.
+
+> 📋 **Riêng Đề 3 đã có checklist thi hành:** [`docs/checklist-truoc-khi-chay.md`](docs/checklist-truoc-khi-chay.md) — liệt kê đúng những gì còn thiếu để chạy thật, xếp theo mức độ chặn, kèm phiếu câu hỏi gom sẵn theo từng đầu mối (HR / IT / lễ tân / HC).
 
 ### Nhóm A — Chặn tiến độ (phải trả lời trong Tuần 0)
 

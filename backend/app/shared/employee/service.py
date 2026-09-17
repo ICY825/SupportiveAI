@@ -5,16 +5,41 @@ from __future__ import annotations
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.exceptions import AuthenticationError, ConflictError, NotFoundError
 from app.core.permissions import Principal
 from app.core.security import hash_password, verify_password
 from app.platform.events import Dispatcher
 from app.platform.events import dispatcher as default_dispatcher
 from app.shared.employee.events import EmployeeDeactivated
-from app.shared.employee.models import Employee, EmployeeRole, EmployeeStatus
+from app.shared.employee.models import EmailSource, Employee, EmployeeRole, EmployeeStatus
 from app.shared.employee.normalization import normalize_name, normalize_phone, phone_last4
 from app.shared.employee.repository import EmployeeRepository
 from app.shared.employee.schemas import EmployeeCreate, EmployeeUpdate
+
+
+def looks_like_upn(email: str | None) -> bool:
+    """Email có đang mang tên miền của tài khoản AD không? (CR-001 §3.5)
+
+    Đây là lỗi im lặng nguy hiểm nhất trong cả phân hệ: nhập nhầm cột tài
+    khoản AD sang cột hộp thư thì thư không tới ai, nhưng SMTP vẫn nhận và
+    hệ thống vẫn báo gửi thành công. Đồng hồ SLA chạy, kiện chuyển tồn
+    đọng, còn người nhận thì không bao giờ biết mình có hàng.
+
+    Để trống `UPN_DOMAIN_HINT` thì không kiểm tra gì — chưa biết tên miền
+    AD thì đoán bừa còn tệ hơn.
+    """
+    hint = (settings.upn_domain_hint or "").strip().lower().lstrip("@")
+    if not hint or not email:
+        return False
+    return email.strip().lower().endswith("@" + hint)
+
+
+UPN_WARNING = (
+    "Email {email} trùng tên miền tài khoản AD ({hint}) — gần như chắc chắn đây là "
+    "cột UPN, không phải hộp thư nhận mail. Kiểm tra lại trước khi lưu; nếu đúng là "
+    "tài khoản AD thì điền vào ô UPN."
+)
 
 
 class EmployeeService:
@@ -48,6 +73,8 @@ class EmployeeService:
             employee_code=payload.employee_code.strip(),
             full_name=payload.full_name.strip(),
             email=(payload.email or "").strip() or None,
+            upn=(payload.upn or "").strip() or None,
+            email_source=payload.email_source or EmailSource.CONFIRMED,
             department_id=payload.department_id,
             job_title=payload.job_title,
             status=EmployeeStatus.ACTIVE,
@@ -72,6 +99,10 @@ class EmployeeService:
             employee.full_name = payload.full_name.strip()
         if payload.email is not None:
             employee.email = payload.email.strip() or None
+        if payload.upn is not None:
+            employee.upn = payload.upn.strip() or None
+        if payload.email_source is not None:
+            employee.email_source = payload.email_source
         if payload.department_id is not None:
             employee.department_id = payload.department_id
         if payload.job_title is not None:
@@ -127,6 +158,25 @@ class EmployeeService:
         if employee is None or not matched or not employee.is_active:
             raise AuthenticationError("Mã nhân viên hoặc mật khẩu không đúng")
         return employee
+
+    # --- Chất lượng dữ liệu danh mục (CR-001 §3.5) ---
+
+    @staticmethod
+    def data_warnings(employee: Employee) -> list[str]:
+        """Cảnh báo hiện ở màn hình nhập danh mục. Không chặn việc ghi."""
+        warnings: list[str] = []
+        if looks_like_upn(employee.email):
+            warnings.append(
+                UPN_WARNING.format(
+                    email=employee.email,
+                    hint=settings.upn_domain_hint.strip().lstrip("@"),
+                )
+            )
+        if not employee.email:
+            warnings.append(
+                "Nhân sự chưa có email — mọi thông báo gửi cho người này sẽ không tới nơi."
+            )
+        return warnings
 
     # --- Nội bộ ---
 

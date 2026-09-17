@@ -21,6 +21,15 @@ class EmployeeStatus:
     INACTIVE = "inactive"
 
 
+class EmailSource:
+    """Nguồn gốc của cột `email` (CR-001 §3.5)."""
+
+    CONFIRMED = "confirmed"   # HR xác nhận đây là hộp thư thật
+    DERIVED = "derived"       # suy ra từ quy tắc đặt tên, chưa ai kiểm chứng
+
+    ALL = (CONFIRMED, DERIVED)
+
+
 class Employee(Base, TimestampMixin):
     __tablename__ = "employee"
     __table_args__ = (
@@ -38,7 +47,15 @@ class Employee(Base, TimestampMixin):
     # normalization.py. Khớp bao giờ cũng chạy trên cột đã chuẩn hóa.
     full_name_normalized: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # `email` là **hộp thư thật sự nhận mail** (CR-001 §3.5, D8), ví dụ
+    # v.trungab1@vinsmartfuture.tech — không phải tài khoản đăng nhập AD.
     email: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
+    # Tài khoản AD (User Principal Name), ví dụ trungab1@vingroup.net. Giữ
+    # riêng vì hai chuỗi này khác nhau và gửi nhầm vào UPN thì thư không tới
+    # ai, mà hệ thống vẫn báo gửi thành công.
+    upn: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # confirmed = HR xác nhận đúng hộp thư; derived = suy ra, chưa kiểm chứng.
+    email_source: Mapped[str | None] = mapped_column(String(16), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     phone_normalized: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # Tách sẵn 4 số cuối cho khớp bậc 2 (mail-tracking.md §4.2) để khỏi

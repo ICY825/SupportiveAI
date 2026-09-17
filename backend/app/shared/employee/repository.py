@@ -73,6 +73,19 @@ class EmployeeRepository:
             stmt = stmt.where(Employee.status == EmployeeStatus.ACTIVE)
         return self.db.execute(stmt).scalars().all()
 
+    def list_all(self, *, active_only: bool = True) -> Sequence[Employee]:
+        """Toàn bộ danh mục, cho bậc khớp gần đúng (CR-001 §4.2 bậc 4-5).
+
+        Bậc này phải chấm điểm từng người nên không có cách nào đẩy xuống
+        SQL. Chấp nhận được ở quy mô pilot (vài trăm tới vài nghìn nhân sự,
+        mỗi ngày vài chục dòng); nếu danh mục lớn hơn nhiều thì thay bằng
+        trigram index của Postgres, đừng nới vòng lặp này ra.
+        """
+        stmt = select(Employee)
+        if active_only:
+            stmt = stmt.where(Employee.status == EmployeeStatus.ACTIVE)
+        return self.db.execute(stmt).scalars().all()
+
     def search(
         self, term: str, *, limit: int = 20, active_only: bool = True
     ) -> Sequence[Employee]:

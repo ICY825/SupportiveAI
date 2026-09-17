@@ -37,9 +37,19 @@ class SchedulerService:
         self._specs: dict[str, JobSpec] = {}
 
     def register(self, spec: JobSpec) -> None:
+        """Đăng ký một job.
+
+        Trùng `job_id` trong cùng một lượt nạp là lỗi thật (hai module đặt
+        trùng tên job), nên vẫn báo lỗi. Việc dựng lại ứng dụng thì gọi
+        `clear()` trước — xem `create_app()`.
+        """
         if spec.job_id in self._specs:
             raise ValueError(f"Job {spec.job_id!r} đã được đăng ký")
         self._specs[spec.job_id] = spec
+
+    def clear(self) -> None:
+        """Xoá danh sách job đã đăng ký (chưa chạy)."""
+        self._specs.clear()
 
     def registered(self) -> tuple[JobSpec, ...]:
         return tuple(self._specs.values())

@@ -71,3 +71,32 @@ def normalize_name(raw: str | None) -> str | None:
     text = unicodedata.normalize("NFC", raw).strip()
     text = _MULTI_SPACE.sub(" ", text)
     return text.casefold() or None
+
+
+def strip_accents(raw: str | None) -> str | None:
+    """Bản bỏ dấu của tên, dùng cho bậc khớp gần đúng (CR-001 §4.1).
+
+    Bản chính vẫn **giữ nguyên dấu** — bỏ dấu làm "Hà" và "Hạ" trùng nhau,
+    nên chỉ dùng ở bậc fuzzy, sau khi bậc khớp chính xác đã trượt.
+
+    >>> strip_accents("Nguyễn Thị Thu")
+    'nguyen thi thu'
+    """
+    normalized = normalize_name(raw)
+    if not normalized:
+        return None
+    # NFD tách dấu thành ký tự tổ hợp riêng, Mn là nhóm dấu đó.
+    decomposed = unicodedata.normalize("NFD", normalized)
+    without_marks = "".join(c for c in decomposed if unicodedata.category(c) != "Mn")
+    # đ/Đ không phải nguyên âm có dấu nên NFD không tách được.
+    return without_marks.replace("đ", "d").replace("Đ", "D") or None
+
+
+def normalize_sender(raw: str | None) -> str | None:
+    """Chuẩn hóa tên người gửi — cùng quy tắc với tên người nhận.
+
+    Dùng cho khóa khử trùng lặp (CR-001 §5.1) và xếp hạng ứng viên theo
+    lịch sử (§4.3). Tách thành hàm riêng để sau này đổi quy tắc cho người
+    gửi (ví dụ bỏ tiền tố "cty") mà không đụng tới tên nhân sự.
+    """
+    return normalize_name(raw)

@@ -14,6 +14,10 @@ dependencies = [
     "pyjwt>=2.9",
     "bcrypt>=4.2",
     "apscheduler>=3.10,<4",
+    # Đọc file .xlsx của lễ tân (mail/importer.py, CR-001 §1).
+    "openpyxl>=3.1",
+    # FastAPI cần cho endpoint tải file lên (POST /mail/batches/upload).
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]

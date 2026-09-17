@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import pytest
 
+from app.core.config import settings
 from app.core.exceptions import AuthenticationError, ConflictError, NotFoundError
 from app.shared.employee.events import EmployeeDeactivated
-from app.shared.employee.models import EmployeeStatus
+from app.shared.employee.models import EmailSource, EmployeeStatus
 from app.shared.employee.repository import EmployeeRepository
 from app.shared.employee.schemas import EmployeeCreate, EmployeeUpdate
-from app.shared.employee.service import EmployeeService
+from app.shared.employee.service import EmployeeService, looks_like_upn
 
 
 @pytest.fixture
@@ -145,3 +146,65 @@ class TestNghiViec:
 def test_get_bao_loi_khi_khong_co(service):
     with pytest.raises(NotFoundError):
         service.get("khong-ton-tai")
+
+
+# ----------------------------------------------------------------------
+# CR-001 §3.5 (D8) — tách hộp thư thật khỏi tài khoản AD
+# ----------------------------------------------------------------------
+
+class TestEmailVaTaiKhoanAD:
+    """Lấy nhầm cột tài khoản AD sang cột email là **lỗi im lặng nguy hiểm
+    nhất** trong cả hệ thống: thư không tới ai, nhưng SMTP vẫn nhận và hệ
+    thống vẫn báo gửi thành công. Đồng hồ SLA chạy, kiện chuyển tồn đọng,
+    còn người nhận thì không bao giờ biết mình có hàng.
+    """
+
+    @pytest.fixture(autouse=True)
+    def ten_mien_ad(self, monkeypatch):
+        monkeypatch.setattr(settings, "upn_domain_hint", "vingroup.net")
+
+    def test_luu_ca_hai_chuoi_rieng_nhau(self, service):
+        person = service.create(EmployeeCreate(
+            employee_code="NV100", full_name="Trần Anh Trung",
+            email="v.trungab1@vinsmartfuture.tech", upn="trungab1@vingroup.net"))
+        assert person.email == "v.trungab1@vinsmartfuture.tech"
+        assert person.upn == "trungab1@vingroup.net"
+        assert person.email_source == EmailSource.CONFIRMED
+
+    def test_email_dung_ten_mien_ad_thi_canh_bao(self, service):
+        person = service.create(EmployeeCreate(
+            employee_code="NV101", full_name="Trần Anh Trung",
+            email="trungab1@vingroup.net"))
+        warnings = service.data_warnings(person)
+        assert any("tài khoản AD" in w for w in warnings)
+
+    def test_canh_bao_khong_chan_viec_ghi(self, service):
+        """HR vẫn nhập được — cảnh báo là để nhìn, không phải để chặn."""
+        person = service.create(EmployeeCreate(
+            employee_code="NV102", full_name="Trần Anh Trung",
+            email="trungab1@vingroup.net"))
+        assert service.get(person.id).email == "trungab1@vingroup.net"
+
+    def test_email_dung_ten_mien_khac_thi_khong_canh_bao(self, service):
+        person = service.create(EmployeeCreate(
+            employee_code="NV103", full_name="Trần Anh Trung",
+            email="v.trungab1@vinsmartfuture.tech"))
+        assert service.data_warnings(person) == []
+
+    def test_thieu_email_thi_canh_bao_rieng(self, service):
+        person = service.create(EmployeeCreate(
+            employee_code="NV104", full_name="Trần Anh Trung"))
+        assert any("chưa có email" in w for w in service.data_warnings(person))
+
+    def test_sua_email_sang_ten_mien_ad_cung_bi_bat(self, service):
+        person = service.create(EmployeeCreate(
+            employee_code="NV105", full_name="Trần Anh Trung",
+            email="v.trungab1@vinsmartfuture.tech"))
+        service.update(person.id, EmployeeUpdate(email="trungab1@vingroup.net"))
+        assert service.data_warnings(person)
+
+
+def test_khong_dat_upn_domain_hint_thi_khong_kiem_tra(service, monkeypatch):
+    """Chưa biết tên miền AD thì đoán bừa còn tệ hơn là không kiểm tra."""
+    monkeypatch.setattr(settings, "upn_domain_hint", "")
+    assert not looks_like_upn("trungab1@vingroup.net")

@@ -94,6 +94,9 @@ def create_app() -> FastAPI:
     test cần dựng được app sạch nhiều lần.
     """
     wire_platform()
+    # Module đăng ký lại job của mình ở dưới; xoá trước để dựng lại ứng dụng
+    # nhiều lần trong một tiến trình không bị báo trùng job_id.
+    scheduler.clear()
     application = FastAPI(title=settings.app_name, lifespan=lifespan)
     application.add_exception_handler(AppError, handle_app_error)
     application.include_router(employee_router, prefix=settings.api_prefix)

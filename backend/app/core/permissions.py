@@ -64,14 +64,14 @@ def require_permission(principal: Principal, permission: Permission) -> None:
         )
 
 
-# ⚠️ HAI ĐIỂM CHƯA CHỐT — chưa tự đặt, chờ xác nhận:
+# Registry để rỗng ở đây là có chủ đích: `core` không được biết vai trò
+# nào của nghiệp vụ nào. Mỗi module tự gọi `registry.grant(...)` trong hàm
+# `register()` của mình.
 #
-# 1. Danh sách vai trò. Hai tài liệu đang nói khác nhau:
-#      - mail-tracking.md §12: Nhân viên HC / Nhân viên / Quản lý
-#      - SupportiveAI_Architecture_v2.md §18: Admin / Staff / Manager / Clerk
-#    Vì vậy registry để rỗng, chưa nạp sẵn vai trò nào.
+# Vai trò đã chốt cho Đề 3 (mail-tracking.md §12, chốt 16/09/2026): `hc` và
+# `employee`. Ba đề còn lại chưa chốt.
 #
-# 2. Phân quyền theo dòng (row-level). README C1 ghi công văn cần phân quyền
-#    theo phòng ban và độ mật, tức không đủ nếu chỉ có role-level như ở đây.
-#    `Principal.department_id` đã để sẵn làm chỗ bám, nhưng cơ chế lọc theo
-#    dòng chưa thiết kế vì C1 chưa có câu trả lời.
+# ⚠️ CHƯA CHỐT — phân quyền theo dòng (row-level). README C1 ghi công văn
+#    cần phân quyền theo phòng ban và độ mật, tức không đủ nếu chỉ có
+#    role-level như ở đây. `Principal.department_id` đã để sẵn làm chỗ bám,
+#    nhưng cơ chế lọc theo dòng chưa thiết kế vì C1 chưa có câu trả lời.
