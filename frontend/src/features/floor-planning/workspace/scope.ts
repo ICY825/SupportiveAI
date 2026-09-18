@@ -54,8 +54,10 @@ export const DEPARTMENT_WING_ZONES: Record<string, 'Zone A' | 'Zone B'> = {
 }
 
 export const ZONE_WING_MAPPING: Record<string, 'Zone A' | 'Zone B'> = {
+  // Two zones, one department: the lift and stair cores split Mô hình & Nền
+  // tảng AI into a block of 116 desks east of them and 38 west.
   'zone-16-ai-platform': 'Zone B',
-  'zone-16-unlabeled-01': 'Zone B',
+  'zone-16-ai-platform-02': 'Zone B',
   'zone-16-kd-vh-gsm': 'Zone A',
   'zone-16-vinfast-kdo2o': 'Zone A',
   'zone-16-bds-smart-city': 'Zone A',

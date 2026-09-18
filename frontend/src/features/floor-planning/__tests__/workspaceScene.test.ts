@@ -118,7 +118,7 @@ describe('workspace scope selection', () => {
       contextBounds: [700, 400, 840, 600],
       includeContextWorkstations: true,
     })
-    const neighbour = scene.contextWorkstations.find((workstation) => workstation.zoneId === 'zone-16-unlabeled-01')
+    const neighbour = scene.contextWorkstations.find((workstation) => workstation.zoneId === 'zone-16-ai-platform-02')
     expect(neighbour).toBeDefined()
     const placements = basePlacements(dataset.workstations.filter((workstation) => workstation.zoneId === 'zone-16-ai-platform'))
     const targetId = area.workstationIds[0]

@@ -94,8 +94,17 @@ ZONES = [
     {
         "annot": "6d509fd4-5823-409f-8af9-f5cd9f0b4f7a",  # Highlight, lavender, no label
         "labelAnnot": None,
-        "id": "zone-16-unlabeled-01",
-        "name": None,  # UNKNOWN: highlighted on the source without any label
+        "id": "zone-16-ai-platform-02",
+        # The drawing highlights this block but never labels it. The team states
+        # it is the second half of Mô hình & Nền tảng AI, split off from the main
+        # block by the lift and stair cores (wall-16-03, wall-16-04) — 38 desks
+        # at x 722–756, against 116 from x 817 east.
+        #
+        # `nameSource: team` keeps the zone's verification at UNVERIFIED: the
+        # department is asserted by people, not read off the sheet. When the
+        # corrected drawing carries a label here, drop the flag.
+        "name": "MÔ HÌNH & NỀN TẢNG AI",
+        "nameSource": "team",
     },
 ]
 

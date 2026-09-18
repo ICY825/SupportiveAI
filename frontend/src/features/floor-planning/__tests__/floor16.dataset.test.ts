@@ -27,13 +27,38 @@ describe('floor-16 dataset', () => {
     )
   })
 
-  it('keeps the unlabeled highlighted area explicitly UNKNOWN', () => {
-    const unlabeled = ds.zones.filter((z) => z.name === null)
-    expect(unlabeled.length).toBeGreaterThan(0)
-    for (const z of unlabeled) {
+  it('keeps any unlabeled highlighted area explicitly UNKNOWN', () => {
+    // There is none on floor 16 any more: the lavender block was the last one,
+    // and the team named it as the second half of AI Platform. The guard stays,
+    // because the next floor extracted may well have one.
+    for (const z of ds.zones.filter((zone) => zone.name === null)) {
       expect(z.verification).toBe('UNKNOWN')
       expect(z.type).toBe('UNKNOWN')
     }
+  })
+
+  /**
+   * A name the team supplied is not a name the drawing carries. The zone is
+   * usable — it has a department, so desks belong to it — but it must not claim
+   * the sheet verified it, or nobody will know to check it against the corrected
+   * drawing later.
+   */
+  it('marks a team-named zone UNVERIFIED, and says where the name came from', () => {
+    const teamNamed = ds.zones.filter((z) => z.source?.nameSource === 'team')
+    expect(teamNamed.map((z) => z.id)).toEqual(['zone-16-ai-platform-02'])
+    for (const z of teamNamed) {
+      expect(z.name).toBe('MÔ HÌNH & NỀN TẢNG AI')
+      expect(z.verification).toBe('UNVERIFIED')
+      expect(z.type).toBe('WORKSPACE_ZONE')
+    }
+  })
+
+  /** The lift and stair cores split one department across two zones. */
+  it('counts both halves of AI Platform', () => {
+    const ai = ds.zones.filter((z) => z.name === 'MÔ HÌNH & NỀN TẢNG AI').map((z) => z.id)
+    expect(ai.sort()).toEqual(['zone-16-ai-platform', 'zone-16-ai-platform-02'])
+    const desks = ds.workstations.filter((w) => ai.includes(w.zoneId ?? ''))
+    expect(desks.length).toBe(154)
   })
 
   it('assigns stable, unique, zone-independent workstation ids', () => {

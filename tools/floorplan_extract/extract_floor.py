@@ -365,6 +365,10 @@ def extract(cfg, pdf_path: Path, out_dir: Path, public_dir: Path):
         cx = sum(p[0] for p in poly) / len(poly)
         cy = sum(p[1] for p in poly) / len(poly)
         labelled = z["name"] is not None
+        # A name the team supplied is not a name the drawing carries. Keep the
+        # zone usable (it has a department, so it is a WORKSPACE_ZONE) but do
+        # not claim the sheet verified it.
+        team_named = labelled and z.get("nameSource") == "team"
         if z["labelAnnot"]:
             lr = annots[z["labelAnnot"]]["rect"]
             anchor, anchor_src = ((lr[0] + lr[2]) / 2, (lr[1] + lr[3]) / 2), "source label position"
@@ -376,7 +380,7 @@ def extract(cfg, pdf_path: Path, out_dir: Path, public_dir: Path):
             "floorId": fid,
             "type": "WORKSPACE_ZONE" if labelled else "UNKNOWN",
             "name": z["name"],
-            "verification": "SOURCE_VERIFIED" if labelled else "UNKNOWN",
+            "verification": ("UNVERIFIED" if team_named else "SOURCE_VERIFIED") if labelled else "UNKNOWN",
             "polygon": [[r2(x), r2(y)] for x, y in poly],
             "bbox": bbox_of(poly),
             "labelAnchor": [r2(anchor[0]), r2(anchor[1])],
@@ -388,6 +392,7 @@ def extract(cfg, pdf_path: Path, out_dir: Path, public_dir: Path):
             "sourceLabelFigure": figure,
             "source": {
                 "kind": "pdf-annotation",
+                "nameSource": z.get("nameSource", "pdf-annotation"),
                 "annotationId": z["annot"],
                 "annotationType": a["type"],
                 "labelAnnotationId": z["labelAnnot"],

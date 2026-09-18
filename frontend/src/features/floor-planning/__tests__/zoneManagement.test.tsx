@@ -216,12 +216,22 @@ describe('Department Management and PDF-style Label Repositioning', () => {
 
     it('allows assigning a department name to an unlabeled zone', () => {
       const onZoneUpdate = vi.fn()
-      const zoneId = 'zone-16-unlabeled-01'
+      const zoneId = 'zone-16-ai-platform-02'
+      // Floor 16 no longer has an unnamed zone — the lavender block was the
+      // last one, and the team named it as the second half of AI Platform. The
+      // flow still has to work for the next floor extracted, so strip the name
+      // here rather than delete the test.
+      const unnamed = {
+        ...dataset,
+        zones: dataset.zones.map((zone) =>
+          zone.id === zoneId ? { ...zone, name: null, type: 'UNKNOWN' as const } : zone,
+        ),
+      }
 
       render(
         <FloorDetailsPanel
-          dataset={dataset}
-          baseDataset={dataset}
+          dataset={unnamed}
+          baseDataset={unnamed}
           selected={{ kind: 'zone', id: zoneId }}
           onSelect={vi.fn()}
           debug={false}

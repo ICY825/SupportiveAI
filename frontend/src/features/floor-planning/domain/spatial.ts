@@ -108,6 +108,12 @@ export interface EntitySource {
   geometry?: string
   annotationId?: string
   annotationType?: string
+  /**
+   * Where a zone's NAME came from, which is not always where its geometry came
+   * from. `team` means people stated the department; the drawing does not say
+   * it, so the zone stays UNVERIFIED until a corrected sheet carries the label.
+   */
+  nameSource?: 'pdf-annotation' | 'team'
   labelAnnotationId?: string | null
   deskLabel?: string
   nominalSizeMm?: [number, number]

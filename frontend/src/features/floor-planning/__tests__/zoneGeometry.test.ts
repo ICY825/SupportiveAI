@@ -63,7 +63,7 @@ describe('regularizeZonePolygon on the extracted Floor 16 annotations', () => {
   })
 
   it('leaves the clean highlight rectangles untouched', () => {
-    for (const id of ['zone-16-vinfast-kdo2o', 'zone-16-kd-vh-gsm', 'zone-16-unlabeled-01']) {
+    for (const id of ['zone-16-vinfast-kdo2o', 'zone-16-kd-vh-gsm', 'zone-16-ai-platform-02']) {
       const source = zoneOf(id).polygon
       const display = regularizeZonePolygon(source)
       expect(display).toHaveLength(source.length)
