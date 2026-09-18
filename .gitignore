@@ -109,3 +109,15 @@ docs/references/
 /data/
 docs/kpi/ground-truth/*
 !docs/kpi/ground-truth/.gitkeep
+
+# Dataset mặt bằng sinh từ trích xuất PDF: công khai, phải theo repo.
+# Ngoại lệ của /data/ ở trên, vốn dành cho dữ liệu thật.
+!/data/floors/
+!/data/floors/**
+
+# PDF và bảng tính tham khảo
+*.pdf
+*.xlsx
+
+# Multi-agent teamwork scratch & handoffs
+.agents/
