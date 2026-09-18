@@ -44,6 +44,8 @@ describe('SpatialWorkspace gestures, pointer isolation, and blur resilience', ()
     expect(screen.getByRole('heading', { name: 'Chọn bộ phận' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /AI & Data/ }))
     expect(container.querySelector('.sw-scene')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '← Chọn bộ phận' }))
+    expect(screen.getByRole('heading', { name: 'Chọn bộ phận' })).toBeTruthy()
   })
 
   it('does not cancel active pointer drag when secondary pointer down/up/cancel fires', () => {

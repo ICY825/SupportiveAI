@@ -653,7 +653,7 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
   )
   const scopeLabel = activeArea?.label ?? overviewScene.resolvedScope.label
   const svgRef = useRef<SVGSVGElement>(null)
-  const stageRef = useRef<HTMLDivElement>(null)
+  const stageRef = useRef<HTMLDivElement | null>(null)
   const [stage, setStage] = useState<{ width: number; height: number } | null>(null)
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState<Point>([0, 0])
@@ -895,6 +895,14 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     // so it belongs in the deps — it is not a stable state setter any more.
   }, [allocation.departments, onSelect, reset, setDepartmentId])
 
+  const returnToDepartmentDashboard = useCallback(() => {
+    setDepartmentId(null)
+    setAreaId(null)
+    setAreaPrompt(false)
+    reset()
+    onSelect(null)
+  }, [onSelect, reset, setDepartmentId])
+
   const zoomBy = useCallback((factor: number) => {
     if (!Number.isFinite(factor) || factor <= 0) return
     if (rafId.current !== null) {
@@ -909,8 +917,25 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     svgRef.current?.focus()
   }, [onSelect])
 
-  useEffect(() => {
-    const el = stageRef.current
+  /**
+   * Measure the stage whenever the node attaches, not once on mount.
+   *
+   * A mount effect was enough while the map was the first thing rendered. It
+   * stopped being enough the moment a department chooser could render first:
+   * the effect then ran with no stage in the tree, attached no observer, and
+   * never ran again once the map appeared. `stage` stayed null, so
+   * `pointerFloorPoint` could not turn a pointer into a floor coordinate and
+   * every pointer-driven action — placing an added desk above all — silently
+   * did nothing.
+   *
+   * A callback ref cannot miss it: React calls it with the node on attach and
+   * with null on detach, however many times the map comes and goes.
+   */
+  const stageObserver = useRef<ResizeObserver | null>(null)
+  const attachStage = useCallback((el: HTMLDivElement | null) => {
+    stageRef.current = el
+    stageObserver.current?.disconnect()
+    stageObserver.current = null
     if (!el) return
     if (el.clientWidth > 0 && el.clientHeight > 0) {
       setStage({ width: el.clientWidth, height: el.clientHeight })
@@ -921,7 +946,7 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
       if (width > 0 && height > 0) setStage({ width, height })
     })
     ro.observe(el)
-    return () => ro.disconnect()
+    stageObserver.current = ro
   }, [])
 
   const releaseDrag = useCallback((cancelObjectMove: boolean) => {
@@ -1278,10 +1303,17 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
               />
             </>
           ) : (
-            <EnterEditButton
-              onClick={startEditing}
-              title={activeArea ? undefined : (displayAreas.length ? LAYOUT_EDIT.chooseArea : SPATIAL_NO_EDIT_AREAS)}
-            />
+            <>
+              {startWithDepartmentPicker && departmentId && (
+                <button type="button" className="fp-btn sw-department-back" onClick={returnToDepartmentDashboard}>
+                  ← Chọn bộ phận
+                </button>
+              )}
+              <EnterEditButton
+                onClick={startEditing}
+                title={activeArea ? undefined : (displayAreas.length ? LAYOUT_EDIT.chooseArea : SPATIAL_NO_EDIT_AREAS)}
+              />
+            </>
           )}
         </div>
       </header>
@@ -1315,7 +1347,7 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
             ? <span className="sw-edit-caption">{pendingDesk ? 'Di chuyển chuột trên bản đồ, nhấp để đặt bàn · Esc để hủy' : <span title={LAYOUT_EDIT.gridNote}>{LAYOUT_EDIT.gridLabel(GRID_CELL_MM)}</span>}</span>
             : desk ? <span className="sw-selected-caption">{`Đang chọn ${desk.seat.code}${outsideScope ? ' · ngoài khu vực đang xem' : ''}`}</span> : null}
         </div>
-        <div className="sw-map-stage" ref={stageRef}>
+        <div className="sw-map-stage" ref={attachStage}>
           <WorkspaceScene
             scene={scene}
             desks={desks}
