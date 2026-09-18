@@ -88,6 +88,11 @@ describe('live allocation honesty', () => {
     window.location.hash = '#/floor-planning?floor=floor-16&view=workspace'
     render(<FloorPlanningPage />)
 
+    // With live data the chooser lists departments by the names on the drawing,
+    // not the demo fixtures' English ones.
+    fireEvent.click(
+      await screen.findByRole('button', { name: /MÔ HÌNH & NỀN TẢNG AI/ }, { timeout: 15000 }),
+    )
     await screen.findByRole('application', {}, { timeout: 15000 })
     expect(await screen.findByRole('link', { name: 'Xem danh sách đối chiếu' }, { timeout: 15000 })).toBeTruthy()
     expect(screen.getByText(/ws-16-gone/)).toBeTruthy()

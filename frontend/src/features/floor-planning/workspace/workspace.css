@@ -26,6 +26,70 @@
 .sw-workspace [data-status='conflict'] { --seat: #b6443d; --seat-bg: #fbecea; }
 .sw-workspace [data-status='unavailable'] { --seat: #6d7882; --seat-bg: #edf0f2; }
 
+/* --------------------------------------------------------- department entry */
+
+.sw-department-dashboard {
+  grid-column: 1 / -1;
+  display: block;
+  overflow-y: auto;
+  background: var(--paper);
+}
+.sw-department-dashboard-inner {
+  width: min(1080px, 100%);
+  margin: 0 auto;
+  padding: clamp(32px, 7vh, 76px) clamp(20px, 5vw, 72px);
+}
+.sw-department-dashboard-heading { max-width: 620px; }
+.sw-department-dashboard-heading h2 {
+  margin: 7px 0 10px;
+  font-size: clamp(25px, 3vw, 38px);
+  letter-spacing: -0.03em;
+}
+.sw-department-dashboard-heading > p:last-child {
+  margin: 0;
+  color: var(--sw-muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+.sw-department-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(245px, 1fr));
+  gap: 12px;
+  margin-top: 34px;
+}
+.sw-department-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-height: 190px;
+  padding: 18px;
+  border: 1px solid var(--sw-line);
+  border-radius: 5px;
+  background: var(--paper);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+}
+.sw-department-card:hover {
+  border-color: #7d9ab3;
+  box-shadow: 0 8px 22px rgba(53, 77, 94, 0.1);
+  transform: translateY(-2px);
+}
+.sw-department-card:focus-visible {
+  outline: 2px solid var(--sw-selected);
+  outline-offset: 3px;
+}
+.sw-department-card-index { color: var(--sw-selected); font: 600 11px var(--mono); letter-spacing: 0.08em; }
+.sw-department-card strong { margin-top: 28px; font-size: 16px; line-height: 1.35; }
+.sw-department-card-count { margin-top: 8px; color: var(--sw-muted); font-size: 12px; }
+.sw-department-card-zones { margin-top: 4px; color: var(--sw-muted); font-size: 11px; line-height: 1.45; }
+.sw-department-card-action { margin-top: auto; padding-top: 18px; color: var(--sw-selected); font-size: 12px; font-weight: 650; }
+.sw-department-empty { margin-top: 34px; padding: 16px; border: 1px dashed var(--sw-line); color: var(--sw-muted); }
+@media (prefers-reduced-motion: reduce) {
+  .sw-department-card { transition: none; }
+}
+
 /* ---------------------------------------------------------------- map area */
 
 .sw-main {

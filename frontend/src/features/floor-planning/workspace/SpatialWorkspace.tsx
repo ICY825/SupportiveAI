@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, 
 import { createPortal } from 'react-dom'
 import { ApiError } from '@/api/client'
 import type { ReconcileReport } from '@/api/seats'
-import type { Employee, FloorAllocationData, Seat } from '../domain/allocation'
+import type { Department, Employee, FloorAllocationData, Seat } from '../domain/allocation'
 import { createDemoAllocation } from '../allocation/demoAllocation'
 import {
   applyAllocationMutations,
@@ -53,7 +53,7 @@ import {
   sessionLayoutStore,
   type LayoutStore,
 } from './layoutDraft'
-import { buildWorkspaceDisplayAreas } from './displayAreas'
+import { buildWorkspaceDisplayAreasForScope } from './displayAreas'
 import { buildWorkspaceScene, detailTierForZoom, effectiveZoom, fitViewBox, project, sceneBounds, unproject, unprojectDelta } from './scene'
 import { defaultWorkspaceScope, resolveDepartmentWingZone } from './scope'
 import { useLayoutEditor, NUDGE_COARSE_CELLS, type WorkspaceMode } from './useLayoutEditor'
@@ -154,6 +154,58 @@ function ScopeSummary({ dataset, areaLabel, departmentZone, count, counts, capac
         </ul>
       </details>
     </section>
+  )
+}
+
+function DepartmentDashboard({ dataset, departments, seats, onChoose }: {
+  dataset: FloorDataset
+  departments: readonly Department[]
+  seats: readonly Seat[]
+  onChoose: (departmentId: string) => void
+}) {
+  const zoneLabel = (zoneId: string) =>
+    dataset.zones.find((zone) => zone.id === zoneId)?.name ?? 'Khu vực chưa đặt tên'
+
+  return (
+    <main className="sw-workspace sw-department-dashboard">
+      <section className="sw-department-dashboard-inner" aria-labelledby="sw-department-dashboard-title">
+        <header className="sw-department-dashboard-heading">
+          <p className="fp-eyebrow">Bố trí chỗ ngồi · {dataset.layout.floor.name}</p>
+          <h2 id="sw-department-dashboard-title">Chọn bộ phận</h2>
+          <p>Chọn bộ phận để mở sơ đồ chỗ ngồi và xem tình trạng phân bổ.</p>
+        </header>
+        {departments.length > 0 ? (
+          <div className="sw-department-grid" aria-label="Danh sách bộ phận">
+            {departments.map((department, index) => {
+              const seatCount = seats.filter((seat) => seat.departmentId === department.id).length
+              const zones = department.zonePreferences.map(zoneLabel)
+              return (
+                <button
+                  key={department.id}
+                  type="button"
+                  className="sw-department-card"
+                  onClick={() => onChoose(department.id)}
+                >
+                  <span className="sw-department-card-index">{String(index + 1).padStart(2, '0')}</span>
+                  <strong>{department.name}</strong>
+                  <span className="sw-department-card-count">{seatCount} chỗ ngồi</span>
+                  <span className="sw-department-card-zones">
+                    {zones.length ? zones.join(' · ') : 'Chưa gắn khu vực'}
+                  </span>
+                  <span className="sw-department-card-action">
+                    Mở bố trí <span aria-hidden="true">→</span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        ) : (
+          <p className="sw-department-empty" role="status">
+            Chưa có danh sách bộ phận cho tầng này.
+          </p>
+        )}
+      </section>
+    </main>
   )
 }
 
@@ -325,7 +377,7 @@ interface PendingDesk {
   placement: SpatialPlacement | null
 }
 
-export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, searchSlot, onDirtyChange, authoredEntities, onAuthoredEntityChange, layoutStore = sessionLayoutStore, allocationSource, allocationStore = sessionAllocationStore, onAllocationCommitted, onSearchEmployees, reconcile }: {
+export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, searchSlot, onDirtyChange, authoredEntities, onAuthoredEntityChange, layoutStore = sessionLayoutStore, allocationSource, allocationStore = sessionAllocationStore, onAllocationCommitted, onSearchEmployees, reconcile, startWithDepartmentPicker = false, departmentId: departmentIdProp, onDepartmentChange }: {
   dataset: FloorDataset
   selected: EntityRef | null
   onSelect: (ref: EntityRef | null) => void
@@ -354,6 +406,18 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
    * from live data, because a list of assignments only names its occupants.
    */
   onSearchEmployees?: (query: string) => Promise<Employee[]>
+  /** Show the department chooser before entering the seating map. */
+  startWithDepartmentPicker?: boolean
+  /**
+   * The chosen department, owned by the page.
+   *
+   * It has to outlive this component: switching to the verification view and
+   * back unmounts the workspace, and a choice kept here would be forgotten
+   * along with the user's selection. The page already owns floor, view and
+   * selection for the same reason.
+   */
+  departmentId?: string | null
+  onDepartmentChange?: (departmentId: string | null) => void
 }) {
   const [now] = useState(() => new Date())
   const [allocation, setAllocation] = useState<FloorAllocationData>(() => {
@@ -468,11 +532,22 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
   }, [allocationStore, dataset.layout.floor.id, onAllocationCommitted])
 
   const overviewScope = useMemo(() => defaultWorkspaceScope(dataset), [dataset])
-  const overviewScene = useMemo(() => buildWorkspaceScene(dataset, overviewScope), [dataset, overviewScope])
-  const displayAreas = useMemo(() => buildWorkspaceDisplayAreas(dataset), [dataset])
+  const [ownDepartmentId, setOwnDepartmentId] = useState<string | null>(null)
+  const departmentId = departmentIdProp !== undefined ? departmentIdProp : ownDepartmentId
+  const setDepartmentId = onDepartmentChange ?? setOwnDepartmentId
+  const selectedDepartmentScope = useMemo(
+    () => (departmentId ? { kind: 'department' as const, departmentId } : null),
+    [departmentId],
+  )
+  const activeOverviewScope = selectedDepartmentScope ?? overviewScope
+  const overviewScene = useMemo(() => buildWorkspaceScene(dataset, activeOverviewScope), [dataset, activeOverviewScope])
+  const displayAreas = useMemo(
+    () => buildWorkspaceDisplayAreasForScope(dataset, activeOverviewScope),
+    [dataset, activeOverviewScope],
+  )
   const [areaId, setAreaId] = useState<string | null>(null)
   const activeArea = areaId ? displayAreas.find((area) => area.id === areaId) ?? null : null
-  const scope = activeArea?.scope ?? overviewScope
+  const scope = activeArea?.scope ?? activeOverviewScope
   const departmentZone = useMemo(
     () => resolveDepartmentWingZone(scope, overviewScene.resolvedScope.zoneIds),
     [scope, overviewScene.resolvedScope.zoneIds],
@@ -809,6 +884,17 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     reset()
   }, [reset])
 
+  const chooseDepartment = useCallback((nextDepartmentId: string) => {
+    if (!allocation.departments.some((department) => department.id === nextDepartmentId)) return
+    setDepartmentId(nextDepartmentId)
+    setAreaId(null)
+    setAreaPrompt(false)
+    reset()
+    onSelect(null)
+    // `setDepartmentId` is the page's callback when the page owns the choice,
+    // so it belongs in the deps — it is not a stable state setter any more.
+  }, [allocation.departments, onSelect, reset, setDepartmentId])
+
   const zoomBy = useCallback((factor: number) => {
     if (!Number.isFinite(factor) || factor <= 0) return
     if (rafId.current !== null) {
@@ -1127,6 +1213,17 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
       </div>
     )
   }, [activeArea, departmentDesks, displayAreas])
+
+  if (startWithDepartmentPicker && !departmentId) {
+    return (
+      <DepartmentDashboard
+        dataset={dataset}
+        departments={allocation.departments}
+        seats={allocation.seats}
+        onChoose={chooseDepartment}
+      />
+    )
+  }
 
   if (!scene.workstations.length) return <div className="fp-state">{SPATIAL_UNAVAILABLE}</div>
 

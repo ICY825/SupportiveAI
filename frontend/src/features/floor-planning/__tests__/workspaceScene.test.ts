@@ -37,9 +37,10 @@ describe('workspace scope selection', () => {
   it('selects the complete accepted AI annotation from canonical workstation membership', () => {
     const before = JSON.stringify(dataset)
     const scene = buildWorkspaceScene(dataset, departmentScope)
-    expect(scene.workstations).toHaveLength(116)
-    expect(new Set(scene.workstations.map((workstation) => workstation.clusterId)).size).toBe(21)
-    expect(scene.workstations.every((workstation) => workstation.zoneId === 'zone-16-ai-platform')).toBe(true)
+    expect(scene.workstations).toHaveLength(154)
+    expect(new Set(scene.workstations.map((workstation) => workstation.clusterId)).size).toBe(26)
+    expect(scene.workstations.every((workstation) =>
+      workstation.zoneId === 'zone-16-ai-platform' || workstation.zoneId === 'zone-16-ai-platform-02')).toBe(true)
     expect(scene.resolvedScope.sourceLabel).toBe('MÔ HÌNH & NỀN TẢNG AI (145)')
     expect(scene.resolvedScope.sourceLabelFigure).toBe(145)
     expect(JSON.stringify(dataset)).toBe(before)
@@ -51,7 +52,12 @@ describe('workspace scope selection', () => {
     const cluster = dataset.clusters.find((item) => item.id === 'cluster-16-13')!
     const focused = buildWorkspaceScene(dataset, { kind: 'bbox', bbox: cluster.bbox })
 
-    expect(zone.workstations.map((workstation) => workstation.id)).toEqual(department.workstations.map((workstation) => workstation.id))
+    // A zone is now a strict subset of its department: AI Platform spans two.
+    expect(zone.workstations.length).toBe(116)
+    expect(department.workstations.length).toBe(154)
+    expect(department.workstations.map((w) => w.id)).toEqual(
+      expect.arrayContaining(zone.workstations.map((w) => w.id)),
+    )
     expect(focused.workstations.length).toBeGreaterThan(0)
     expect(focused.workstations.length).toBeLessThan(department.workstations.length)
     expect(focused.workstations.every((workstation) => department.workstations.includes(workstation))).toBe(true)
@@ -63,8 +69,11 @@ describe('workspace scope selection', () => {
 
   it('resolves department geometry independently of source label capacity', () => {
     const resolved = resolveWorkspaceScope(dataset, departmentScope)
-    expect(resolved.zoneIds).toEqual(['zone-16-ai-platform'])
-    expect(resolved.bbox).toEqual([806.91, 234.72, 1009.27, 665.58])
+    // One department, two zones — the lift cores split AI Platform in half.
+    expect(resolved.zoneIds).toEqual(['zone-16-ai-platform', 'zone-16-ai-platform-02'])
+    // Reaches west to 701 now, because the second block sits the far side of
+    // the lift cores.
+    expect(resolved.bbox).toEqual([701.19, 234.72, 1009.27, 665.58])
   })
 
   it('supports another department through the same zone-backed display-area builder', () => {
@@ -74,7 +83,12 @@ describe('workspace scope selection', () => {
     expect(areas[0].scope).toEqual({ kind: 'zone', zoneId: 'zone-16-bds-smart-city' })
   })
 
-  it('partitions the accepted department into six disjoint display areas', () => {
+  /**
+   * The six curated areas were drawn for the block east of the lift cores, and
+   * they still cover only that block — the department's other 38 desks have no
+   * area to focus. That gap is real and visible here on purpose.
+   */
+  it('partitions the eastern AI block into six disjoint display areas', () => {
     const areas = buildWorkspaceDisplayAreas(dataset)
     expect(areas).toHaveLength(6)
     expect(areas.map((area) => area.workstationIds.length)).toEqual([28, 21, 15, 14, 22, 16])
@@ -208,9 +222,9 @@ describe('semantic detail and memoized geometry', () => {
     const scene = buildWorkspaceScene(dataset, departmentScope)
     const first = memoizeSceneGeometry(scene)
     expect(memoizeSceneGeometry(scene)).toBe(first)
-    expect(first.markers).toHaveLength(116)
-    expect(first.selectionPolygons.size).toBe(116)
-    expect(first.items.filter((item) => item.kind === 'desk')).toHaveLength(116)
+    expect(first.markers).toHaveLength(154)
+    expect(first.selectionPolygons.size).toBe(154)
+    expect(first.items.filter((item) => item.kind === 'desk')).toHaveLength(154)
     for (let index = 1; index < first.items.length; index++) {
       expect(first.items[index].depth).toBeGreaterThanOrEqual(first.items[index - 1].depth)
     }

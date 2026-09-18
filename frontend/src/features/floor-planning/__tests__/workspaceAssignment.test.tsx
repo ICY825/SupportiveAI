@@ -31,6 +31,8 @@ function clickDesk(id: string) {
 async function openAvailableDesk() {
   window.location.hash = '#/floor-planning?floor=floor-16&view=workspace'
   render(<FloorPlanningPage />)
+  // The seating view opens on the department chooser.
+  fireEvent.click(await screen.findByRole('button', { name: /AI & Data/ }, { timeout: 15000 }))
   await screen.findByRole('application', {}, { timeout: 15000 })
   clickDesk('ws-16-066')
   return screen.findByRole('complementary', { name: /^F16-.-066$/ })
@@ -56,6 +58,7 @@ describe('workspace employee assignment', () => {
     const inspector = await (async () => {
       window.location.hash = '#/floor-planning?floor=floor-16&view=workspace'
       render(<FloorPlanningPage />)
+      fireEvent.click(await screen.findByRole('button', { name: /AI & Data/ }, { timeout: 15000 }))
       await screen.findByRole('application', {}, { timeout: 15000 })
       clickDesk('ws-16-065')
       return screen.findByRole('complementary', { name: /^F16-.-065$/ })

@@ -7,6 +7,7 @@ import { useFloorAllocation } from '../allocation/useFloorAllocation'
 import { FloorDetailsPanel } from '../components/FloorDetailsPanel'
 import { FloorMap } from '../components/FloorMap'
 import { SpatialWorkspace } from '../workspace/SpatialWorkspace'
+import { departmentOfEntity } from '../workspace/scope'
 import { UnsavedChangesDialog } from '../workspace/EditPanel'
 import { FloorMapControls, ViewControls } from '../components/FloorMapControls'
 import { FloorSearch } from '../components/FloorSearch'
@@ -83,6 +84,15 @@ export function FloorPlanningPage({
   const [layoutDirty, setLayoutDirty] = useState(false)
   const [pendingNav, setPendingNav] = useState<{ floorId?: string; view?: ViewMode } | null>(null)
   const [authoredByFloor, setAuthoredByFloor] = useState<Record<string, AuthoredEntities>>({})
+  /**
+   * Which department's seating map is open, or null for the chooser.
+   *
+   * Lives here, not in SpatialWorkspace, because switching to the verification
+   * view unmounts that component — and a shared link like
+   * `?select=workstation:ws-16-001` must open the map on that desk's
+   * department rather than stopping at the chooser.
+   */
+  const [departmentId, setDepartmentId] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -268,6 +278,14 @@ export function FloorPlanningPage({
     return applyAuthoredEntities(customized, authoredEntities)
   }, [currentDataset, floorCustomizations, floorZonePreviews, authoredEntities])
 
+  // A deep link names a desk, and a desk names its department. Without this a
+  // shared link opens the chooser and the recipient never sees what was shared.
+  useEffect(() => {
+    if (departmentId || !effectiveDataset || !selected) return
+    const owner = departmentOfEntity(effectiveDataset, selected.kind, selected.id)
+    if (owner) setDepartmentId(owner)
+  }, [departmentId, effectiveDataset, selected])
+
   // Seats and people: real when there is a session, demo fixtures otherwise.
   // The map itself never waits on this — its geometry ships with the build.
   const [allocationNow] = useState(() => new Date())
@@ -353,6 +371,9 @@ export function FloorPlanningPage({
           onAllocationCommitted={allocation.status === 'live' ? allocation.reload : undefined}
           onSearchEmployees={allocation.status === 'live' ? searchDirectory : undefined}
           reconcile={allocation.status === 'live' ? allocation.reconcile : null}
+          startWithDepartmentPicker
+          departmentId={departmentId}
+          onDepartmentChange={setDepartmentId}
         />
       )}
       {effectiveDataset && view === 'verification' && (

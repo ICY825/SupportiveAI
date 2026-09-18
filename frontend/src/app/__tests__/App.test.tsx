@@ -84,6 +84,8 @@ describe('app shell', () => {
 
     const user = userEvent.setup()
     await user.click(screen.getByRole('radio', { name: 'Bố trí chỗ ngồi' }))
+    // The seating view opens on the department chooser; pick one to reach the map.
+    await user.click(await screen.findByRole('button', { name: /AI & Data/ }, { timeout: 15000 }))
     await screen.findByRole('button', { name: /Chỉnh sửa bố trí/ }, { timeout: 15000 })
 
     expect(screen.queryByRole('button', { name: 'Cài đặt bản đồ' })).toBeNull()

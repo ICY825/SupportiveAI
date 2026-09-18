@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { FLOORS } from '../data/registry'
 import type { FloorDataset } from '../domain/spatial'
@@ -28,6 +28,24 @@ afterEach(() => {
 })
 
 describe('SpatialWorkspace gestures, pointer isolation, and blur resilience', () => {
+  it('opens a department dashboard before the seating map', () => {
+    const onSelect = vi.fn()
+    const { container } = render(
+      <SpatialWorkspace
+        dataset={dataset}
+        selected={null}
+        onSelect={onSelect}
+        onVerify={vi.fn()}
+        searchSlot={null}
+        startWithDepartmentPicker
+      />
+    )
+
+    expect(screen.getByRole('heading', { name: 'Chọn bộ phận' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /AI & Data/ }))
+    expect(container.querySelector('.sw-scene')).toBeTruthy()
+  })
+
   it('does not cancel active pointer drag when secondary pointer down/up/cancel fires', () => {
     const onSelect = vi.fn()
     const { container } = render(

@@ -229,7 +229,21 @@ export interface EditableArea {
  * and chairTileSize for full multi-layer collision validation.
  */
 export function deriveEditableArea(dataset: FloorDataset, scene: WorkspaceSceneModel): EditableArea {
-  const zoneId = scene.resolvedScope.zoneIds[0] ?? scene.workstations.find((w) => w.zoneId)?.zoneId ?? null
+  // Pick the zone the desks on screen actually stand in, not simply the first
+  // the scope lists. A department can span several zones — AI Platform is split
+  // in two by the lift cores — and `zoneIds[0]` would then bound editing by a
+  // polygon most of the desks are outside of.
+  //
+  // A boundary is one polygon, so a scope covering two zones at once still
+  // resolves to the busier one. That is why editing is entered from a focused
+  // area, and each area lies inside a single zone.
+  const zoneTally = new Map<string, number>()
+  for (const workstation of scene.workstations) {
+    if (!workstation.zoneId) continue
+    zoneTally.set(workstation.zoneId, (zoneTally.get(workstation.zoneId) ?? 0) + 1)
+  }
+  const busiestZone = [...zoneTally.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
+  const zoneId = busiestZone ?? scene.resolvedScope.zoneIds[0] ?? null
   const zone = zoneId ? dataset.zones.find((z) => z.id === zoneId) : undefined
   // A bbox is a camera/display scope, never a physical editing boundary.
   const clippedZone = zone ? [...zone.polygon] : []

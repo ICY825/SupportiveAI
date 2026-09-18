@@ -647,10 +647,6 @@ export function FloorDetailsPanel({
 
   if (!selected) {
     const ws = dataset.workstations.filter((w) => w.classification === 'WORKSTATION')
-    const unknownCount =
-      dataset.zones.filter((z) => z.verification === 'UNKNOWN').length +
-      dataset.workstations.filter((w) => w.classification === 'UNKNOWN').length +
-      dataset.objects.filter((o) => o.classification === 'UNKNOWN').length
     body = (
       <>
         <header className="fp-panel-head">
@@ -698,12 +694,6 @@ export function FloorDetailsPanel({
             onDeleteAuthoredRoom={onDeleteAuthoredRoom}
           />
         )}
-        {unknownCount > 0 && (
-          <p className="fp-callout" data-verification="UNKNOWN">
-            <span aria-hidden="true">?</span> {unknownCount} đối tượng chưa xác định cần Admin làm rõ
-          </p>
-        )}
-
         <Section title="Khu vực" open>
           <ul className="fp-list">
             {dataset.zones.map((z) => {

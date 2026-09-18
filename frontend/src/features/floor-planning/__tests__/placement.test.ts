@@ -237,8 +237,15 @@ describe('floor 16 placements, boundary and projection', () => {
     }
   })
 
-  it('starts from a layout with no overlapping desks, so Save is not blocked on open', () => {
-    const scene = buildWorkspaceScene(dataset, defaultWorkspaceScope(dataset))
+  /**
+   * Per zone, not per department: AI Platform spans two zones split by the lift
+   * cores, and an editable boundary is a single polygon. Editing is entered from
+   * a focused area, and every area lies inside one zone.
+   */
+  it.each(['zone-16-ai-platform', 'zone-16-ai-platform-02'])(
+    'starts %s from a layout with no overlapping desks, so Save is not blocked on open',
+    (zoneId) => {
+    const scene = buildWorkspaceScene(dataset, { kind: 'zone', zoneId })
     const placements = Object.values(basePlacements(scene.workstations))
     const area = deriveEditableArea(dataset, scene)
     for (const placement of placements) {

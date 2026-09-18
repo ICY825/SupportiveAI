@@ -22,7 +22,9 @@ const DEPARTMENT_GEOMETRY_LINKS: readonly DepartmentGeometryLink[] = [
   {
     floorId: 'floor-16',
     departmentId: 'dept-ai-data',
-    zoneIds: ['zone-16-ai-platform'],
+    // Two zones, one department: the lift and stair cores split the block.
+    // Listing only the first hides 38 of its 154 desks.
+    zoneIds: ['zone-16-ai-platform', 'zone-16-ai-platform-02'],
   },
   {
     floorId: 'floor-16',
@@ -107,6 +109,48 @@ export function departmentScopeForFloor(dataset: FloorDataset): WorkspaceScope |
   return link ? { kind: 'department', departmentId: link.departmentId } : null
 }
 
+/**
+ * Which department owns a zone — the reverse of DEPARTMENT_GEOMETRY_LINKS.
+ *
+ * Needed for deep links: `?select=workstation:ws-16-001` has to open the map on
+ * the department that desk belongs to, instead of stopping at the chooser and
+ * losing the link's whole point.
+ */
+/**
+ * The zones a department occupies.
+ *
+ * Prefers the drawing: every zone carries `departmentCode`, so real data needs
+ * no table at all. DEPARTMENT_GEOMETRY_LINKS remains for the demo fixtures,
+ * whose department ids (`dept-ai-data`) are not codes and never appear in a
+ * dataset. Delete it once the fixtures speak codes too.
+ */
+export function zonesOfDepartment(dataset: FloorDataset, departmentId: string): readonly string[] {
+  const byCode = dataset.zones
+    .filter((zone) => zone.departmentCode === departmentId)
+    .map((zone) => zone.id)
+  if (byCode.length > 0) return byCode
+  return (
+    DEPARTMENT_GEOMETRY_LINKS.find(
+      (item) => item.floorId === dataset.layout.floor.id && item.departmentId === departmentId,
+    )?.zoneIds ?? []
+  )
+}
+
+export function departmentOfZone(dataset: FloorDataset, zoneId: string | null): string | null {
+  if (!zoneId) return null
+  const link = DEPARTMENT_GEOMETRY_LINKS.find(
+    (item) => item.floorId === dataset.layout.floor.id && item.zoneIds.includes(zoneId),
+  )
+  return link?.departmentId ?? null
+}
+
+/** The department a selected entity sits in, when it is a desk. */
+export function departmentOfEntity(dataset: FloorDataset, kind: string, id: string): string | null {
+  if (kind !== 'workstation') return null
+  const workstation = dataset.workstations.find((item) => item.id === id)
+  return workstation ? departmentOfZone(dataset, workstation.zoneId) : null
+}
+
 export function defaultWorkspaceScope(dataset: FloorDataset): WorkspaceScope {
   return departmentScopeForFloor(dataset) ?? {
     kind: 'bbox',
@@ -128,11 +172,7 @@ export function resolveWorkspaceScope(dataset: FloorDataset, scope: WorkspaceSco
     }
   }
 
-  const zoneIds = scope.kind === 'zone'
-    ? [scope.zoneId]
-    : (DEPARTMENT_GEOMETRY_LINKS.find(
-        (item) => item.floorId === dataset.layout.floor.id && item.departmentId === scope.departmentId,
-      )?.zoneIds ?? [])
+  const zoneIds = scope.kind === 'zone' ? [scope.zoneId] : zonesOfDepartment(dataset, scope.departmentId)
   const zones = zoneIds
     .map((id) => dataset.zones.find((zone) => zone.id === id))
     .filter((zone): zone is FloorDataset['zones'][number] => zone !== undefined)

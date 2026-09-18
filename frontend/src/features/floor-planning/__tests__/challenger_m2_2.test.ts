@@ -358,12 +358,14 @@ describe('Challenger M2-2: Chair Seating Space & Boundary Stress Verification', 
 
     it('uses all canonical AI clusters instead of a fixed cluster allowlist', () => {
       const scene = buildWorkspaceScene(dataset, defaultWorkspaceScope(dataset))
-      expect(new Set(scene.workstations.map((workstation) => workstation.clusterId)).size).toBe(21)
+      // 26, not 21: the department holds two zones, the second of which the
+      // drawing left unlabelled until the team named it.
+      expect(new Set(scene.workstations.map((workstation) => workstation.clusterId)).size).toBe(26)
     })
 
-    it('verifies exactly 116 workstations are extracted in the accepted department scope', () => {
+    it('verifies exactly 154 workstations are extracted in the accepted department scope', () => {
       const scene = buildWorkspaceScene(dataset, defaultWorkspaceScope(dataset))
-      expect(scene.workstations).toHaveLength(116)
+      expect(scene.workstations).toHaveLength(154)
     })
 
     it('verifies each workstation in the focused editor scope validates with 0 errors on load', () => {

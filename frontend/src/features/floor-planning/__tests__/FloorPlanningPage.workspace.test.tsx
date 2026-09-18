@@ -2,7 +2,6 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { SPATIAL_OUT_OF_SCOPE } from '../labels'
 import { FloorPlanningPage } from '../pages/FloorPlanningPage'
 import { clearSessionLayouts } from '../workspace/layoutDraft'
 import { clearAuthoredEntityStore } from '../domain/authoredEntities'
@@ -51,9 +50,19 @@ function clickDesk(id: string) {
   fireEvent.pointerUp(el, { button: 0, pointerId: 1, clientX: 10, clientY: 10 })
 }
 
+/**
+ * The seating view opens on the department chooser, so every test that wants
+ * the map has to pick a department first. AI & Data, because the showcase desks
+ * these tests use (ws-16-065, ws-16-066) stand in its zones.
+ */
 async function openWorkspace() {
   window.location.hash = '#/floor-planning?floor=floor-16&view=workspace'
   render(<FloorPlanningPage />)
+  await chooseDepartment()
+}
+
+async function chooseDepartment(name: RegExp = /AI & Data/) {
+  fireEvent.click(await screen.findByRole('button', { name }, { timeout: 15000 }))
   await screen.findByRole('application', {}, { timeout: 15000 })
 }
 
@@ -112,10 +121,10 @@ describe('desk selection → workspace inspector', () => {
     expect(document.querySelector('.fp-svg')).not.toBeNull()
   }, 30000)
 
-  it('renders all 116 accepted department desks while excluding other departments from search', async () => {
+  it('renders all 154 desks of the department while excluding other departments from search', async () => {
     await openWorkspace()
     const desks = [...document.querySelectorAll('.sw-desktop')]
-    expect(desks).toHaveLength(116)
+    expect(desks).toHaveLength(154)
     expect(new Set([...document.querySelectorAll('.sw-furniture')].map((node) => node.getAttribute('data-status')))).toEqual(new Set(['occupied', 'available', 'reserved', 'conflict', 'unavailable']))
     const user = userEvent.setup()
     await user.type(screen.getByRole('combobox', { name: 'Tìm kiếm trên mặt bằng' }), 'ws-16-001')
@@ -191,8 +200,8 @@ describe('desk selection → workspace inspector', () => {
     fireEvent.click(zoomIn)
     fireEvent.click(zoomIn)
     expect(map.getAttribute('data-detail-tier')).toBe('medium')
-    expect(map.querySelectorAll('.sw-desk-code')).toHaveLength(116)
-    expect(map.querySelectorAll('.sw-marker')).toHaveLength(116)
+    expect(map.querySelectorAll('.sw-desk-code')).toHaveLength(154)
+    expect(map.querySelectorAll('.sw-marker')).toHaveLength(154)
     expect(map.querySelector('.sw-avatar-text')).toBeNull()
 
     fireEvent.click(zoomIn)
@@ -228,17 +237,35 @@ describe('desk selection → workspace inspector', () => {
     // still stated exactly once, in the summary
     const summary = document.querySelector('.sw-summary')!
     expect(summary.textContent).toMatch(/Khu B · cánh toà nhà/)
-    expect(summary.textContent).toMatch(/116/)
+    expect(summary.textContent).toMatch(/154/)
     expect(summary.textContent).toMatch(/chỗ ngồi/)
   }, 30000)
 
-  it('explains deep links outside the accepted department without expanding its scope', async () => {
+  /**
+   * A shared link names a desk, and the recipient must see that desk. Before
+   * the department chooser existed the map was fixed to one department, so a
+   * link pointing anywhere else could only be refused. Now the link decides
+   * which department opens — otherwise every shared link would land the
+   * recipient on a chooser, which is the one thing the link already answered.
+   */
+  it('opens a deep link on the department the desk belongs to', async () => {
     window.location.hash = '#/floor-planning?floor=floor-16&view=workspace&select=workstation:ws-16-001'
     render(<FloorPlanningPage />)
     await screen.findByRole('application', {}, { timeout: 15000 })
-    expect(screen.getByText(SPATIAL_OUT_OF_SCOPE)).toBeTruthy()
-    expect(document.querySelectorAll('.sw-desktop')).toHaveLength(116)
-    expect(document.querySelector('.sw-selection')).toBeNull()
+
+    // ws-16-001 belongs to GSM, not to the department the chooser lists first.
+    expect(await screen.findByRole('complementary', { name: /^F16-/ })).toBeTruthy()
+    expect(document.querySelector('.sw-selection')).not.toBeNull()
+    expect(document.querySelectorAll('.sw-desktop')).toHaveLength(38)
+  }, 30000)
+
+  /** One desk on floor 16 lies outside every department highlight. */
+  it('leaves the chooser open for a deep link to a desk in no department', async () => {
+    window.location.hash = '#/floor-planning?floor=floor-16&view=workspace&select=workstation:ws-16-030'
+    render(<FloorPlanningPage />)
+
+    expect(await screen.findByRole('button', { name: /AI & Data/ }, { timeout: 15000 })).toBeTruthy()
+    expect(screen.queryByRole('application')).toBeNull()
   }, 30000)
 
   it('search: typing a name and pressing Enter selects that person\'s desk', async () => {
@@ -274,10 +301,10 @@ describe('desk selection → workspace inspector', () => {
     const user = userEvent.setup()
     const selector = screen.getByRole('combobox', { name: 'Tập trung khu vực' })
     await user.selectOptions(selector, selector.querySelectorAll('option')[1])
-    expect(document.querySelectorAll('.sw-desktop').length).toBeLessThan(116)
+    expect(document.querySelectorAll('.sw-desktop').length).toBeLessThan(154)
     expect(screen.getByRole('complementary', { name: /^F16-.-065$/ })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Tổng quan' }))
-    expect(document.querySelectorAll('.sw-desktop')).toHaveLength(116)
+    expect(document.querySelectorAll('.sw-desktop')).toHaveLength(154)
     expect(screen.getByRole('complementary', { name: /^F16-.-065$/ })).toBeTruthy()
   }, 30000)
 
@@ -294,7 +321,7 @@ describe('desk selection → workspace inspector', () => {
 
     await user.type(box, 'ws-16-382')
     await user.keyboard('{Enter}')
-    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('116')
+    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('154')
   }, 30000)
 
   it('search: shows an empty state and Escape clears the query without closing the inspector', async () => {
@@ -328,7 +355,7 @@ describe('desk selection → workspace inspector', () => {
 
   it('keeps adding desks inside layout editing and opens the selected overview desk area', async () => {
     await openWorkspace()
-    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('116')
+    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('154')
     expect(screen.queryByRole('button', { name: '+ Thêm bàn' })).toBeNull()
 
     clickDesk(OCCUPIED)
@@ -363,8 +390,11 @@ describe('desk selection → workspace inspector', () => {
     const map = screen.getByRole('application')
 
     let placed = false
-    for (const clientY of [100, 220, 340, 460, 580, 700]) {
-      for (const clientX of [100, 300, 500, 700, 900, 1100]) {
+    // Sweep finely: the point is that the desk lands where the pointer is, not
+    // at the map origin. Which screen pixels are valid depends on the framing,
+    // and the framing changes whenever a department's zones change.
+    for (const clientY of [80, 140, 200, 260, 320, 380, 440, 500, 560, 620, 680, 740]) {
+      for (const clientX of [80, 180, 280, 380, 480, 580, 680, 780, 880, 980, 1080, 1180]) {
         fireEvent.pointerMove(map, { clientX, clientY, pointerId: 1 })
         const preview = document.querySelector<SVGPolygonElement>('.sw-edit-placement-preview')
         if (!preview || preview.classList.contains('is-invalid')) continue
@@ -398,8 +428,11 @@ describe('desk selection → workspace inspector', () => {
     const save = screen.getByRole('button', { name: 'Lưu bố trí' }) as HTMLButtonElement
     expect(save.disabled).toBe(true)
     const map = screen.getByRole('application')
-    for (const clientY of [100, 220, 340, 460, 580, 700]) {
-      for (const clientX of [100, 300, 500, 700, 900, 1100]) {
+    // Sweep finely: the point is that the desk lands where the pointer is, not
+    // at the map origin. Which screen pixels are valid depends on the framing,
+    // and the framing changes whenever a department's zones change.
+    for (const clientY of [80, 140, 200, 260, 320, 380, 440, 500, 560, 620, 680, 740]) {
+      for (const clientX of [80, 180, 280, 380, 480, 580, 680, 780, 880, 980, 1080, 1180]) {
         fireEvent.pointerMove(map, { clientX, clientY, pointerId: 1 })
         const preview = document.querySelector<SVGPolygonElement>('.sw-edit-placement-preview')
         if (!preview || preview.classList.contains('is-invalid')) continue
