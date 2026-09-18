@@ -169,6 +169,22 @@ Out:
 Gates: `npx vitest run`, `npx tsc -b`, `npx oxlint`, `npx vite build`, and
 `git diff --check`.
 
+### Watch item, not yet a defect
+
+On 18 September two tests failed intermittently — `liveAllocationHonesty` once,
+and `zoneManagement`'s opacity-slider case once — in runs that happened while a
+backend `pytest` run or the floor extractor was using the same machine. Neither
+reproduced: three consecutive full runs with nothing else going were green,
+41 files and 381 tests each time. Timeouts are already 30s.
+
+So the likely cause is CPU contention, not a race, and there is no error text
+captured for the second one. Recorded here only so that a third occurrence is
+recognised as a pattern rather than investigated from scratch.
+
+The thing that would actually settle it is CI — the repository has none, so
+"the tests pass" currently means "they passed on somebody's laptop, under
+unknown load".
+
 ## 10. File ownership
 
 Free: `allocation/*`, `components/desk-inspector/*`, `labels.ts`, new tests.

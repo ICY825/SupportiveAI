@@ -59,7 +59,7 @@ cần nhìn vào đâu:
 
 | Khu vực | Hiện trạng | Vấn đề |
 | --- | --- | --- |
-| `zone-16-bds-smart-city` | bbox `[121, 241, 642, 473]`, **14 polygon** | Trải gần nửa mặt bằng và bao trọn cả vùng của VINFAST-KDO2O (`[120, 211, 194, 364]`). Gần như chắc chắn vùng tô bị vẽ lan. |
+| `zone-16-bds-smart-city` | 14 đỉnh, 522,4 m², 143 chỗ, x 121–642 | Hình lược, luồn theo các dãy bàn ở cánh A. **Dữ liệu không mâu thuẫn**: không chỗ ngồi nào nằm trong hai khu vực cùng lúc, VINFAST-KDO2O (y 211–364) nằm ngay trên BĐS (từ y 366) chứ không bị bao. Vấn đề — nếu có — là chuyện nghiệp vụ: phòng ban này có thật sự ngồi ở đó không. Cần người xác nhận, không suy ra được từ bản vẽ. |
 | `zone-16-ai-platform` | bbox `[807, 235, 1009, 666]`, 116 chỗ | Vùng tô đã phủ gần đúng cánh B. Hai chỗ chưa phủ: hai lõi thang máy nằm lọt trong vùng, và dải hành lang phía nam tới mép nhà. Nhỏ, chưa gấp. |
 | ~~`zone-16-unlabeled-01`~~ | **Đã xử lý 18/09** | Vùng tô lavender không nhãn, 38 chỗ ngồi tại x 722–756. Nghiệp vụ xác nhận đây là nửa còn lại của Mô hình & Nền tảng AI, bị lõi thang máy tách khỏi khối chính. Nay là `zone-16-ai-platform-02`, `verification: UNVERIFIED` vì **tên do người nói, bản vẽ không ghi**. Bản vẽ sửa xong mà có nhãn ở đây thì bỏ cờ `nameSource: team` trong `floor16.py`. |
 
