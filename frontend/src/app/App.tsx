@@ -77,7 +77,7 @@ export function App() {
       <SessionProvider>
         <Routes>
           {/*
-           * Two routes deliberately outside the signed-in shell.
+           * The only two routes outside the sign-in guard.
            *
            * `/station` is the QR screen at the parcel bench: most employees
            * have no account and must confirm on the spot, so it must never ask
@@ -87,29 +87,34 @@ export function App() {
           <Route path="/station" element={<StationPage />} />
           <Route path="/login" element={<LoginPage />} />
 
-          <Route
-            element={
-              <AppShell
-                settingsOpen={settingsOpen}
-                settingsApplicable={settingsApplicable}
-                onSettingsOpenChange={changeSettingsOpen}
-              />
-            }
-          >
+          {/*
+           * Everything else needs a session. The four modules read staff data —
+           * who sits where, whose locker, whose parcel — so the sign-in that
+           * module 3 arrived with now covers all of them rather than being an
+           * accident of which module was written first.
+           */}
+          <Route element={<RequireSession />}>
             <Route
-              path="/floor-planning"
               element={
-                <FloorPlanningPage
+                <AppShell
                   settingsOpen={settingsOpen}
+                  settingsApplicable={settingsApplicable}
                   onSettingsOpenChange={changeSettingsOpen}
-                  onSettingsApplicableChange={setSettingsApplicable}
                 />
               }
-            />
-            <Route path="/lockers" element={<LockerManagementPage />} />
+            >
+              <Route
+                path="/floor-planning"
+                element={
+                  <FloorPlanningPage
+                    settingsOpen={settingsOpen}
+                    onSettingsOpenChange={changeSettingsOpen}
+                    onSettingsApplicableChange={setSettingsApplicable}
+                  />
+                }
+              />
+              <Route path="/lockers" element={<LockerManagementPage />} />
 
-            {/* Everything under /mail needs a session. */}
-            <Route element={<RequireSession />}>
               <Route path="/mail" element={<MailShell />}>
                 <Route index element={<Navigate to="/mail/batches" replace />} />
                 <Route path="batches" element={<BatchesPage />} />
@@ -118,9 +123,9 @@ export function App() {
                 <Route path="items" element={<ItemsPage />} />
                 <Route path="reports" element={<ReportsPage />} />
               </Route>
-            </Route>
 
-            <Route path="*" element={<Navigate to="/floor-planning" replace />} />
+              <Route path="*" element={<Navigate to="/floor-planning" replace />} />
+            </Route>
           </Route>
         </Routes>
       </SessionProvider>

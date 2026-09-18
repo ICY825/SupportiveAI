@@ -2,9 +2,9 @@
 
 > Cấu trúc mã nguồn và nguyên tắc phân chia module
 
-**Trạng thái:** `Draft` — cấu trúc frontend đã chốt và dựng (17/09/2026)
-**Phiên bản:** 0.1
-**Cập nhật:** 15/09/2026
+**Trạng thái:** `Draft` — backend, frontend và ranh giới giữa 4 phân hệ đã chốt (ADR 0002)
+**Phiên bản:** 0.2
+**Cập nhật:** 18/09/2026
 
 ---
 
@@ -297,42 +297,76 @@ Quy ước đặt tên bảng: `mail_item`, `mail_batch`, `locker`, `seat`, `doc
 
 ## 9. Frontend
 
-> ✅ **Chốt: React 19 + TypeScript + Vite** ([ADR 0001](../decisions/0001-floor-planning-web-stack-and-floor-data.md), 15/09/2026).
+> ✅ **Chốt: React 19 + TypeScript + Vite**, một ứng dụng duy nhất cho cả bốn phân hệ
+> ([ADR 0001](../decisions/0001-floor-planning-web-stack-and-floor-data.md) 15/09/2026,
+> [ADR 0002](../decisions/0002-shared-core-and-module-boundaries.md) 18/09/2026).
 >
-> ⚠️ Màn hình Đề 3 đã dựng ngày 17/09 trên **Next.js 14 App Router**, lệch với ADR. Cây thư
-> mục dưới đây mô tả đúng mã hiện có; xem [`frontend/README.md`](../../frontend/README.md)
-> để biết chỗ nào dính Next và thay bằng gì nếu chuyển sang Vite.
+> Màn hình Đề 3 từng dựng trên Next.js 14 App Router ngày 17/09 và đã chuyển sang Vite.
 
 ```text
 frontend/
+├── index.html              # Vite nạp từ đây; thẻ <link> tải font Inter
+├── vite.config.ts          # alias `@` và `@data`, proxy /api, cấu hình vitest
 ├── src/
-│   ├── app/                # route — Next định tuyến theo file
-│   │   ├── (admin)/        # nhóm cần đăng nhập, bọc trong AdminShell
-│   │   │   └── mail/       # Đề 3
-│   │   ├── login/
-│   │   └── station/        # CÔNG KHAI, không shell — quét QR tại khu để đơn
+│   ├── main.tsx
+│   ├── app/                # vỏ ứng dụng
+│   │   ├── App.tsx         # HashRouter + bảng route
+│   │   ├── AppNav.tsx      # thanh điều hướng 4 phân hệ
+│   │   ├── RequireSession.tsx
+│   │   └── LoginPage.tsx
 │   ├── api/                # client gọi backend + DTO chép từ schemas.py
-│   ├── components/         # ui.tsx, EmployeePicker
-│   ├── features/           # ← chia dọc giống backend, khi mã đủ lớn
-│   │   ├── seat/
-│   │   ├── locker/
-│   │   ├── mail/
-│   │   └── document/
-│   ├── layouts/            # AdminShell
-│   └── shared/             # auth, format, nhãn tiếng Việt
+│   ├── components/         # ui.tsx, EmployeePicker dùng chung
+│   ├── features/           # ← chia dọc giống backend
+│   │   ├── floor-planning/ # Đề 1
+│   │   ├── lockers/        # Đề 2
+│   │   ├── mail/           # Đề 3
+│   │   └── document/       # Đề 4 (chưa có)
+│   ├── shared/             # auth, format, nhãn tiếng Việt
+│   └── styles/             # token và nền chung
 └── package.json
 ```
 
-Nguyên tắc giống backend: **`features/` phản ánh đúng 4 đề bài**, và các feature không import lẫn nhau. Thứ gì hai feature cùng dùng thì đẩy lên `shared/` hoặc `components/`.
+Nguyên tắc giống backend: **`features/` phản ánh đúng 4 đề bài**, và các feature không import lẫn
+nhau. Thứ gì hai feature cùng dùng thì đẩy lên `shared/` hoặc `components/`.
 
-Hai ghi chú về Next:
+### 9.1. Định tuyến bằng hash
 
-- **Không có `router/`.** Next định tuyến theo cây thư mục `app/`, nên thư mục đó của bản nháp cũ không dùng tới.
-- **`features/` hiện còn trống.** Mã Đề 3 đủ nhỏ để nằm gọn trong `app/(admin)/mail/`; tách sang `features/` khi có đề thứ hai, hoặc khi một màn hình cần dùng lại logic của màn hình khác. Tách sớm hơn chỉ là thêm một lớp thư mục để đi qua.
+`HashRouter`, không phải `BrowserRouter`. Sơ đồ mặt bằng đã phát hành deep link dạng
+`#/floor-planning?floor=…&view=…&select=…`, và thanh điều hướng đã dùng `href="#/…"` — hash router
+giữ nguyên tất cả. Máy chủ vì thế chỉ thấy đúng một đường dẫn `/`, nên phục vụ bản build không cần
+luật rewrite nào cho SPA.
 
-**Ranh giới với backend:** `src/api/types.ts` chép tay DTO từ `schemas.py`, chưa sinh tự động từ OpenAPI. Sửa một bên thì phải sửa bên kia — chấp nhận được khi mới có một phân hệ, nhưng tới đề thứ hai thì nên sinh tự động.
+Phần query của sơ đồ nằm **trong cùng cái hash** mà router đọc. Hai thứ sống chung được, và ai sửa
+router phải giữ cho điều đó còn đúng — có test trong `app/__tests__/routing.test.tsx`.
 
-**Không bật CORS ở backend.** Next proxy `/api/*` sang FastAPI (`next.config.mjs`), nên trình duyệt chỉ thấy một origin.
+### 9.2. Chắn đăng nhập
+
+Mọi route nằm trong `RequireSession`, **trừ hai**:
+
+| Route | Vì sao ngoài chắn |
+|---|---|
+| `/station` | Trang quét QR tại khu để đơn. Phần lớn CBNV không có tài khoản mà vẫn phải xác nhận ngay tại chỗ (mail-tracking.md §7.2). |
+| `/login` | Không thể bắt đăng nhập để vào trang đăng nhập. |
+
+Bọc sai thì hỏng theo hai chiều ngược nhau, và cả hai đều **không lộ ra khi bấm thử lúc đang đăng
+nhập**. Vì vậy cả hai ca đều có test riêng.
+
+Chắn này chỉ để đỡ hiện màn hình trống. Chốt chặn thật ở backend: mọi endpoint tự kiểm quyền.
+
+### 9.3. Ranh giới với backend
+
+`src/api/*.ts` chép tay DTO từ `schemas.py`, chưa sinh tự động từ OpenAPI. Sửa một bên thì phải sửa
+bên kia. Chấp nhận được lúc này, nhưng đến phân hệ thứ ba thì nên sinh tự động.
+
+**Không bật CORS ở backend.** Lúc phát triển, `server.proxy` trong `vite.config.ts` đẩy `/api/*`
+sang FastAPI. Lúc chạy thật, đặt `FRONTEND_DIST` để backend phục vụ luôn `dist/`. Cả hai cách đều
+cho trình duyệt chỉ thấy một origin.
+
+### 9.4. Dataset mặt bằng
+
+Dataset **không** nằm trong `src/`. Nó ở `data/floors/` tại gốc repo, vì backend đọc cùng file đó để
+biết mã chỗ ngồi nào có thật ([ADR 0002](../decisions/0002-shared-core-and-module-boundaries.md) §5).
+Frontend đọc qua alias `@data`, khai ở `vite.config.ts` và `tsconfig.app.json`. Xem `data/README.md`.
 
 ---
 
@@ -350,8 +384,8 @@ docs/
 │   └── document-flow.md             # Đề 4
 │
 ├── decisions/                       # ADR
-│   ├── 001-modular-monolith.md
-│   ├── 002-shared-workflow-engine.md
+│   ├── 0001-floor-planning-web-stack-and-floor-data.md
+│   ├── 0002-shared-core-and-module-boundaries.md
 │   └── ...
 │
 └── kpi/

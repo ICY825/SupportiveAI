@@ -53,6 +53,20 @@ beforeAll(() => {
   }
 })
 
+function signIn() {
+  localStorage.setItem(TOKEN_KEY, 'a-token')
+  me.mockResolvedValue({
+    id: 'emp-1',
+    employee_code: 'VSF001',
+    full_name: 'Trần Thu Hà',
+    email: null,
+    phone: null,
+    department_id: null,
+    job_title: null,
+    status: 'active',
+  })
+}
+
 beforeEach(() => {
   me.mockReset()
   listBatches.mockReset()
@@ -85,17 +99,7 @@ describe('route guard', () => {
   })
 
   it('lets a signed-in employee through to the mail screens', async () => {
-    localStorage.setItem(TOKEN_KEY, 'a-token')
-    me.mockResolvedValue({
-      id: 'emp-1',
-      employee_code: 'VSF001',
-      full_name: 'Trần Thu Hà',
-      email: null,
-      phone: null,
-      department_id: null,
-      job_title: null,
-      status: 'active',
-    })
+    signIn()
     window.location.hash = '#/mail/batches'
     render(<App />)
 
@@ -103,7 +107,26 @@ describe('route guard', () => {
     expect(window.location.hash).toBe('#/mail/batches')
   })
 
-  it('shows the floor plan, not a mail screen, at the root', async () => {
+  it('sends an anonymous visitor from the floor plan to the sign-in page too', async () => {
+    // Chắn bao cả bốn phân hệ, không riêng Đề 3: phân hệ nào cũng đọc dữ liệu
+    // nhân sự.
+    window.location.hash = '#/floor-planning'
+    render(<App />)
+
+    expect(await screen.findByLabelText('Mã nhân viên')).toBeTruthy()
+    expect(window.location.hash).toBe('#/login')
+  })
+
+  it('sends an anonymous visitor from the lockers to the sign-in page too', async () => {
+    window.location.hash = '#/lockers'
+    render(<App />)
+
+    expect(await screen.findByLabelText('Mã nhân viên')).toBeTruthy()
+    expect(window.location.hash).toBe('#/login')
+  })
+
+  it('shows the floor plan, not a mail screen, once signed in', async () => {
+    signIn()
     render(<App />)
 
     expect(await screen.findByRole('application', {}, { timeout: 15000 })).toBeTruthy()

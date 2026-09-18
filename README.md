@@ -385,7 +385,7 @@ OCR tiếng Việt với công văn hành chính: dấu thanh, dấu đỏ chồ
 | --------------- | ------------------- | -------------------------------------------------------------- |
 | Backend         | Python + FastAPI    | 🚧                                                             |
 | Database        | PostgreSQL          | 🚧                                                             |
-| Frontend        | React 19 + TypeScript + Vite | ✅ Đã chọn ([ADR 0001](docs/decisions/0001-floor-planning-web-stack-and-floor-data.md)) · ⚠️ Đề 3 hiện dựng trên Next.js — xem ghi chú dưới |
+| Frontend        | React 19 + TypeScript + Vite | ✅ Đã chọn ([ADR 0001](docs/decisions/0001-floor-planning-web-stack-and-floor-data.md)), cả bốn phân hệ ([ADR 0002](docs/decisions/0002-shared-core-and-module-boundaries.md)) |
 | Lưu trữ file    | Filesystem + backup | Đủ cho pilot; bọc sẵn lớp abstraction để đổi sang S3/MinIO sau |
 | Scheduler       | APScheduler         | Đủ nếu tải chỉ vài chục job/ngày                               |
 | Queue           | ⏭                  | Chỉ thêm khi có bằng chứng cần                                 |
@@ -394,15 +394,10 @@ OCR tiếng Việt với công văn hành chính: dấu thanh, dấu đỏ chồ
 | Agent framework | ⏭                  | Luồng hiện tại là pipeline tuyến tính, chưa cần                |
 | Vector DB       | ⏭                  | Pilot không có nghiệp vụ nào cần                               |
 
-> ⚠️ **Frontend Đề 3 đang lệch khỏi ADR 0001.** Màn hình Đề 3 (tải file, soát, chờ khớp,
-> kiện hàng, báo cáo, trang quét QR) đã dựng xong trên **Next.js 14 App Router**, trước khi
-> nhánh này lấy ADR về. ADR chốt **Vite**, và lý do nêu trong đó vẫn đúng: wireframe là React,
-> bản đồ tầng là việc SVG nặng phía client, không cần server rendering.
->
-> Đây là **quyết định còn treo**, chưa ai giải: chuyển Đề 3 sang Vite, hay sửa ADR để nhận cả
-> hai. Phần lớn mã Đề 3 là React thuần và không phụ thuộc Next — chỗ thật sự dính là định
-> tuyến theo thư mục `app/`, proxy `/api/*` trong `next.config.mjs`, và `next/font`. Chi tiết
-> ở [`frontend/README.md`](frontend/README.md).
+> ✅ **Đã giải, 18/09/2026.** Màn hình Đề 3 từng dựng trên Next.js 14 App Router, lệch với
+> ADR 0001. Issue #1 chốt chuyển sang Vite và việc đó đã xong: bốn phân hệ giờ nằm trong một
+> ứng dụng Vite duy nhất, định tuyến bằng `react-router` ở chế độ hash. Lý do và những gì
+> phải đổi ghi ở [ADR 0002](docs/decisions/0002-shared-core-and-module-boundaries.md).
 
 **Nguyên tắc chọn:** mỗi thành phần thêm vào đều tốn ngày setup và debug. Trong 6 tuần, thời gian đó lấy từ đúng phần quan trọng nhất là vận hành thật. Chỉ thêm khi có lý do cụ thể, không thêm theo thói quen.
 

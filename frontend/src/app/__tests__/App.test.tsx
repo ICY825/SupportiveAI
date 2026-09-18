@@ -1,8 +1,28 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TOKEN_KEY } from '../../api/client'
 import { App } from '../App'
+
+// Mọi màn hình quản trị đều sau chắn đăng nhập, nên test phải có phiên thì
+// mới tới được sơ đồ mặt bằng.
+const me = vi.fn()
+vi.mock('../../api/auth', () => ({ me: () => me(), login: vi.fn() }))
+
+function signIn() {
+  localStorage.setItem(TOKEN_KEY, 'a-token')
+  me.mockResolvedValue({
+    id: 'emp-1',
+    employee_code: 'VSF001',
+    full_name: 'Nguyễn Thị Thu Hương',
+    email: null,
+    phone: null,
+    department_id: null,
+    job_title: null,
+    status: 'active',
+  })
+}
 
 beforeAll(() => {
   globalThis.ResizeObserver = class {
@@ -16,6 +36,11 @@ beforeAll(() => {
     unobserve() {}
     disconnect() {}
   }
+})
+
+beforeEach(() => {
+  me.mockReset()
+  signIn()
 })
 
 afterEach(() => {
