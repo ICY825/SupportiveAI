@@ -145,6 +145,8 @@ export const SPATIAL_OUT_OF_SCOPE_HINT = 'Chuyển sang bản vẽ để xem v�
 export const SPATIAL_UNAVAILABLE = 'Bố trí chỗ ngồi hiện chỉ có tại Tầng 16.'
 export const SPATIAL_NO_EDIT_AREAS = 'Tầng này chưa có khu vực chỉnh sửa.'
 
+export const ALLOCATION_FALLBACK =
+  'Không đọc được dữ liệu chỗ ngồi thật — đang hiện dữ liệu minh họa.'
 export const DEMO_DATA_LABEL = 'Dữ liệu minh họa'
 export const DEMO_DATA_HINT = 'Nhân sự, chỗ ngồi và thiết bị là dữ liệu giả lập để thiết kế giao diện; chưa kết nối HR/Admin.'
 

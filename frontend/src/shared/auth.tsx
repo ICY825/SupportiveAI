@@ -81,3 +81,15 @@ export function useSession(): Session {
   if (!context) throw new Error('useSession phải nằm trong <SessionProvider>');
   return context;
 }
+
+/**
+ * Như `useSession`, nhưng trả `null` khi không có provider thay vì ném.
+ *
+ * Dành cho màn hình chạy được ở cả hai trạng thái — sơ đồ mặt bằng vẽ được
+ * khi chưa đăng nhập (hình học nằm trong dataset), chỉ phần ai ngồi đâu là
+ * cần phiên. Cũng là thứ cho phép test dựng riêng một màn hình mà không phải
+ * bọc cả cây provider.
+ */
+export function useOptionalSession(): Session | null {
+  return useContext(SessionContext);
+}

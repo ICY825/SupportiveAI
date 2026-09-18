@@ -4,6 +4,7 @@ import type { FloorAllocationData, Seat } from '../domain/allocation'
 import { createDemoAllocation } from '../allocation/demoAllocation'
 import {
   applyAllocationMutations,
+  type AllocationStore,
   inverseAllocationMutations,
   planAssignment,
   planRelease,
@@ -296,7 +297,7 @@ interface PendingDesk {
   placement: SpatialPlacement | null
 }
 
-export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, searchSlot, onDirtyChange, authoredEntities, onAuthoredEntityChange, layoutStore = sessionLayoutStore }: {
+export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, searchSlot, onDirtyChange, authoredEntities, onAuthoredEntityChange, layoutStore = sessionLayoutStore, allocationSource, allocationStore = sessionAllocationStore, onAllocationCommitted }: {
   dataset: FloorDataset
   selected: EntityRef | null
   onSelect: (ref: EntityRef | null) => void
@@ -308,13 +309,32 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
   onAuthoredEntityChange?: (changes: AuthoredEntityChanges) => void
   /** swap for an API-backed store once a layout endpoint exists */
   layoutStore?: LayoutStore
+  /**
+   * Seats and people from the backend. Left out, the workspace generates the
+   * demo fixtures as before, so a test can mount it without a session.
+   */
+  allocationSource?: FloorAllocationData
+  /** where committed assignments go; the API-backed store talks to /api/seats */
+  allocationStore?: AllocationStore
+  /** the API store has no local history, so the page refetches after a write */
+  onAllocationCommitted?: () => void
 }) {
   const [now] = useState(() => new Date())
   const [allocation, setAllocation] = useState<FloorAllocationData>(() => {
+    if (allocationSource) return allocationSource
     const baseAllocation = createDemoAllocation(dataset, now)
     return applyAllocationMutations(baseAllocation, sessionAllocationStore.read(dataset.layout.floor.id) ?? [])
   })
   const allocationRef = useRef(allocation)
+
+  // Real data arrives after the first render, and again after every write.
+  // Adopt it wholesale: the server is the truth about who sits where, so a
+  // local optimistic state that disagrees with it is the bug, not the fix.
+  useEffect(() => {
+    if (!allocationSource) return
+    allocationRef.current = allocationSource
+    setAllocation(allocationSource)
+  }, [allocationSource])
 
   // Authored desks arrive through the spatial dataset after the demo
   // allocation was initially generated. Add their seats without resetting
@@ -356,8 +376,8 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     setAllocation(next)
     undoMutationsRef.current = inverseAllocationMutations(before, mutations, { at: new Date().toISOString(), actor: 'demo-admin' })
     setCanUndo(true)
-    void sessionAllocationStore.append(dataset.layout.floor.id, mutations)
-  }, [dataset.layout.floor.id])
+    void allocationStore.append(dataset.layout.floor.id, mutations).then(() => onAllocationCommitted?.())
+  }, [allocationStore, dataset.layout.floor.id, onAllocationCommitted])
 
   const undoAllocationChange = useCallback(() => {
     const mutations = undoMutationsRef.current
@@ -368,8 +388,8 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     setAllocation(next)
     undoMutationsRef.current = null
     setCanUndo(false)
-    void sessionAllocationStore.append(dataset.layout.floor.id, mutations)
-  }, [dataset.layout.floor.id])
+    void allocationStore.append(dataset.layout.floor.id, mutations).then(() => onAllocationCommitted?.())
+  }, [allocationStore, dataset.layout.floor.id, onAllocationCommitted])
 
   const overviewScope = useMemo(() => defaultWorkspaceScope(dataset), [dataset])
   const overviewScene = useMemo(() => buildWorkspaceScene(dataset, overviewScope), [dataset, overviewScope])

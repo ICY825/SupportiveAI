@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
+import { createApiAllocationStore } from '../allocation/apiAllocationStore'
 import { createDemoAllocation } from '../allocation/demoAllocation'
+import { useFloorAllocation } from '../allocation/useFloorAllocation'
 import { FloorDetailsPanel } from '../components/FloorDetailsPanel'
 import { FloorMap } from '../components/FloorMap'
 import { SpatialWorkspace } from '../workspace/SpatialWorkspace'
@@ -35,7 +37,7 @@ import {
   saveZoneCustomizations,
   type FloorZoneCustomizations,
 } from '../domain/zoneCustomization'
-import { DESK_STATUS, UNLABELED_ZONE, VIEW_MODES, objectName } from '../labels'
+import { ALLOCATION_FALLBACK, DESK_STATUS, UNLABELED_ZONE, VIEW_MODES, objectName } from '../labels'
 import { ARROW_DIRECTION, nearestInDirection } from '../map/deskNavigation'
 import { buildSearchIndex, type SearchItem } from '../search/searchIndex'
 import { contentBounds } from '../map/contentBounds'
@@ -217,6 +219,15 @@ export function FloorPlanningPage({
     return applyAuthoredEntities(customized, authoredEntities)
   }, [currentDataset, floorCustomizations, authoredEntities])
 
+  // Seats and people: real when there is a session, demo fixtures otherwise.
+  // The map itself never waits on this — its geometry ships with the build.
+  const [allocationNow] = useState(() => new Date())
+  const allocation = useFloorAllocation(effectiveDataset, allocationNow)
+  const liveAllocationStore = useMemo(
+    () => createApiAllocationStore({ floorId, onCommitted: allocation.reload }),
+    [floorId, allocation.reload],
+  )
+
   return (
     <div className={`fp-page${view === 'workspace' ? ' is-spatial-page' : ''}`}>
       <header className="fp-topbar">
@@ -255,6 +266,12 @@ export function FloorPlanningPage({
           <span className="fp-mono">{current.error}</span>
         </div>
       )}
+      {allocation.status === 'failed' && view === 'workspace' && (
+        <div className="fp-state is-error" role="alert">
+          <strong>{ALLOCATION_FALLBACK}</strong>
+          <span className="fp-mono">{allocation.error}</span>
+        </div>
+      )}
       {effectiveDataset && view === 'workspace' && (
         <SpatialWorkspace
           key={floorId}
@@ -266,6 +283,9 @@ export function FloorPlanningPage({
           onDirtyChange={setLayoutDirty}
           authoredEntities={authoredEntities}
           onAuthoredEntityChange={handleAuthoredEntityChange}
+          allocationSource={allocation.status === 'live' ? allocation.data : undefined}
+          allocationStore={allocation.status === 'live' ? liveAllocationStore : undefined}
+          onAllocationCommitted={allocation.status === 'live' ? allocation.reload : undefined}
         />
       )}
       {effectiveDataset && view === 'verification' && (
