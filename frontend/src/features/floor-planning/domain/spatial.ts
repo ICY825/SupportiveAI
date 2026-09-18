@@ -159,6 +159,12 @@ export interface Zone extends SpatialEntity {
   type: 'WORKSPACE_ZONE' | 'UNKNOWN'
   /** null = no label on the source */
   name: string | null
+  /**
+   * Which department occupies this zone, as `shared/department` codes it.
+   * Null when the drawing highlights an area nobody has claimed. Two zones can
+   * share a code: AI Platform holds two blocks split by the lift cores.
+   */
+  departmentCode: string | null
   polygon: Point[]
   /** where the name is drawn: the source label position when there is one */
   labelAnchor: Point

@@ -20,6 +20,7 @@ from app.platform.notification import build_channel_from_settings
 from app.platform.notification.channels import registry as notification_channels
 from app.platform.scheduler import scheduler
 from app.platform.workflow.events import WorkflowTransitioned
+from app.shared.department.router import router as department_router
 from app.shared.employee.router import router as employee_router
 
 logger = logging.getLogger(__name__)
@@ -103,6 +104,7 @@ def create_app() -> FastAPI:
     application = FastAPI(title=settings.app_name, lifespan=lifespan)
     application.add_exception_handler(AppError, handle_app_error)
     application.include_router(employee_router, prefix=settings.api_prefix)
+    application.include_router(department_router, prefix=settings.api_prefix)
 
     for spec in load_enabled_modules():
         if spec.router is not None:

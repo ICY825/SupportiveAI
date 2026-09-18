@@ -58,13 +58,35 @@ describe('buildLiveAllocation', () => {
     expect(allocation.assignments[0].seatId).toBe(seatIdOf(dataset.workstations[0].id))
   })
 
-  it('invents nothing the backend does not answer for', () => {
+  it('invents nothing that neither the drawing nor the backend answers for', () => {
     const allocation = buildLiveAllocation(dataset, [row()])
+    // No endpoint reports equipment, presence or a seat's type.
     expect(allocation.devices).toEqual([])
-    expect(allocation.departments).toEqual([])
-    expect(allocation.seats.every((seat) => seat.departmentId === null)).toBe(true)
     expect(allocation.seats.every((seat) => seat.status === undefined)).toBe(true)
     expect(allocation.seats.every((seat) => seat.seatType === undefined)).toBe(true)
+  })
+
+  it('reads departments off the drawing, merging the two halves of AI Platform', () => {
+    const allocation = buildLiveAllocation(dataset, [row()])
+    const ai = allocation.departments.find((d) => d.id === 'AI')
+
+    expect(allocation.departments.map((d) => d.id).sort()).toEqual(['AI', 'BDS', 'GSM', 'VF-KDO2O'])
+    // One department, two zones: the lift cores split it in half.
+    expect(ai?.zonePreferences.sort()).toEqual(['zone-16-ai-platform', 'zone-16-ai-platform-02'])
+    expect(ai?.name).toBe('MÔ HÌNH & NỀN TẢNG AI')
+  })
+
+  it('gives a seat the department of the zone it stands in', () => {
+    const allocation = buildLiveAllocation(dataset, [row()])
+    const byCode = new Map<string | null, number>()
+    for (const seat of allocation.seats) byCode.set(seat.departmentId, (byCode.get(seat.departmentId) ?? 0) + 1)
+
+    expect(byCode.get('AI')).toBe(154)
+    expect(byCode.get('BDS')).toBe(143)
+    expect(byCode.get('VF-KDO2O')).toBe(46)
+    expect(byCode.get('GSM')).toBe(38)
+    // The one desk the drawing leaves outside every highlight.
+    expect(byCode.get(null)).toBe(1)
   })
 
   it('drops an assignment pointing at a desk the drawing no longer has', () => {

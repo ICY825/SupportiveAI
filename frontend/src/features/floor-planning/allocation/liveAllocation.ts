@@ -9,13 +9,13 @@
  *   nhất DB giữ.
  *
  * Những gì bản demo có mà bản thật chưa có — thiết bị, trạng thái hiện diện,
- * phòng ban của ghế, loại ghế — đều **để trống**, không đoán. Chỗ nào màn
+ * loại ghế — đều **để trống**, không đoán. Chỗ nào màn
  * hình cần mà backend chưa trả lời thì phải nhìn thấy là trống, chứ không
  * được nhìn thấy số liệu bịa.
  */
 
 import type { SeatAssignment as ApiSeatAssignment } from '@/api/seats'
-import type { Assignment, Employee, FloorAllocationData, Seat } from '../domain/allocation'
+import type { Assignment, Department, Employee, FloorAllocationData, Seat } from '../domain/allocation'
 import type { FloorDataset, Workstation } from '../domain/spatial'
 
 /** `seat-ws-16-001` ↔ `ws-16-001`. Một ghế gắn với đúng một workstation. */
@@ -38,17 +38,42 @@ export function seatCodeOf(dataset: FloorDataset, workstation: Workstation): str
   return `F${dataset.layout.floor.level}-${zoneLetter}-${number}`
 }
 
+/**
+ * Phòng ban của từng tầng, đọc từ chính bản vẽ.
+ *
+ * Khu vực nào cũng mang `departmentCode`, và hai khu vực dùng chung một mã thì
+ * đó là **một phòng ban ngồi hai chỗ** — Mô hình & Nền tảng AI bị lõi thang máy
+ * chia đôi. Gộp theo mã chứ không theo khu vực, nếu không màn hình sẽ hiện hai
+ * phòng ban trùng tên.
+ */
+export function departmentsOf(dataset: FloorDataset): Department[] {
+  const byCode = new Map<string, Department>()
+  for (const zone of dataset.zones) {
+    if (!zone.departmentCode || !zone.name) continue
+    const existing = byCode.get(zone.departmentCode)
+    if (existing) existing.zonePreferences.push(zone.id)
+    else byCode.set(zone.departmentCode, {
+      id: zone.departmentCode,
+      name: zone.name,
+      zonePreferences: [zone.id],
+    })
+  }
+  return [...byCode.values()]
+}
+
 /** Ghế của một tầng, suy ra từ bản vẽ. */
 export function seatsOf(dataset: FloorDataset, layoutVersion: string): Seat[] {
+  const departmentOfZone = new Map(dataset.zones.map((zone) => [zone.id, zone.departmentCode]))
   return dataset.workstations
     .filter((workstation) => workstation.classification === 'WORKSTATION')
     .map((workstation) => ({
       id: seatIdOf(workstation.id),
       code: seatCodeOf(dataset, workstation),
       workstationId: workstation.id,
-      // Backend chưa giữ phòng ban của ghế, và đoán theo khu vực thì sai khi
-      // một khu chứa nhiều phòng. Để trống cho tới khi có người chốt.
-      departmentId: null,
+      // Phòng ban của ghế là phòng ban của khu vực chứa nó. Đó là điều bản vẽ
+      // nói, và là thứ duy nhất nói được — không có bảng nào gán ghế cho phòng
+      // ban riêng lẻ.
+      departmentId: workstation.zoneId ? departmentOfZone.get(workstation.zoneId) ?? null : null,
       verifiedBy: null,
       verifiedAt: null,
       layoutVersion,
@@ -108,7 +133,7 @@ export function buildLiveAllocation(
     seats,
     employees: [...employees.values()],
     assignments: mapped,
-    departments: [],
+    departments: departmentsOf(dataset),
     devices: [],
   }
 }

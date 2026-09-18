@@ -63,6 +63,12 @@ LAYERS = {
     "A-SHBD": None,  # sheet border
 }
 
+# `departmentCode` is the join between a drawing and the staff directory. The
+# drawing gives a department's NAME as the reviewer wrote it; the code is what
+# `shared/department` stores, and it does not change when someone rewrites the
+# label. Two zones may carry the same code — Mô hình & Nền tảng AI occupies two
+# blocks split by the lift cores.
+
 # Markup annotations (Acrobat) keyed by annotation NM (unique id in the PDF).
 # Visible polygon/highlight annotations are the department zones drawn by the
 # reviewer. Hidden (opacity 0) annotations are recorded but not imported.
@@ -71,30 +77,35 @@ ZONES = [
         "annot": "2dc72558-690f-4e57-90b8-80c59e7d2376",  # Highlight, pink
         "labelAnnot": "60ed3a51-2ee5-456d-9deb-e44ebac05350",
         "id": "zone-16-vinfast-kdo2o",
+        "departmentCode": "VF-KDO2O",
         "name": "VINFAST-KDO2O",
     },
     {
         "annot": "1d4aa329-ec31-4a94-881c-4123e9939b80",  # Highlight, yellow
         "labelAnnot": "8de8e662-a678-48ce-8635-75ed8c702052",
         "id": "zone-16-kd-vh-gsm",
+        "departmentCode": "GSM",
         "name": "KINH DOANH & VẬN HÀNH GSM",
     },
     {
         "annot": "36779c41-a897-4fac-8bae-c17ee8ed462a",  # Polygon, cyan, opacity .57
         "labelAnnot": "e54c1caa-f7f4-4171-9406b8aca574f12a",
         "id": "zone-16-bds-smart-city",
+        "departmentCode": "BDS",
         "name": "BẤT ĐỘNG SẢN - SMART CITY",
     },
     {
         "annot": "2944a7d6-ba06-4c53-9c2207190c80996c",  # Polygon, blue, opacity .8
         "labelAnnot": "9d6438ab-d794-4c2e-9823-b9401376379a",
         "id": "zone-16-ai-platform",
+        "departmentCode": "AI",
         "name": "MÔ HÌNH & NỀN TẢNG AI",
     },
     {
         "annot": "6d509fd4-5823-409f-8af9-f5cd9f0b4f7a",  # Highlight, lavender, no label
         "labelAnnot": None,
         "id": "zone-16-ai-platform-02",
+        "departmentCode": "AI",
         # The drawing highlights this block but never labels it. The team states
         # it is the second half of Mô hình & Nền tảng AI, split off from the main
         # block by the lift and stair cores (wall-16-03, wall-16-04) — 38 desks

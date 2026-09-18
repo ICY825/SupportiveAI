@@ -434,6 +434,7 @@ describe('Milestone 2 - Multi-Layer Validation Engine', () => {
     gridRef: 'B-A / 6-5',
     areaM2: 500,
     verification: 'SOURCE_VERIFIED',
+    departmentCode: null,
     labelAnchor: [500, 250],
     labelAnchorSource: 'annotation',
     sourceColor: '#0000FF',

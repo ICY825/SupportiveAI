@@ -380,6 +380,7 @@ def extract(cfg, pdf_path: Path, out_dir: Path, public_dir: Path):
             "floorId": fid,
             "type": "WORKSPACE_ZONE" if labelled else "UNKNOWN",
             "name": z["name"],
+            "departmentCode": z.get("departmentCode"),
             "verification": ("UNVERIFIED" if team_named else "SOURCE_VERIFIED") if labelled else "UNKNOWN",
             "polygon": [[r2(x), r2(y)] for x, y in poly],
             "bbox": bbox_of(poly),
