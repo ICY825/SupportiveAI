@@ -36,6 +36,11 @@ class LockerCompartment(Base):
     employee_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    employee_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    employee_code: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    employee_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    job_title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    department: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     assigned_date: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

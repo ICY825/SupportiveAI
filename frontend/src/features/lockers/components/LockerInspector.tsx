@@ -21,6 +21,18 @@ interface LockerInspectorProps {
       notes?: string
     },
   ) => void
+  onUpdateLocker?: (
+    lockerId: string,
+    payload: {
+      employeeName: string
+      employeeCode?: string
+      employeeEmail?: string
+      jobTitle?: string
+      department?: string
+      assignedDate?: string
+      notes?: string
+    },
+  ) => void
   onMarkBroken?: (lockerId: string, reason: string) => void
   onRemindLocker: (lockerId: string) => void
   onSelectCompartment?: (compartmentId: string) => void
@@ -38,14 +50,55 @@ function getTodayDateISO(): string {
 
 function formatDateToDisplay(dateStr?: string | null): string {
   if (!dateStr) return ''
-  if (dateStr.includes('-')) {
-    const parts = dateStr.split('-')
+  const trimmed = dateStr.trim()
+  if (trimmed.includes('-')) {
+    const datePart = trimmed.split('T')[0]
+    const parts = datePart.split('-')
     if (parts.length === 3) {
-      const [yyyy, mm, dd] = parts
-      return `${dd}/${mm}/${yyyy}`
+      if (parts[0].length === 4) {
+        const [yyyy, mm, dd] = parts
+        return `${dd.padStart(2, '0')}/${mm.padStart(2, '0')}/${yyyy}`
+      }
+      if (parts[2].length === 4) {
+        const [dd, mm, yyyy] = parts
+        return `${dd.padStart(2, '0')}/${mm.padStart(2, '0')}/${yyyy}`
+      }
     }
   }
-  return dateStr
+  return trimmed
+}
+
+function parseDateToISO(dateStr?: string | null): string {
+  if (!dateStr) return ''
+  const trimmed = dateStr.trim()
+  if (trimmed.includes('/')) {
+    const parts = trimmed.split('/')
+    if (parts.length === 3) {
+      if (parts[2].length === 4) {
+        const [dd, mm, yyyy] = parts
+        return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`
+      }
+      if (parts[0].length === 4) {
+        const [yyyy, mm, dd] = parts
+        return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`
+      }
+    }
+  }
+  if (trimmed.includes('-')) {
+    const datePart = trimmed.split('T')[0]
+    const parts = datePart.split('-')
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        const [yyyy, mm, dd] = parts
+        return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`
+      }
+      if (parts[2].length === 4) {
+        const [dd, mm, yyyy] = parts
+        return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`
+      }
+    }
+  }
+  return ''
 }
 
 const DESK_STATUS_MAP: Record<LockerItem['status'], 'occupied' | 'available' | 'conflict' | 'unavailable'> = {
@@ -59,14 +112,14 @@ function formatLockType(lockType?: string | null): string {
   if (!lockType) return 'Khóa cơ (Chìa)'
   const normalized = lockType.toLowerCase().trim()
   switch (normalized) {
+    case 'mechanical_key':
+      return 'Khóa cơ (Chìa)'
     case 'electronic':
       return 'Khóa điện tử'
     case 'electronic_pin':
       return 'Khóa điện tử (Mã PIN)'
     case 'mechanical':
       return 'Khóa cơ'
-    case 'mechanical_key':
-      return 'Khóa cơ (Chìa)'
     case 'smart_card':
       return 'Khóa thẻ từ (Smart card)'
     case 'rfid':
@@ -82,38 +135,7 @@ function formatLockType(lockType?: string | null): string {
   }
 }
 
-function LockerLegend({ stats }: { stats?: LockerStats }) {
-  const inUse = stats?.inUse ?? 13
-  const available = stats?.available ?? 3
-  const recall = stats?.recall ?? 1
-  const broken = stats?.broken ?? 1
 
-  return (
-    <details className="fp-section" open>
-      <summary>
-        <h3>Chú giải</h3>
-      </summary>
-      <ul className="fp-key">
-        <li title="Ngăn tủ đang được nhân sự sử dụng">
-          <span className="status-dot in_use" aria-hidden="true" />
-          <span>Đang dùng ({inUse})</span>
-        </li>
-        <li title="Ngăn tủ còn trống, sẵn sàng cấp phát">
-          <span className="status-dot available" aria-hidden="true" />
-          <span>Còn trống ({available})</span>
-        </li>
-        <li title="Ngăn tủ hết hạn hoặc cần thu hồi">
-          <span className="status-dot recall" aria-hidden="true" />
-          <span>Cần thu hồi ({recall})</span>
-        </li>
-        <li title="Ngăn tủ đang báo hỏng, cần kỹ thuật xử lý">
-          <span className="status-dot broken" aria-hidden="true" />
-          <span>Hỏng ({broken})</span>
-        </li>
-      </ul>
-    </details>
-  )
-}
 
 export function LockerInspector({
   locker,
@@ -122,6 +144,7 @@ export function LockerInspector({
   locationLabel,
   onRecallLocker,
   onAssignLocker,
+  onUpdateLocker,
   onMarkBroken,
   onRemindLocker,
   onSelectCompartment,
@@ -142,6 +165,17 @@ export function LockerInspector({
   const [brokenReason, setBrokenReason] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
 
+  // State cho form chỉnh sửa nhân sự của ngăn đang sử dụng
+  const [isEditing, setIsEditing] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editCode, setEditCode] = useState('')
+  const [editTitle, setEditTitle] = useState('')
+  const [editDept, setEditDept] = useState('')
+  const [editEmail, setEditEmail] = useState('')
+  const [editAssignedDate, setEditAssignedDate] = useState('')
+  const [editNotes, setEditNotes] = useState('')
+  const [editError, setEditError] = useState<string | null>(null)
+
   useEffect(() => {
     scrollRef.current?.scrollTo?.({ top: 0 })
     setActionMode('assign')
@@ -153,7 +187,56 @@ export function LockerInspector({
     setEmpAssignedDate(getTodayDateISO())
     setBrokenReason('')
     setFormError(null)
+
+    // Reset edit mode và form khi locker.id thay đổi
+    setIsEditing(false)
+    setEditName('')
+    setEditCode('')
+    setEditTitle('')
+    setEditDept('')
+    setEditEmail('')
+    setEditAssignedDate('')
+    setEditNotes('')
+    setEditError(null)
   }, [locker?.id])
+
+  const handleStartEdit = () => {
+    if (!locker) return
+    setIsEditing(true)
+    setEditName(locker.employeeName || '')
+    setEditCode(locker.employeeCode || '')
+    setEditTitle(locker.jobTitle || '')
+    setEditDept(locker.department || '')
+    setEditEmail(locker.employeeEmail || '')
+    setEditAssignedDate(parseDateToISO(locker.assignedDate))
+    setEditNotes(locker.notes || '')
+    setEditError(null)
+  }
+
+  const handleCancelEdit = () => {
+    setIsEditing(false)
+    setEditError(null)
+  }
+
+  const handleSaveEdit = () => {
+    if (!locker) return
+    const trimmedName = editName.trim()
+    if (!trimmedName) {
+      setEditError('Vui lòng nhập tên nhân sự.')
+      return
+    }
+    const payload = {
+      employeeName: trimmedName,
+      employeeCode: editCode.trim() || undefined,
+      employeeEmail: editEmail.trim() || undefined,
+      jobTitle: editTitle.trim() || undefined,
+      department: editDept.trim() || undefined,
+      assignedDate: editAssignedDate ? formatDateToDisplay(editAssignedDate) : undefined,
+      notes: editNotes.trim() || undefined,
+    }
+    onUpdateLocker?.(locker.id, payload)
+    setIsEditing(false)
+  }
 
   // When no locker is selected: render FloorDetailsPanel splitting image overview
   if (!locker) {
@@ -210,8 +293,6 @@ export function LockerInspector({
           </dl>
         </details>
 
-        {/* Collapsible status legend near footer */}
-        <LockerLegend stats={stats} />
       </aside>
     )
   }
@@ -237,19 +318,19 @@ export function LockerInspector({
       data-collapsed={collapsed || undefined}
     >
       {/* Header matching DeskInspector */}
-      <header className="fp-di-head">
+      <header className="fp-di-head locker-di-head">
         <div className="fp-di-head-main">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-            <p className="fp-di-kicker" style={{ margin: 0 }}>
-              {isCompartmentSelected
-                ? locker.cabinetCode
-                  ? `Ngăn tủ · Cụm ${locker.cabinetCode}`
-                  : 'Ngăn tủ locker'
-                : 'Cụm tủ locker'}
-            </p>
+          <p className="fp-di-kicker locker-di-kicker">
+            {isCompartmentSelected
+              ? locker.cabinetCode
+                ? `Ngăn tủ · Cụm ${locker.cabinetCode}`
+                : 'Ngăn tủ locker'
+              : 'Cụm tủ locker'}
+          </p>
+          <div className="locker-di-title-row">
+            <h2 className="fp-mono-title locker-di-title">{locker.code}</h2>
+            <DeskStatusBadge status={mappedStatus} />
           </div>
-          <h2 className="fp-mono-title">{locker.code}</h2>
-          <DeskStatusBadge status={mappedStatus} />
         </div>
 
         <div className="fp-di-head-tools">
@@ -631,53 +712,302 @@ export function LockerInspector({
 
           {/* Nhân sự sử dụng (khi đã có người dùng) */}
           {locker.employeeName ? (
-            <div className="fp-di-section">
-              <h3 className="fp-di-heading">Nhân sự sử dụng</h3>
-              <div className="fp-di-person">
-                <span className="fp-avatar is-lg" aria-hidden="true">
-                  {locker.employeeName.charAt(0)}
-                </span>
-                <div className="fp-di-person-text">
-                  <p className="fp-di-person-name">{locker.employeeName}</p>
-                  <p className="fp-di-person-org">
-                    {[locker.jobTitle, locker.department].filter(Boolean).join(' · ')}
-                  </p>
-                </div>
+            <div className="fp-di-section locker-person-section">
+              <div className="locker-person-section-header">
+                <h3 className="fp-di-heading locker-person-heading">Nhân sự sử dụng</h3>
+                {!isEditing && (
+                  <button
+                    type="button"
+                    className="fp-icon-btn locker-edit-btn"
+                    aria-label="Chỉnh sửa thông tin nhân sự"
+                    title="Chỉnh sửa thông tin nhân sự"
+                    onClick={handleStartEdit}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false">
+                      <path
+                        d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5.25 12.75l-3.25.75.75-3.25L11.5 2.5z"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </button>
+                )}
               </div>
 
-              {/* Chi tiết bổ sung thông tin nhân sự */}
-              <dl className="fp-di-props" style={{ marginTop: '10px' }}>
-                {locker.employeeCode && (
-                  <div>
-                    <dt>Mã nhân viên</dt>
-                    <dd><span className="fp-mono" style={{ fontWeight: 600 }}>{locker.employeeCode}</span></dd>
+              {!isEditing ? (
+                <div className="locker-person-card">
+                  <div className="fp-di-person locker-person-hero">
+                    <span className="fp-avatar is-lg" aria-hidden="true">
+                      {locker.employeeName.charAt(0)}
+                    </span>
+                    <div className="fp-di-person-text locker-person-hero-details">
+                      <p className="fp-di-person-name locker-person-name">{locker.employeeName}</p>
+                      <p className="fp-di-person-org locker-person-org">
+                        {[locker.jobTitle, locker.department].filter(Boolean).join(' · ')}
+                      </p>
+                    </div>
                   </div>
-                )}
-                {locker.jobTitle && (
+
+                  {/* Chi tiết bổ sung thông tin nhân sự */}
+                  <dl className="fp-di-props locker-person-props">
+                    {locker.employeeCode && (
+                      <div className="locker-prop-row">
+                        <dt>Mã nhân viên</dt>
+                        <dd><span className="fp-mono" style={{ fontWeight: 600 }}>{locker.employeeCode}</span></dd>
+                      </div>
+                    )}
+                    {locker.jobTitle && (
+                      <div className="locker-prop-row">
+                        <dt>Chức danh</dt>
+                        <dd>{locker.jobTitle}</dd>
+                      </div>
+                    )}
+                    {locker.department && (
+                      <div className="locker-prop-row">
+                        <dt>Bộ phận</dt>
+                        <dd>{locker.department}</dd>
+                      </div>
+                    )}
+                    {locker.employeeEmail && (
+                      <div className="locker-prop-row">
+                        <dt>Email</dt>
+                        <dd style={{ wordBreak: 'break-all' }}>{locker.employeeEmail}</dd>
+                      </div>
+                    )}
+                    {locker.assignedDate && (
+                      <div className="locker-prop-row">
+                        <dt>Ngày cấp phát</dt>
+                        <dd>{locker.assignedDate}</dd>
+                      </div>
+                    )}
+                  </dl>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div>
-                    <dt>Chức danh</dt>
-                    <dd>{locker.jobTitle}</dd>
+                    <label
+                      htmlFor="locker-edit-emp-name"
+                      style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' }}
+                    >
+                      Tên nhân sự <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <input
+                      id="locker-edit-emp-name"
+                      type="text"
+                      value={editName}
+                      onChange={(e) => {
+                        setEditName(e.target.value)
+                        if (editError) setEditError(null)
+                      }}
+                      placeholder="Nhập họ và tên nhân viên..."
+                      style={{
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        height: '32px',
+                        padding: '0 10px',
+                        fontSize: '13px',
+                        border: editError && !editName.trim() ? '1px solid #ef4444' : '1px solid #cbd5e1',
+                        borderRadius: '6px',
+                        outline: 'none',
+                        backgroundColor: '#ffffff',
+                      }}
+                    />
                   </div>
-                )}
-                {locker.department && (
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div>
+                      <label
+                        htmlFor="locker-edit-emp-code"
+                        style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' }}
+                      >
+                        Mã nhân viên
+                      </label>
+                      <input
+                        id="locker-edit-emp-code"
+                        type="text"
+                        value={editCode}
+                        onChange={(e) => setEditCode(e.target.value)}
+                        placeholder="Ví dụ: NV-0824..."
+                        style={{
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          height: '32px',
+                          padding: '0 10px',
+                          fontSize: '13px',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '6px',
+                          outline: 'none',
+                          backgroundColor: '#ffffff',
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="locker-edit-emp-title"
+                        style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' }}
+                      >
+                        Chức danh
+                      </label>
+                      <input
+                        id="locker-edit-emp-title"
+                        type="text"
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        placeholder="Ví dụ: Kỹ sư AI..."
+                        style={{
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          height: '32px',
+                          padding: '0 10px',
+                          fontSize: '13px',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '6px',
+                          outline: 'none',
+                          backgroundColor: '#ffffff',
+                        }}
+                      />
+                    </div>
+                  </div>
+
                   <div>
-                    <dt>Bộ phận</dt>
-                    <dd>{locker.department}</dd>
+                    <label
+                      htmlFor="locker-edit-emp-dept"
+                      style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' }}
+                    >
+                      Bộ phận / Phòng ban
+                    </label>
+                    <input
+                      id="locker-edit-emp-dept"
+                      type="text"
+                      value={editDept}
+                      onChange={(e) => setEditDept(e.target.value)}
+                      placeholder="Ví dụ: Khối AI & Công nghệ..."
+                      style={{
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        height: '32px',
+                        padding: '0 10px',
+                        fontSize: '13px',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '6px',
+                        outline: 'none',
+                        backgroundColor: '#ffffff',
+                      }}
+                    />
                   </div>
-                )}
-                {locker.employeeEmail && (
+
                   <div>
-                    <dt>Email</dt>
-                    <dd style={{ wordBreak: 'break-all' }}>{locker.employeeEmail}</dd>
+                    <label
+                      htmlFor="locker-edit-emp-email"
+                      style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' }}
+                    >
+                      Email
+                    </label>
+                    <input
+                      id="locker-edit-emp-email"
+                      type="email"
+                      value={editEmail}
+                      onChange={(e) => setEditEmail(e.target.value)}
+                      placeholder="Ví dụ: dungnt@vinai.io..."
+                      style={{
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        height: '32px',
+                        padding: '0 10px',
+                        fontSize: '13px',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '6px',
+                        outline: 'none',
+                        backgroundColor: '#ffffff',
+                      }}
+                    />
                   </div>
-                )}
-                {locker.assignedDate && (
+
                   <div>
-                    <dt>Ngày cấp phát</dt>
-                    <dd>{locker.assignedDate}</dd>
+                    <label
+                      htmlFor="locker-edit-emp-date"
+                      style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' }}
+                    >
+                      Ngày cấp phát
+                    </label>
+                    <input
+                      id="locker-edit-emp-date"
+                      type="date"
+                      value={editAssignedDate}
+                      onChange={(e) => setEditAssignedDate(e.target.value)}
+                      style={{
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        height: '32px',
+                        padding: '0 10px',
+                        fontSize: '13px',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '6px',
+                        outline: 'none',
+                        backgroundColor: '#ffffff',
+                        color: '#1e293b',
+                      }}
+                    />
                   </div>
-                )}
-              </dl>
+
+                  <div>
+                    <label
+                      htmlFor="locker-edit-notes"
+                      style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' }}
+                    >
+                      Ghi chú
+                    </label>
+                    <textarea
+                      id="locker-edit-notes"
+                      rows={3}
+                      value={editNotes}
+                      onChange={(e) => setEditNotes(e.target.value)}
+                      placeholder="Ghi chú bổ sung..."
+                      style={{
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        padding: '6px 10px',
+                        fontSize: '13px',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '6px',
+                        outline: 'none',
+                        backgroundColor: '#ffffff',
+                        color: '#1e293b',
+                        fontFamily: 'inherit',
+                        resize: 'vertical',
+                      }}
+                    />
+                  </div>
+
+                  {editError && (
+                    <p style={{ margin: 0, fontSize: '12px', color: '#ef4444' }}>
+                      {editError}
+                    </p>
+                  )}
+
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                    <button
+                      type="button"
+                      className="fp-btn is-primary"
+                      style={{ flex: 1, justifyContent: 'center' }}
+                      onClick={handleSaveEdit}
+                    >
+                      Lưu thay đổi
+                    </button>
+                    <button
+                      type="button"
+                      className="fp-btn"
+                      style={{ flex: 1, justifyContent: 'center' }}
+                      onClick={handleCancelEdit}
+                    >
+                      Hủy
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : !isAvailableCompartment ? (
             /* Tình trạng sử dụng: BỎ khi click vào ngăn trống, chỉ hiện khi xem cụm tủ hoặc ngăn hỏng */
@@ -726,20 +1056,7 @@ export function LockerInspector({
           </div>
 
           {/* SupportiveAI Recommendation */}
-          {locker.aiSuggestion && (
-            <div className="fp-di-section locker-ai-section">
-              <h3 className="fp-di-heading locker-ai-heading">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
-                  <path d="M8 1.5v13M1.5 8h13M3.5 3.5l9 9M12.5 3.5l-9 9" strokeLinecap="round" />
-                </svg>
-                Đề xuất SupportiveAI
-              </h3>
-              <div className="locker-ai-box">{locker.aiSuggestion}</div>
-            </div>
-          )}
 
-          {/* Chú giải: BỎ khi xem ngăn trống theo yêu cầu, giữ khi xem cả cụm tủ hoặc trạng thái khác */}
-          {!isAvailableCompartment && <LockerLegend stats={stats} />}
         </div>
       </div>
 

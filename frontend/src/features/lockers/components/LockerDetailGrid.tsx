@@ -6,6 +6,33 @@ interface LockerDetailGridProps {
   lockers: LockerItem[]
   selectedLocker: LockerItem | null
   onSelectLocker: (locker: LockerItem) => void
+  onOpenLockerOnMap?: (locker: LockerItem) => void
+  onLockerClick?: (locker: LockerItem) => void
+  onOpenLocker?: (locker: LockerItem) => void
+}
+
+/**
+ * Chuẩn hóa giá trị hiển thị mã ngăn locker trong tab Chi tiết:
+ * Tách theo dấu '-' và lấy segment cuối sau khi trim.
+ * Nếu mã không có segment hợp lệ thì fallback về toàn bộ mã đã trim.
+ *
+ * @param code Mã locker đầy đủ (ví dụ: 'BT16-01-21', 'BT16-01-02')
+ * @returns Segment cuối cùng đã trim hoặc fallback về toàn bộ mã đã trim
+ */
+function getCompartmentDisplayCode(code?: string | null): string {
+  if (!code || typeof code !== 'string') {
+    return ''
+  }
+
+  const trimmed = code.trim()
+  if (!trimmed) {
+    return ''
+  }
+
+  const segments = trimmed.split('-')
+  const lastSegment = segments[segments.length - 1]?.trim()
+
+  return lastSegment || trimmed
 }
 
 function getCompartments(locker: LockerItem) {
@@ -18,6 +45,9 @@ export function LockerDetailGrid({
   lockers,
   selectedLocker,
   onSelectLocker,
+  onOpenLockerOnMap,
+  onLockerClick,
+  onOpenLocker,
 }: LockerDetailGridProps) {
   const allCompartments = useMemo(
     () => lockers.flatMap(getCompartments),
@@ -36,6 +66,11 @@ export function LockerDetailGrid({
     () => allCompartments.filter((c) => c.status === 'recall').length,
     [allCompartments]
   )
+
+  const handleLockerHeaderClick = (locker: LockerItem) => {
+    const callback = onOpenLockerOnMap || onLockerClick || onOpenLocker
+    callback?.(locker)
+  }
 
   return (
     <div className="locker-detail-wrapper" role="region" aria-label="Sơ đồ chi tiết tủ locker">
@@ -71,9 +106,26 @@ export function LockerDetailGrid({
             <div key={locker.id} className="locker-detail-zone-card">
               <div className="locker-detail-zone-header">
                 <div>
-                  <div className="locker-detail-zone-title">{locker.code}</div>
+                  <button
+                    type="button"
+                    className="locker-detail-zone-title"
+                    onClick={() => handleLockerHeaderClick(locker)}
+                    aria-label={`Mở tủ ${locker.code} trên sơ đồ`}
+                    title={`Mở tủ ${locker.code} trên sơ đồ`}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      margin: 0,
+                      color: 'inherit',
+                      textAlign: 'inherit',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {locker.code}
+                  </button>
                   <div className="locker-detail-zone-subtitle">
-                    {locker.zoneGroupName || locker.physicalLocation}
+                    Zone : {locker.zoneGroupName || locker.physicalLocation}
                   </div>
                 </div>
                 <span className="locker-detail-zone-badge">
@@ -84,11 +136,16 @@ export function LockerDetailGrid({
               <div className="locker-compartments-grid">
                 {compartments.map((comp) => {
                   const isSelected = selectedLocker?.id === comp.id
+                  const displayCode = getCompartmentDisplayCode(comp.code)
 
                   return (
                     <button
                       key={comp.id}
                       type="button"
+                      aria-label={comp.code}
+                      data-locker-code={comp.code}
+                      data-full-code={comp.code}
+                      title={comp.code}
                       className={
                         'locker-compartment-box is-' +
                         comp.status +
@@ -104,7 +161,9 @@ export function LockerDetailGrid({
                       }}
                     >
                       <div className="locker-comp-top">
-                        <span className="locker-comp-code">{comp.code}</span>
+                        <span className="locker-comp-code" data-full-code={comp.code}>
+                          {displayCode}
+                        </span>
                         <span className={'locker-comp-dot status-dot ' + comp.status} aria-hidden='true' />
                       </div>
 

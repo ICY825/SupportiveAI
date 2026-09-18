@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class LockerCompartmentCreate(BaseModel):
@@ -15,19 +15,113 @@ class LockerCompartmentCreate(BaseModel):
     notes: str | None = None
 
 
+class LockerCompartmentAssignmentUpdate(BaseModel):
+    employee_name: str = Field(..., min_length=1)
+    employee_code: str | None = None
+    email: str | None = None
+    job_title: str | None = None
+    department: str | None = None
+    assigned_date: str | None = None
+    notes: str | None = None
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    @property
+    def employee_email(self) -> str | None:
+        return self.email
+
+    @field_validator("employee_name")
+    @classmethod
+    def validate_employee_name_not_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Employee name cannot be empty")
+        return v.strip()
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "employee_name" not in data and "employeeName" in data:
+                data["employee_name"] = data["employeeName"]
+            if "employee_code" not in data and "employeeCode" in data:
+                data["employee_code"] = data["employeeCode"]
+            if "email" not in data and ("employee_email" in data or "employeeEmail" in data):
+                data["email"] = data.get("employee_email") or data.get("employeeEmail")
+            if "job_title" not in data and "jobTitle" in data:
+                data["job_title"] = data["jobTitle"]
+            if "assigned_date" not in data and "assignedDate" in data:
+                data["assigned_date"] = data["assignedDate"]
+        return data
+
+
 class LockerCompartmentRead(BaseModel):
     id: str
     code: str
     status: str
-    employeeName: str | None = None
+    employeeName: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("employeeName", "employee_name"),
+    )
+    employeeCode: str | None = None
+    employeeEmail: str | None = None
+    jobTitle: str | None = None
     employee_id: int | None = None
     department: str | None = None
-    assignedDate: str | None = None
-    recallDueDate: str | None = None
-    aiSuggestion: str | None = None
+    assignedDate: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("assignedDate", "assigned_date"),
+    )
+    recallDueDate: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("recallDueDate", "recall_due_date"),
+    )
+    aiSuggestion: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("aiSuggestion", "ai_suggestion"),
+    )
     notes: str | None = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="ignore", populate_by_name=True)
+
+    @property
+    def employee_name(self) -> str | None:
+        return self.employeeName
+
+    @property
+    def employee_code(self) -> str | None:
+        return self.employeeCode
+
+    @property
+    def employee_email(self) -> str | None:
+        return self.employeeEmail
+
+    @property
+    def job_title(self) -> str | None:
+        return self.jobTitle
+
+    @property
+    def assigned_date(self) -> str | None:
+        return self.assignedDate
+
+    @property
+    def recall_due_date(self) -> str | None:
+        return self.recallDueDate
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get("employeeCode") and data.get("employee_code"):
+                data["employeeCode"] = data["employee_code"]
+            if not data.get("employeeEmail") and (data.get("employee_email") or data.get("email")):
+                data["employeeEmail"] = data.get("employee_email") or data.get("email")
+            if not data.get("jobTitle") and (data.get("job_title") or data.get("title")):
+                data["jobTitle"] = data.get("job_title") or data.get("title")
+            if not data.get("employeeName") and data.get("employee_name"):
+                data["employeeName"] = data["employee_name"]
+            if not data.get("assignedDate") and data.get("assigned_date"):
+                data["assignedDate"] = data["assigned_date"]
+        return data
 
 
 class LockerCreate(BaseModel):

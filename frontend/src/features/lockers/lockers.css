@@ -369,10 +369,199 @@
 }
 
 @media (max-width: 1100px) {
+
   .fp-desk-inspector .fp-di-head,
   .fp-desk-inspector[data-desk-status] .fp-di-head {
     box-shadow: none !important;
   }
+}
+
+/* Header balancing: kicker, locker code, status badge, close button */
+.locker-di-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--line, #e2ded7);
+  background: var(--paper, #ffffff);
+  gap: 12px;
+}
+
+.locker-di-head .fp-di-head-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.locker-di-kicker {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted, #6f6a63);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.locker-di-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.locker-di-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.locker-di-head .fp-di-head-tools {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Personnel section: remove underline from heading only */
+.locker-person-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  border-bottom: none !important;
+}
+
+.locker-person-section .fp-di-heading,
+.locker-person-heading {
+  border-bottom: none !important;
+  box-shadow: none !important;
+  padding-bottom: 0 !important;
+  margin: 0 !important;
+}
+
+.locker-person-section .fp-di-heading::after,
+.locker-person-heading::after {
+  display: none !important;
+}
+
+/* Edit button: pencil icon */
+.locker-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  border: 1px solid var(--line, #e2ded7);
+  background: var(--paper, #ffffff);
+  color: var(--fp-text-2, #57524b);
+  cursor: pointer;
+  padding: 0;
+  transition: all 120ms ease;
+  flex-shrink: 0;
+}
+
+.locker-edit-btn:hover {
+  background: var(--canvas-2, #f6f4f1);
+  color: var(--ink, #1c1b1a);
+  border-color: var(--line-strong, #c9c3ba);
+}
+
+/* Personnel Card: tall, airy, responsive, prevents overflow */
+.locker-person-card {
+  background: #ffffff;
+  border: 1px solid var(--line, #e2ded7);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 140px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+}
+
+.locker-person-card .locker-person-hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line-hairline, #f1eee9);
+}
+
+.locker-person-card .fp-avatar {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  font-size: 16px;
+  font-weight: 700;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e2e8f0;
+  color: #1e293b;
+  flex-shrink: 0;
+}
+
+.locker-person-card .locker-person-hero-details {
+  min-width: 0;
+  flex: 1;
+}
+
+.locker-person-card .locker-person-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink, #1c1b1a);
+  margin: 0 0 3px 0;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.locker-person-card .locker-person-org {
+  font-size: 12px;
+  color: var(--muted, #6f6a63);
+  margin: 0;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.locker-person-card .locker-person-props {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+}
+
+.locker-person-card .locker-prop-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.locker-person-card .locker-prop-row dt {
+  color: var(--muted, #6f6a63);
+  font-size: 11.5px;
+  flex-shrink: 0;
+  margin: 0;
+  font-weight: 500;
+}
+
+.locker-person-card .locker-prop-row dd {
+  color: var(--ink, #1c1b1a);
+  text-align: right;
+  word-break: break-word;
+  margin: 0;
 }
 
 .locker-ai-section {
@@ -431,6 +620,7 @@
     opacity: 0;
     transform: translate(-50%, 12px);
   }
+
   to {
     opacity: 1;
     transform: translate(-50%, 0);

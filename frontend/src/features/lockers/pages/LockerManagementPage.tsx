@@ -30,6 +30,16 @@ export interface LockerLocation {
   [key: string]: any
 }
 
+export interface LockerUpdatePayload {
+  employeeName: string
+  employeeCode?: string | null
+  employeeEmail?: string | null
+  jobTitle?: string | null
+  department?: string | null
+  assignedDate?: string | null
+  notes?: string | null
+}
+
 interface LockerCreateFormData {
   zone: string
   compartment_start: number | string
@@ -42,7 +52,7 @@ const initialFormData: LockerCreateFormData = {
   zone: 'A',
   compartment_start: '',
   compartment_count: 1,
-  lock_type: 'electronic',
+  lock_type: 'mechanical_key',
   notes: '',
 }
 
@@ -155,6 +165,9 @@ function mapLockerReadToItem(data: any, index: number = 0): LockerItem {
       code: String(c.code ?? `${data.code || 'LK'}-${cIdx + 1}`),
       status: normalizeStatus(c.status),
       employeeName: c.employeeName ?? c.employee_name ?? null,
+      employeeCode: c.employeeCode ?? c.employee_code ?? null,
+      employeeEmail: c.employeeEmail ?? c.employee_email ?? null,
+      jobTitle: c.jobTitle ?? c.job_title ?? null,
       department: c.department ?? null,
       assignedDate: c.assignedDate ?? c.assigned_date ?? null,
       recallDueDate: c.recallDueDate ?? c.recall_due_date ?? null,
@@ -168,6 +181,9 @@ function mapLockerReadToItem(data: any, index: number = 0): LockerItem {
       code: `${data.code || 'LK'}-${String(cIdx + 1).padStart(2, '0')}`,
       status: normalizeStatus(data.status),
       employeeName: null,
+      employeeCode: null,
+      employeeEmail: null,
+      jobTitle: null,
       department: null,
       assignedDate: null,
       recallDueDate: null,
@@ -205,6 +221,9 @@ function mapLockerReadToItem(data: any, index: number = 0): LockerItem {
     size,
     status: normalizeStatus(data?.status),
     employeeName: data?.employeeName ?? data?.employee_name ?? null,
+    employeeCode: data?.employeeCode ?? data?.employee_code ?? null,
+    employeeEmail: data?.employeeEmail ?? data?.employee_email ?? null,
+    jobTitle: data?.jobTitle ?? data?.job_title ?? null,
     department: data?.department ?? null,
     assignedDate: data?.assignedDate ?? data?.assigned_date ?? null,
     recallDueDate: data?.recallDueDate ?? data?.recall_due_date ?? null,
@@ -216,6 +235,17 @@ function mapLockerReadToItem(data: any, index: number = 0): LockerItem {
     compartments,
     lockType: data?.lock_type ?? data?.lockType ?? 'mechanical_key',
   }
+}
+
+export function isNumericCompartmentId(id: unknown): boolean {
+  if (typeof id === 'number') {
+    return Number.isInteger(id) && id > 0
+  }
+  if (typeof id === 'string') {
+    const trimmed = id.trim()
+    return /^\d+$/.test(trimmed) && Number(trimmed) > 0
+  }
+  return false
 }
 
 export function LockerManagementPage() {
@@ -598,6 +628,15 @@ export function LockerManagementPage() {
     setCreateError(null)
   }
 
+  // Mở tủ trên sơ đồ bản đồ từ tab Chi tiết
+  const handleOpenLockerOnMap = (locker: LockerItem) => {
+    if (isCreatingLocker) {
+      handleCancelCreate()
+    }
+    setSelectedLockerId(locker.id)
+    setViewMode('map')
+  }
+
   // Cập nhật vị trí nháp khi kéo thả trên bản đồ hoặc click
   const handleDraftPositionChange = (pos: any) => {
     if (Array.isArray(pos) && pos.length >= 2) {
@@ -856,7 +895,106 @@ export function LockerManagementPage() {
     setToastMessage(`Đã thu hồi tủ ${targetCode} thành công. Trạng thái chuyển về "Còn trống".`)
   }
 
-  const handleAssignLocker = (
+  // Helper dùng chung cho việc gọi API cấp phát / cập nhật ngăn tủ
+  const handleAssignmentApi = async (
+    compartmentId: string | number,
+    action: 'assign' | 'update',
+    payload: {
+      employeeName: string
+      employeeCode?: string | null
+      employeeEmail?: string | null
+      email?: string | null
+      jobTitle?: string | null
+      department?: string | null
+      assignedDate?: string | null
+      notes?: string | null
+    },
+  ) => {
+    const cleanOptional = (val?: string | null): string | null => {
+      if (val === undefined || val === null) return null
+      const trimmed = String(val).trim()
+      return trimmed === '' ? null : trimmed
+    }
+
+    const trimmedName = (payload.employeeName || '').trim()
+    const backendPayload = {
+      employee_name: trimmedName,
+      employee_code: cleanOptional(payload.employeeCode),
+      email: cleanOptional(payload.employeeEmail ?? (payload as any).email),
+      job_title: cleanOptional(payload.jobTitle),
+      department: cleanOptional(payload.department),
+      assigned_date: cleanOptional(payload.assignedDate),
+      notes: cleanOptional(payload.notes),
+    }
+
+    const compIdStr = String(compartmentId).trim()
+
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/locker-compartments/${encodeURIComponent(compIdStr)}/assignment`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(backendPayload),
+        },
+      )
+
+      if (!res.ok) {
+        let errMsg = `HTTP ${res.status}: ${res.statusText}`
+        try {
+          const errJson = await res.json()
+          if (errJson.detail) {
+            errMsg = typeof errJson.detail === 'string' ? errJson.detail : JSON.stringify(errJson.detail)
+          } else if (errJson.message) {
+            errMsg = typeof errJson.message === 'string' ? errJson.message : JSON.stringify(errJson.message)
+          }
+        } catch {
+          // ignore
+        }
+        throw new Error(errMsg)
+      }
+
+      const resJson = await res.json()
+      const rawItem = resJson?.data ?? resJson
+      const existingIndex = lockers.findIndex(
+        (l) => l.id === String(rawItem?.id) || l.compartments?.some((c) => String(c.id) === compIdStr),
+      )
+      const updatedLocker = mapLockerReadToItem(rawItem, existingIndex >= 0 ? existingIndex : 0)
+
+      setLockers((prev) => {
+        const targetIdx = prev.findIndex(
+          (l) => l.id === updatedLocker.id || l.compartments?.some((c) => String(c.id) === compIdStr),
+        )
+        if (targetIdx >= 0) {
+          const next = [...prev]
+          next[targetIdx] = updatedLocker
+          return next
+        }
+        return [...prev, updatedLocker]
+      })
+
+      // Giữ selected compartment
+      setSelectedLockerId(compIdStr)
+
+      // Toast thành công
+      const comp = updatedLocker.compartments?.find((c) => String(c.id) === compIdStr)
+      const compCode = comp?.code || compIdStr
+      if (action === 'assign') {
+        const dept = comp?.department || backendPayload.department
+        const deptInfo = dept ? ` (${dept})` : ''
+        setToastMessage(`Đã cấp phát ngăn ${compCode} cho nhân sự ${backendPayload.employee_name}${deptInfo}.`)
+      } else {
+        setToastMessage(`Đã cập nhật thông tin ngăn ${compCode}.`)
+      }
+    } catch (err: any) {
+      const errorMsg = err?.message || 'Không thể kết nối đến máy chủ.'
+      setToastMessage(`Lỗi: ${errorMsg}`)
+    }
+  }
+
+  const handleAssignLocker = async (
     lockerId: string,
     info?: {
       employeeName?: string
@@ -868,6 +1006,19 @@ export function LockerManagementPage() {
       notes?: string
     },
   ) => {
+    if (isNumericCompartmentId(lockerId)) {
+      await handleAssignmentApi(lockerId, 'assign', {
+        employeeName: info?.employeeName?.trim() || 'Nguyễn Tiến Dũng',
+        employeeCode: info?.employeeCode,
+        employeeEmail: info?.employeeEmail,
+        jobTitle: info?.jobTitle,
+        department: info?.department?.trim() || 'Mô hình & Nền tảng AI',
+        assignedDate: info?.assignedDate !== undefined ? info.assignedDate : '16/09/2026',
+        notes: info?.notes,
+      })
+      return
+    }
+
     const candidateName = info?.employeeName?.trim() || 'Nguyễn Tiến Dũng'
     const candidateCode = info?.employeeCode?.trim() || null
     const candidateEmail = info?.employeeEmail?.trim() || null
@@ -1061,6 +1212,84 @@ export function LockerManagementPage() {
       }
     }
     setToastMessage(`Đã gửi thông báo nhắc trả ngăn ${targetCode} qua email & Microsoft Teams.`)
+  }
+
+  const handleUpdateLocker = async (lockerId: string, payload: LockerUpdatePayload) => {
+    if (isNumericCompartmentId(lockerId)) {
+      await handleAssignmentApi(lockerId, 'update', {
+        employeeName: payload.employeeName,
+        employeeCode: payload.employeeCode,
+        employeeEmail: payload.employeeEmail,
+        jobTitle: payload.jobTitle,
+        department: payload.department,
+        assignedDate: payload.assignedDate,
+        notes: payload.notes,
+      })
+      return
+    }
+
+    const cleanOptional = (val?: string | null): string | null => {
+      if (val === undefined || val === null) return null
+      const trimmed = val.trim()
+      return trimmed === '' ? null : trimmed
+    }
+
+    const updatedEmployeeName = payload.employeeName.trim()
+    const updatedEmployeeCode = cleanOptional(payload.employeeCode)
+    const updatedEmployeeEmail = cleanOptional(payload.employeeEmail)
+    const updatedJobTitle = cleanOptional(payload.jobTitle)
+    const updatedDepartment = cleanOptional(payload.department)
+    const updatedAssignedDate = cleanOptional(payload.assignedDate)
+    const updatedNotes = cleanOptional(payload.notes)
+
+    let updatedTargetCode = lockerId
+
+    setLockers((prev) =>
+      prev.map((l) => {
+        if (l.compartments && l.compartments.length > 0) {
+          const compMatch = l.compartments.find((c) => c.id === lockerId)
+          if (compMatch) {
+            updatedTargetCode = compMatch.code
+            const updatedComps = l.compartments.map((c) =>
+              c.id === lockerId
+                ? {
+                    ...c,
+                    employeeName: updatedEmployeeName,
+                    employeeCode: updatedEmployeeCode,
+                    employeeEmail: updatedEmployeeEmail,
+                    jobTitle: updatedJobTitle,
+                    department: updatedDepartment,
+                    assignedDate: updatedAssignedDate,
+                    notes: updatedNotes,
+                  }
+                : c,
+            )
+            return {
+              ...l,
+              compartments: updatedComps,
+            }
+          }
+        }
+
+        if (l.id === lockerId) {
+          updatedTargetCode = l.code
+          return {
+            ...l,
+            employeeName: updatedEmployeeName,
+            employeeCode: updatedEmployeeCode,
+            employeeEmail: updatedEmployeeEmail,
+            jobTitle: updatedJobTitle,
+            department: updatedDepartment,
+            assignedDate: updatedAssignedDate,
+            notes: updatedNotes,
+          }
+        }
+
+        return l
+      }),
+    )
+
+    setToastMessage(`Đã cập nhật thông tin ngăn ${updatedTargetCode}.`)
   }
 
   return (
@@ -1505,6 +1734,7 @@ export function LockerManagementPage() {
               lockers={filteredDetailLockers}
               selectedLocker={selectedLocker}
               onSelectLocker={(l) => setSelectedLockerId(l.id)}
+              onOpenLockerOnMap={handleOpenLockerOnMap}
             />
           ) : selectedCabinetUnavailable ? (
             <div
@@ -1596,6 +1826,7 @@ export function LockerManagementPage() {
             locationLabel={locationLabel}
             onRecallLocker={handleRecallLocker}
             onAssignLocker={handleAssignLocker}
+            onUpdateLocker={handleUpdateLocker}
             onMarkBroken={handleMarkBroken}
             onRemindLocker={handleRemindLocker}
             onSelectCompartment={(cId) => setSelectedLockerId(cId)}

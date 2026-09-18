@@ -96,7 +96,7 @@ async def test_create_and_list_locker_api(client):
         "compartment_count": 4,
         "compartment_start": 1,
         "location_id": 1,
-        "lock_type": "electronic",
+        "lock_type": "mechanical_key",
     }
     res = await client.post("/api/v1/lockers", json=payload)
     assert res.status_code == 201

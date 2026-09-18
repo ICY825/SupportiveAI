@@ -9,6 +9,7 @@ from app.core.exceptions import EntityNotFoundError
 from app.core.security import CurrentUser, get_current_user
 from app.modules.resource_allocation.services import ResourceAllocationService
 from app.modules.resource_allocation.schemas import (
+    LockerCompartmentAssignmentUpdate,
     LockerCreate,
     LockerDeleteResponse,
     LockerLocationRead,
@@ -318,3 +319,16 @@ async def delete_locker(
     """Delete a locker and its associated compartments directly from database."""
     svc = ResourceAllocationService(db)
     return await svc.delete_locker(locker_id)
+
+
+@router.patch("/locker-compartments/{compartment_id}/assignment", response_model=LockerRead)
+async def update_locker_compartment_assignment(
+    compartment_id: int,
+    data: LockerCompartmentAssignmentUpdate,
+    db: AsyncSession = Depends(get_db_session),
+    _: CurrentUser = Depends(get_current_user),
+) -> LockerRead:
+    """Update locker compartment assignment with employee details."""
+    svc = ResourceAllocationService(db)
+    return await svc.update_locker_compartment(compartment_id=compartment_id, data=data)
+

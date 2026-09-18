@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import and_, func, select
@@ -14,6 +14,7 @@ logger = logging.getLogger("supportive_ai.resource_allocation")
 
 from app.core.exceptions import EntityNotFoundError, ResourceConflictError
 from app.modules.resource_allocation.schemas import (
+    LockerCompartmentAssignmentUpdate,
     LockerCompartmentRead,
     LockerCreate,
     LockerDeleteResponse,
@@ -92,6 +93,43 @@ def _compute_building_tag(current_building: str, other_buildings: list[str]) -> 
     return current_clean[:needed_len].lower()
 
 
+def _parse_assigned_date(val: Any) -> Any:
+    """Parse assigned_date safely from ISO or dd/mm/yyyy string, datetime, or date."""
+    if val is None or val == "":
+        return datetime.now(timezone.utc)
+    if isinstance(val, (datetime, date)):
+        return val
+
+    s = str(val).strip()
+    if not s:
+        return datetime.now(timezone.utc)
+
+    # Try ISO format
+    try:
+        clean_s = s.replace("Z", "+00:00")
+        return datetime.fromisoformat(clean_s)
+    except (ValueError, TypeError):
+        pass
+
+    # Try common date formats
+    for fmt in (
+        "%d/%m/%Y",
+        "%d/%m/%Y %H:%M:%S",
+        "%d/%m/%Y %H:%M",
+        "%d-%m-%Y",
+        "%d-%m-%Y %H:%M:%S",
+        "%Y-%m-%d",
+        "%Y-%m-%d %H:%M:%S",
+        "%d/%m/%y",
+    ):
+        try:
+            return datetime.strptime(s, fmt)
+        except (ValueError, TypeError):
+            continue
+
+    return datetime.now(timezone.utc)
+
+
 def _serialize_locker(resource: Resource) -> LockerRead:
     """Helper serializer converting Resource locker entity and relationships to LockerRead."""
     attrs: dict[str, Any] = dict(resource.attributes or {})
@@ -121,24 +159,54 @@ def _serialize_locker(resource: Resource) -> LockerRead:
             norm_status = "available"
 
         comp_emp = _safe_rel(c, "employee")
+        c_attrs = getattr(c, "attributes", None) or {}
+
         comp_emp_name = getattr(c, "employee_name", None)
+        if not comp_emp_name and isinstance(c_attrs, dict):
+            comp_emp_name = c_attrs.get("employee_name") or c_attrs.get("employeeName")
         if not comp_emp_name and comp_emp:
             comp_emp_name = getattr(comp_emp, "full_name", None)
 
+        comp_emp_code = getattr(c, "employee_code", None)
+        if not comp_emp_code and isinstance(c_attrs, dict):
+            comp_emp_code = c_attrs.get("employee_code") or c_attrs.get("employeeCode")
+        if not comp_emp_code and comp_emp:
+            comp_emp_code = getattr(comp_emp, "employee_code", None)
+
+        comp_emp_email = getattr(c, "employee_email", None) or getattr(c, "email", None)
+        if not comp_emp_email and isinstance(c_attrs, dict):
+            comp_emp_email = c_attrs.get("employee_email") or c_attrs.get("email") or c_attrs.get("employeeEmail")
+        if not comp_emp_email and comp_emp:
+            comp_emp_email = getattr(comp_emp, "email", None)
+
+        comp_job_title = getattr(c, "job_title", None)
+        if not comp_job_title and isinstance(c_attrs, dict):
+            comp_job_title = c_attrs.get("job_title") or c_attrs.get("jobTitle")
+        if not comp_job_title and comp_emp:
+            comp_job_title = getattr(comp_emp, "title", None)
+
         comp_emp_id = getattr(c, "employee_id", None)
+        if comp_emp_id is None and isinstance(c_attrs, dict):
+            comp_emp_id = c_attrs.get("employee_id")
         if comp_emp_id is None and comp_emp:
             comp_emp_id = getattr(comp_emp, "id", None)
 
         comp_dept = getattr(c, "department", None)
+        if not comp_dept and isinstance(c_attrs, dict):
+            comp_dept = c_attrs.get("department")
         if not comp_dept and comp_emp:
             emp_dept = _safe_rel(comp_emp, "department")
             if emp_dept:
                 comp_dept = getattr(emp_dept, "name", None)
 
         c_assigned = getattr(c, "assigned_date", None)
+        if not c_assigned and isinstance(c_attrs, dict):
+            c_assigned = c_attrs.get("assigned_date") or c_attrs.get("assignedDate")
         c_assigned_str = str(c_assigned) if c_assigned else None
 
         c_recall = getattr(c, "recall_due_date", None)
+        if not c_recall and isinstance(c_attrs, dict):
+            c_recall = c_attrs.get("recall_due_date") or c_attrs.get("recallDueDate")
         c_recall_str = str(c_recall) if c_recall else None
 
         comp_num = str(getattr(c, "compartment_number", "") or "")
@@ -146,18 +214,29 @@ def _serialize_locker(resource: Resource) -> LockerRead:
         if not comp_code:
             comp_code = f"{resource.code}-{comp_num}" if comp_num else resource.code
 
+        c_notes = getattr(c, "notes", None)
+        if not c_notes and isinstance(c_attrs, dict):
+            c_notes = c_attrs.get("notes")
+
+        c_ai = getattr(c, "ai_suggestion", None)
+        if not c_ai and isinstance(c_attrs, dict):
+            c_ai = c_attrs.get("ai_suggestion") or c_attrs.get("aiSuggestion")
+
         serialized_comps.append(
             LockerCompartmentRead(
                 id=str(getattr(c, "id", "")),
                 code=comp_code,
                 status=norm_status,
                 employeeName=comp_emp_name,
+                employeeCode=comp_emp_code,
+                employeeEmail=comp_emp_email,
+                jobTitle=comp_job_title,
                 employee_id=comp_emp_id,
                 department=comp_dept,
                 assignedDate=c_assigned_str,
                 recallDueDate=c_recall_str,
-                aiSuggestion=getattr(c, "ai_suggestion", None),
-                notes=getattr(c, "notes", None),
+                aiSuggestion=c_ai,
+                notes=c_notes,
             )
         )
 
@@ -311,13 +390,6 @@ class ResourceAllocationService:
             if hasattr(Employee, "department"):
                 comp_emp_opt = comp_emp_opt.selectinload(Employee.department)
             options.append(comp_emp_opt)
-
-        if hasattr(LockerCompartment, "department"):
-            options.append(
-                selectinload(Resource.locker_detail)
-                .selectinload(LockerDetail.compartments)
-                .selectinload(LockerCompartment.department)
-            )
 
         stmt = select(Resource).where(
             Resource.resource_type.in_([ResourceTypeEnum.LOCKER.value, "locker", "LOCKER"])
@@ -577,6 +649,144 @@ class ResourceAllocationService:
             compartments_deleted_count=compartments_count,
             message=f"Locker {deleted_code} and {compartments_count} compartment(s) successfully deleted.",
         )
+
+    async def update_locker_compartment(
+        self, compartment_id: int, data: LockerCompartmentAssignmentUpdate
+    ) -> LockerRead:
+        """Update locker compartment assignment with employee snapshot and notes, setting status to in_use."""
+        try:
+            comp_id_int = int(compartment_id)
+        except (ValueError, TypeError):
+            raise EntityNotFoundError("LockerCompartment", compartment_id)
+
+        comp = await self.session.get(LockerCompartment, comp_id_int)
+        if not comp:
+            raise EntityNotFoundError("LockerCompartment", compartment_id)
+
+        options = [
+            selectinload(Resource.location),
+            selectinload(Resource.locker_detail).selectinload(LockerDetail.compartments),
+            selectinload(Resource.assignments).selectinload(ResourceAssignment.employee).selectinload(Employee.department),
+        ]
+        if hasattr(LockerCompartment, "employee"):
+            comp_emp_opt = (
+                selectinload(Resource.locker_detail)
+                .selectinload(LockerDetail.compartments)
+                .selectinload(LockerCompartment.employee)
+            )
+            if hasattr(Employee, "department"):
+                comp_emp_opt = comp_emp_opt.selectinload(Employee.department)
+            options.append(comp_emp_opt)
+
+        resource: Resource | None = None
+        try:
+            stmt = (
+                select(Resource)
+                .join(Resource.locker_detail)
+                .join(LockerDetail.compartments)
+                .where(LockerCompartment.id == comp.id)
+                .options(*options)
+            )
+            res = await self.session.execute(stmt)
+            resource = res.scalars().first()
+        except Exception:
+            resource = None
+
+        if resource is None:
+            locker_detail_id = getattr(comp, "locker_detail_id", None)
+            res_id = getattr(comp, "resource_id", None) or getattr(comp, "locker_id", None)
+            if res_id is None and locker_detail_id:
+                detail = await self.session.get(LockerDetail, locker_detail_id)
+                if detail:
+                    res_id = getattr(detail, "resource_id", getattr(detail, "id", None))
+            if res_id is not None:
+                stmt = select(Resource).where(Resource.id == res_id).options(*options)
+                res = await self.session.execute(stmt)
+                resource = res.scalars().first()
+
+        if resource is None:
+            raise EntityNotFoundError("Locker", compartment_id)
+
+        comp_cols = LockerCompartment.__table__.columns.keys()
+
+        # Update snapshot fields
+        if "employee_name" in comp_cols or hasattr(comp, "employee_name"):
+            setattr(comp, "employee_name", data.employee_name)
+
+        if "employee_code" in comp_cols or hasattr(comp, "employee_code"):
+            setattr(comp, "employee_code", data.employee_code)
+
+        email_val = data.employee_email or getattr(data, "email", None)
+        if "employee_email" in comp_cols or hasattr(comp, "employee_email"):
+            setattr(comp, "employee_email", email_val)
+        elif "email" in comp_cols or hasattr(comp, "email"):
+            setattr(comp, "email", email_val)
+
+        if "job_title" in comp_cols or hasattr(comp, "job_title"):
+            setattr(comp, "job_title", data.job_title)
+
+        if "department" in comp_cols or hasattr(comp, "department"):
+            setattr(comp, "department", data.department)
+
+        # Update status
+        if "status" in comp_cols or hasattr(comp, "status"):
+            setattr(comp, "status", "in_use")
+
+        # Parse assigned_date safely
+        assigned_dt = _parse_assigned_date(data.assigned_date)
+        if "assigned_date" in comp_cols or hasattr(comp, "assigned_date"):
+            col = LockerCompartment.__table__.columns.get("assigned_date")
+            from sqlalchemy.types import Date as SqlDate, DateTime as SqlDateTime
+            if col is not None and isinstance(col.type, SqlDate) and not isinstance(col.type, SqlDateTime):
+                val_to_set: Any = assigned_dt.date() if isinstance(assigned_dt, datetime) else assigned_dt
+            elif col is not None and isinstance(col.type, SqlDateTime):
+                val_to_set = assigned_dt
+            elif col is not None and not isinstance(col.type, (SqlDate, SqlDateTime)):
+                val_to_set = (
+                    assigned_dt.strftime("%Y-%m-%d")
+                    if isinstance(assigned_dt, (datetime, date))
+                    else str(assigned_dt)
+                )
+            else:
+                val_to_set = assigned_dt
+            setattr(comp, "assigned_date", val_to_set)
+
+        # Update notes
+        if data.notes is not None:
+            if "notes" in comp_cols or hasattr(comp, "notes"):
+                setattr(comp, "notes", data.notes)
+
+        # Attempt to link employee_id if exists in DB
+        if ("employee_id" in comp_cols or hasattr(comp, "employee_id")) and getattr(comp, "employee_id", None) is None:
+            matched_emp = None
+            if data.employee_code:
+                emp_res = await self.session.execute(
+                    select(Employee).where(Employee.employee_code == data.employee_code)
+                )
+                matched_emp = emp_res.scalars().first()
+            if not matched_emp and email_val:
+                emp_res = await self.session.execute(
+                    select(Employee).where(Employee.email == email_val)
+                )
+                matched_emp = emp_res.scalars().first()
+            if matched_emp:
+                setattr(comp, "employee_id", matched_emp.id)
+                if not data.department and matched_emp.department_id:
+                    dept = await self.session.get(Department, matched_emp.department_id)
+                    if dept and ("department" in comp_cols or hasattr(comp, "department")):
+                        setattr(comp, "department", dept.name)
+
+        if hasattr(comp, "attributes") and isinstance(comp.attributes, dict):
+            comp.attributes["employee_name"] = data.employee_name
+            comp.attributes["employee_code"] = data.employee_code
+            comp.attributes["employee_email"] = email_val
+            comp.attributes["job_title"] = data.job_title
+            comp.attributes["department"] = data.department
+            if data.notes is not None:
+                comp.attributes["notes"] = data.notes
+
+        await self.session.flush()
+        return self._serialize_locker(resource)
 
     # -------------------------------------------------------------------------
     # Seat Planning / Resource Allocation APIs (Flow 1)
@@ -1157,3 +1367,27 @@ async def delete_locker(
         raise ValueError("locker_id is required for delete_locker")
     service = ResourceAllocationService(actual_session)
     return await service.delete_locker(locker_id=locker_id)
+
+
+async def update_locker_compartment(
+    compartment_id: int | AsyncSession | None = None,
+    data: LockerCompartmentAssignmentUpdate | None = None,
+    session: AsyncSession | None = None,
+    db: AsyncSession | None = None,
+    **kwargs: Any,
+) -> LockerRead:
+    """Module-level wrapper for ResourceAllocationService.update_locker_compartment."""
+    if isinstance(compartment_id, AsyncSession):
+        session = compartment_id
+        compartment_id = kwargs.get("compartment_id")
+    actual_session = session or db or kwargs.get("session") or kwargs.get("db")
+    if actual_session is None:
+        raise ValueError("AsyncSession is required for update_locker_compartment")
+    if compartment_id is None:
+        raise ValueError("compartment_id is required for update_locker_compartment")
+    if data is None:
+        data = kwargs.get("data")
+    if data is None:
+        raise ValueError("data (LockerCompartmentAssignmentUpdate) is required for update_locker_compartment")
+    service = ResourceAllocationService(actual_session)
+    return await service.update_locker_compartment(compartment_id=int(compartment_id), data=data)

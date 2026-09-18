@@ -2,6 +2,8 @@
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LockerManagementPage } from '../pages/LockerManagementPage'
+import { LockerDetailGrid } from '../components/LockerDetailGrid'
+import { LockerInspector } from '../components/LockerInspector'
 
 const mockLocations = [
   {
@@ -208,6 +210,9 @@ describe('LockerManagementPage', () => {
     expect(screen.getAllByRole('button', { name: /L1-01/ }).length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByRole('button', { name: /L1-02/ }).length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByRole('button', { name: /L1-04/ }).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('01')).toBeTruthy()
+    expect(screen.getByText('02')).toBeTruthy()
+    expect(screen.getByText('04')).toBeTruthy()
 
     // Click L1-02 compartment to inspect
     const [l102Comp] = screen.getAllByRole('button', { name: /L1-02/ })
@@ -375,5 +380,143 @@ describe('LockerManagementPage', () => {
     fireEvent.click(confirmBrokenBtn)
 
     expect(await screen.findByText(/Đã ghi nhận báo hỏng ngăn L1-02: "Kẹt ổ khóa thông minh"/)).toBeTruthy()
+  })
+
+  it('displays only the last segment of locker compartment code (BT16-01-21 displays as 21) in Chi tiết view', () => {
+    const mockLockerWithStandardCode = {
+      id: 'BT16-01',
+      code: 'BT16-01',
+      name: 'Tủ BT16-01',
+      zone: 'BT16',
+      status: 'in_use' as const,
+      compartments: [
+        {
+          id: 'BT16-01-21',
+          code: 'BT16-01-21',
+          status: 'in_use' as const,
+          employeeName: 'Nguyễn Văn A',
+        },
+        {
+          id: 'BT16-01-02',
+          code: 'BT16-01-02',
+          status: 'available' as const,
+        },
+      ],
+    }
+
+    render(
+      <LockerDetailGrid
+        lockers={[mockLockerWithStandardCode as any]}
+        selectedLocker={null}
+        onSelectLocker={vi.fn()}
+      />
+    )
+
+    // Kiểm chứng mã đầy đủ BT16-01-21 được hiển thị thành 21, BT16-01-02 thành 02
+    expect(screen.getByText('21')).toBeTruthy()
+    expect(screen.getByText('02')).toBeTruthy()
+    expect(screen.queryByText('BT16-01-21')).toBeNull()
+
+    // Giữ nguyên mã đầy đủ trong thuộc tính data hoặc metadata để tìm kiếm sau này
+    const comp21Btn = screen.getByRole('button', { name: /BT16-01-21/ })
+    expect(comp21Btn.getAttribute('data-locker-code')).toBe('BT16-01-21')
+    expect(comp21Btn.getAttribute('data-full-code')).toBe('BT16-01-21')
+    const comp21CodeEl = screen.getByText('21')
+    expect(comp21CodeEl.getAttribute('data-full-code')).toBe('BT16-01-21')
+  })
+
+  it('calls onOpenLockerOnMap callback with parent locker when clicking locker header button with accessible name "Mở tủ BT16-01 trên sơ đồ"', () => {
+    const handleOpenLockerOnMap = vi.fn()
+    const parentLocker = {
+      id: 'BT16-01',
+      code: 'BT16-01',
+      name: 'Tủ BT16-01',
+      zone: 'BT16',
+      status: 'in_use' as const,
+      compartments: [
+        {
+          id: 'BT16-01-21',
+          code: 'BT16-01-21',
+          status: 'in_use' as const,
+          employeeName: 'Nguyễn Văn A',
+        },
+        {
+          id: 'BT16-01-02',
+          code: 'BT16-01-02',
+          status: 'available' as const,
+        },
+      ],
+    }
+
+    render(
+      <LockerDetailGrid
+        lockers={[parentLocker as any]}
+        selectedLocker={null}
+        onSelectLocker={vi.fn()}
+        onOpenLockerOnMap={handleOpenLockerOnMap}
+      />
+    )
+
+    const mapButton = screen.getByRole('button', { name: 'Mở tủ BT16-01 trên sơ đồ' })
+    fireEvent.click(mapButton)
+
+    expect(handleOpenLockerOnMap).toHaveBeenCalledTimes(1)
+    expect(handleOpenLockerOnMap).toHaveBeenCalledWith(parentLocker)
+  })
+
+  it('prefills edit form and calls onUpdateLocker with trimmed payload when editing in-use locker compartment with employee and notes', () => {
+    const handleUpdateLocker = vi.fn()
+    const handleRecallLocker = vi.fn()
+    const handleAssignLocker = vi.fn()
+    const handleRemindLocker = vi.fn()
+    const handleClose = vi.fn()
+
+    const mockInUseLocker = {
+      id: 'L1-01',
+      code: 'L1-01',
+      name: 'Tủ L1-01',
+      status: 'in_use' as const,
+      employeeName: 'Nguyễn Văn A',
+      notes: 'Ghi chú ban đầu',
+    }
+
+    render(
+      <LockerInspector
+        locker={mockInUseLocker as any}
+        onRecallLocker={handleRecallLocker}
+        onAssignLocker={handleAssignLocker}
+        onRemindLocker={handleRemindLocker}
+        onClose={handleClose}
+        onUpdateLocker={handleUpdateLocker}
+      />,
+    )
+
+    const editButton = screen.getByRole('button', { name: 'Chỉnh sửa' })
+    fireEvent.click(editButton)
+
+    const nameInput = screen.getByLabelText(/Tên nhân sự/) as HTMLInputElement
+    const notesTextarea = screen.getByLabelText(/Ghi chú/) as HTMLTextAreaElement
+
+    expect(nameInput.value).toBe('Nguyễn Văn A')
+    expect(notesTextarea.value).toBe('Ghi chú ban đầu')
+
+    fireEvent.change(nameInput, { target: { value: '  Trần Thị B  ' } })
+    fireEvent.change(notesTextarea, { target: { value: '  Ghi chú đã cập nhật  ' } })
+
+    const saveButton = screen.getByRole('button', { name: 'Lưu thay đổi' })
+    fireEvent.click(saveButton)
+
+    expect(handleUpdateLocker).toHaveBeenCalledTimes(1)
+    expect(handleUpdateLocker).toHaveBeenCalledWith(
+      'L1-01',
+      expect.objectContaining({
+        employeeName: 'Trần Thị B',
+        notes: 'Ghi chú đã cập nhật',
+      }),
+    )
+    const [calledLockerId, calledPayload] = handleUpdateLocker.mock.calls[0]
+    expect(calledLockerId).toBe('L1-01')
+    expect(calledPayload.employeeName).toBe('Trần Thị B')
+    expect(calledPayload.notes).toBe('Ghi chú đã cập nhật')
   })
 })
