@@ -1,6 +1,6 @@
 import { bboxOfPoints, polygonArea, polygonContainsBBox, polygonIsSimple, polygonsOverlap, polygonsOverlapBeyond, rectangle } from './geometry'
 import type { FloorDataset, Room, Workstation, Point, BBox } from './spatial'
-import { placementPolygon, type SpatialPlacement } from './placement'
+import { normalizeRotation, placementBounds, placementPolygon, type SpatialPlacement } from './placement'
 import { regularizeZonePolygon } from './zoneGeometry'
 import type { RoomType } from './roomTypes'
 import { roomParts } from './roomOutline'
@@ -129,6 +129,50 @@ export function clearAuthoredEntityStore(): void {
 
 const pad = (value: number) => String(value).padStart(3, '0')
 
+export function authoredChairBounds(placement: SpatialPlacement, tileSize: number): BBox {
+  const [x0, y0, x1, y1] = placementBounds(placement)
+  const centerX = (x0 + x1) / 2
+  const centerY = (y0 + y1) / 2
+  const halfTile = tileSize / 2
+
+  switch (placement.rotation) {
+    case 90:
+      return [x0 - tileSize, centerY - halfTile, x0, centerY + halfTile]
+    case 180:
+      return [centerX - halfTile, y0 - tileSize, centerX + halfTile, y0]
+    case 270:
+      return [x1, centerY - halfTile, x1 + tileSize, centerY + halfTile]
+    default:
+      return [centerX - halfTile, y1, centerX + halfTile, y1 + tileSize]
+  }
+}
+
+function authoredPlacementFromWorkstation(workstation: Workstation): SpatialPlacement {
+  const [x0, y0, x1, y1] = workstation.bbox
+  const rotation = normalizeRotation(workstation.rotationDeg)
+  const turned = rotation % 180 !== 0
+  return {
+    entityId: workstation.id,
+    x: x0 + (x1 - x0) / 2,
+    y: y0 + (y1 - y0) / 2,
+    width: turned ? y1 - y0 : x1 - x0,
+    depth: turned ? x1 - x0 : y1 - y0,
+    rotation,
+  }
+}
+
+function normalizeAuthoredWorkstation(dataset: FloorDataset, workstation: Workstation): Workstation {
+  if (workstation.source?.kind !== 'user-authored') return workstation
+  const chairBbox = authoredChairBounds(authoredPlacementFromWorkstation(workstation), 600 / dataset.layout.floor.mmPerPt)
+  return {
+    ...workstation,
+    chair: {
+      bbox: chairBbox,
+      center: [(chairBbox[0] + chairBbox[2]) / 2, (chairBbox[1] + chairBbox[3]) / 2],
+    },
+  }
+}
+
 export function nextAuthoredDeskNumber(authored: Pick<AuthoredEntities, 'issuedDeskNumbers' | 'workstations'>): number {
   const observed = authored.workstations
     .map((item) => Number(item.source?.deskCode?.match(/-(\d+)$/)?.[1] ?? item.id.match(/-a(\d+)$/)?.[1] ?? 0))
@@ -167,6 +211,7 @@ export function authoredWorkstationFromPlacement({
   authoredAt: string
 }): Workstation {
   const polygon = placementPolygon(placement)
+  const chairBbox = authoredChairBounds(placement, 600 / dataset.layout.floor.mmPerPt)
   const level = dataset.layout.floor.level
   const zoneIndex = zoneId ? dataset.zones.findIndex((zone) => zone.id === zoneId) : -1
   return {
@@ -180,7 +225,12 @@ export function authoredWorkstationFromPlacement({
     center: [placement.x, placement.y],
     rotationDeg: placement.rotation,
     bbox: bboxOfPoints(polygon),
-    chair: null,
+    chair: chairBbox
+      ? {
+          bbox: chairBbox,
+          center: [(chairBbox[0] + chairBbox[2]) / 2, (chairBbox[1] + chairBbox[3]) / 2],
+        }
+      : null,
     gridRef: zoneIndex >= 0 ? `authored/${dataset.zones[zoneIndex].gridRef}` : 'authored',
     source: {
       kind: 'user-authored',
@@ -300,7 +350,9 @@ export function applyAuthoredEntities(dataset: FloorDataset, authored: AuthoredE
   const removedIds = authored.removedWorkstationIds ?? []
   if (authored.workstations.length === 0 && authored.rooms.length === 0 && removedIds.length === 0) return dataset
   const removedWorkstationIds = new Set(removedIds)
-  const authoredWorkstations = authored.workstations.filter((item) => item.floorId === dataset.layout.floor.id && !removedWorkstationIds.has(item.id))
+  const authoredWorkstations = authored.workstations
+    .filter((item) => item.floorId === dataset.layout.floor.id && !removedWorkstationIds.has(item.id))
+    .map((item) => normalizeAuthoredWorkstation(dataset, item))
   const authoredRooms = authored.rooms.filter((item) => item.floorId === dataset.layout.floor.id)
   const sourceWorkstations = dataset.workstations.filter((item) => !removedWorkstationIds.has(item.id))
 

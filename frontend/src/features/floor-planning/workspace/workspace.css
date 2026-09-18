@@ -275,6 +275,8 @@
 .sw-edit-box { fill: none; stroke: var(--sw-edit); stroke-width: 0.5; stroke-linejoin: round; }
 .sw-edit-placement-preview { fill: rgba(36, 91, 183, 0.18); stroke: var(--sw-edit); stroke-width: 0.6; stroke-dasharray: 2 1.2; stroke-linejoin: round; opacity: 0.9; }
 .sw-edit-placement-preview.is-invalid { fill: rgba(182, 68, 61, 0.18); stroke: var(--sw-invalid); }
+.sw-edit-placement-chair-preview { fill: rgba(36, 91, 183, 0.08); stroke: var(--sw-edit); stroke-width: 0.35; stroke-dasharray: 1.2 1; stroke-linejoin: round; opacity: 0.75; }
+.sw-edit-placement-chair-preview.is-invalid { fill: rgba(182, 68, 61, 0.08); stroke: var(--sw-invalid); }
 .sw-edit-invalid polygon:last-child { fill: none; stroke: var(--sw-invalid); stroke-width: 0.55; stroke-linejoin: round; }
 
 /* Dual conflict styling for colliding obstacles */

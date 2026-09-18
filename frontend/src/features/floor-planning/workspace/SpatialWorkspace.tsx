@@ -19,6 +19,7 @@ import { formatDate, initials } from '../components/desk-inspector/format'
 import { EmployeePicker } from '../components/desk-inspector/EmployeePicker'
 import { OverflowMenu } from '../components/desk-inspector/OverflowMenu'
 import {
+  authoredChairBounds,
   authoredDeskId,
   authoredWorkstationFromPlacement,
   nextAuthoredDeskNumber,
@@ -26,7 +27,7 @@ import {
   type AuthoredEntityChanges,
 } from '../domain/authoredEntities'
 import { buildDeskIndex, DESK_STATUSES, type DeskRecord, type DeskStatus } from '../domain/desk'
-import { placementsEqual, snapPlacementToGrid, validatePlacement, type SpatialPlacement } from '../domain/placement'
+import { normalizeRotation, placementsEqual, rotatePlacementBy, snapPlacementToGrid, validatePlacement, type SpatialPlacement } from '../domain/placement'
 import type { BBox, EntityRef, FloorDataset, Point } from '../domain/spatial'
 import {
   DESK_STATUS,
@@ -38,6 +39,8 @@ import {
   SPATIAL_OUT_OF_SCOPE_HINT,
   SPATIAL_NO_EDIT_AREAS,
   SPATIAL_UNAVAILABLE,
+  placementIssueText,
+  placementIssueTitle,
 } from '../labels'
 import { ARROW_DIRECTION, DIRECTION_VECTOR, nearestInDirection } from '../map/deskNavigation'
 import { normalizeWheelZoom } from '../map/viewport'
@@ -374,7 +377,29 @@ interface PendingDesk {
   width: number
   depth: number
   rotation: SpatialPlacement['rotation']
+  autoOrient: boolean
   placement: SpatialPlacement | null
+}
+
+function authoredTemplatePlacement(workstation: NonNullable<FloorDataset['workstations'][number]>, mmPerPt: number): SpatialPlacement {
+  const placement = placementFromWorkstation(workstation)
+  const nominal = workstation.source?.nominalSizeMm
+  // Extraction bboxes are allowed to carry a few points of noise. When an
+  // older dataset has no nominal metadata, use the documented workstation
+  // rule rather than making the first extracted bbox the product's template.
+  if (!(mmPerPt > 0)) return placement
+  if (!nominal) {
+    return {
+      ...placement,
+      width: 1200 / mmPerPt,
+      depth: 600 / mmPerPt,
+    }
+  }
+  return {
+    ...placement,
+    width: nominal[0] / mmPerPt,
+    depth: nominal[1] / mmPerPt,
+  }
 }
 
 export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, searchSlot, onDirtyChange, authoredEntities, onAuthoredEntityChange, layoutStore = sessionLayoutStore, allocationSource, allocationStore = sessionAllocationStore, onAllocationCommitted, onSearchEmployees, reconcile, startWithDepartmentPicker = false, departmentId: departmentIdProp, onDepartmentChange }: {
@@ -592,7 +617,7 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     const targetArea = activeArea
     const template = dataset.workstations.find((workstation) => workstation.id === targetArea.workstationIds[0]) ?? dataset.workstations[0]
     if (!template) return
-    const templatePlacement = placementFromWorkstation(template)
+    const templatePlacement = authoredTemplatePlacement(template, dataset.layout.floor.mmPerPt)
     const issuedNumber = nextAuthoredDeskNumber(authoredEntities ?? { workstations: [], issuedDeskNumbers: [] })
     setPendingDesk({
       workstationId: authoredDeskId(dataset.layout.floor.level, issuedNumber),
@@ -602,13 +627,14 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
       width: templatePlacement.width,
       depth: templatePlacement.depth,
       rotation: templatePlacement.rotation,
+      autoOrient: true,
       placement: null,
     })
   }, [activeArea, authoredEntities, dataset, editing, onAuthoredEntityChange, setPendingDesk])
 
   const deleteDesk = useCallback((workstationId: string) => {
     const workstation = dataset.workstations.find((item) => item.id === workstationId)
-    if (!workstation || !onAuthoredEntityChange) return
+    if (!workstation || workstation.source?.kind !== 'user-authored' || !onAuthoredEntityChange) return
     onAuthoredEntityChange({ removeWorkstationIds: [workstationId] })
     if (selected?.kind === 'workstation' && selected.id === workstationId) onSelect(null)
   }, [dataset.workstations, onAuthoredEntityChange, onSelect, selected])
@@ -774,19 +800,6 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     ])
   }, [frame, origin, pan, stage, svgRef, zoom])
 
-  const placementForPointer = useCallback((pending: PendingDesk, clientX: number, clientY: number) => {
-    const point = pointerFloorPoint(clientX, clientY)
-    if (!point) return null
-    return snapPlacementToGrid({
-      entityId: pending.workstationId,
-      x: point[0],
-      y: point[1],
-      width: pending.width,
-      depth: pending.depth,
-      rotation: pending.rotation,
-    }, area.grid)
-  }, [area.grid, pointerFloorPoint])
-
   const validateNewPlacement = useCallback((placement: SpatialPlacement) => {
     const others = area.contextPlacements?.length
       ? [...Object.values(editor.placements), ...area.contextPlacements]
@@ -802,6 +815,59 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
       chairTileSize: area.chairTileSize,
     })
   }, [area, editor.placements])
+
+  const nearbyPlacements = useMemo(() => {
+    const workstations = [...scene.workstations, ...scene.contextWorkstations]
+    const seen = new Set<string>()
+    return workstations.flatMap((workstation) => {
+      if (seen.has(workstation.id)) return []
+      seen.add(workstation.id)
+      const placement = editor.placements[workstation.id]
+      return placement ? [placement] : [placementFromWorkstation(workstation)]
+    })
+  }, [editor.placements, scene.contextWorkstations, scene.workstations])
+
+  /**
+   * Keep the pointer's grid cell authoritative while choosing a local facing.
+   * The nearest desk is only an ordering hint; every quarter-turn still goes
+   * through the same boundary, obstacle, desk, and chair validation.
+   */
+  const placementForPointer = useCallback((pending: PendingDesk, clientX: number, clientY: number) => {
+    const point = pointerFloorPoint(clientX, clientY)
+    if (!point) return null
+    const base = {
+      entityId: pending.workstationId,
+      x: point[0],
+      y: point[1],
+      width: pending.width,
+      depth: pending.depth,
+      rotation: pending.rotation,
+    } satisfies SpatialPlacement
+    const withChair = (candidate: SpatialPlacement): SpatialPlacement => {
+      const chairBbox = authoredChairBounds(candidate, area.chairTileSize ?? 600 / dataset.layout.floor.mmPerPt)
+      return {
+        ...candidate,
+        chair: { bbox: chairBbox, center: [(chairBbox[0] + chairBbox[2]) / 2, (chairBbox[1] + chairBbox[3]) / 2] },
+      }
+    }
+    if (!pending.autoOrient) return withChair(snapPlacementToGrid(base, area.grid))
+
+    const nearest = nearbyPlacements
+      .map((placement) => ({ placement, distance: Math.hypot(placement.x - point[0], placement.y - point[1]) }))
+      .sort((a, b) => a.distance - b.distance)[0]?.placement
+    const orderedRotations = [
+      nearest?.rotation,
+      pending.rotation,
+      ...([0, 90, 180, 270] as const),
+    ].filter((rotation): rotation is SpatialPlacement['rotation'] => rotation !== undefined)
+    const rotations = [...new Set(orderedRotations)]
+    // Snap the pointer-selected cell once, then try every facing around that
+    // same centre. Snapping each rotated footprint independently would move a
+    // 1200x600 desk by half a cell while the user is only asking for a facing.
+    const snapped = snapPlacementToGrid(base, area.grid)
+    const candidates = rotations.map((rotation) => withChair({ ...snapped, rotation }))
+    return candidates.find((candidate) => validateNewPlacement(candidate).valid) ?? candidates[0]
+  }, [area.chairTileSize, area.grid, dataset.layout.floor.mmPerPt, nearbyPlacements, pointerFloorPoint, validateNewPlacement])
 
   const pendingValidation = useMemo(() => {
     if (!pendingDesk?.placement) return undefined
@@ -1031,6 +1097,19 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
   }, [scheduleFrame])
 
   const onKeyDown = (e: KeyboardEvent<SVGSVGElement>) => {
+    const pending = pendingDeskRef.current
+    if (editing && pending && (e.key === 'r' || e.key === 'R')) {
+      e.preventDefault()
+      const current = pending.placement
+      const rotation = normalizeRotation((current?.rotation ?? pending.rotation) + 90)
+      const rotated = current
+        // Keep the pending desk in the selected grid cell. Re-snapping the
+        // rotated footprint here would translate it when width/depth swap.
+        ? { ...rotatePlacementBy(current, 90), rotation }
+        : null
+      setPendingDesk({ ...pending, autoOrient: false, rotation, placement: rotated })
+      return
+    }
     const direction = ARROW_DIRECTION[e.key]
     // Edit mode rebinds the arrows to nudging the selected object; view-mode
     // desk-to-desk navigation is untouched.
@@ -1344,7 +1423,20 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
             </label>
           </nav>
           {editing
-            ? <span className="sw-edit-caption">{pendingDesk ? 'Di chuyển chuột trên bản đồ, nhấp để đặt bàn · Esc để hủy' : <span title={LAYOUT_EDIT.gridNote}>{LAYOUT_EDIT.gridLabel(GRID_CELL_MM)}</span>}</span>
+            ? <span
+              className="sw-edit-caption"
+              role="status"
+              aria-live="polite"
+              aria-label={pendingDesk && pendingValidation && !pendingValidation.valid && pendingValidation.reasons[0]
+                ? placementIssueTitle(pendingValidation.reasons[0], codeOf)
+                : undefined}
+            >
+              {pendingDesk
+                ? pendingValidation && !pendingValidation.valid
+                  ? <>{placementIssueText(pendingValidation.reasons[0], codeOf)} · di chuyển chuột để chọn vị trí khác · Esc để hủy</>
+                  : 'Di chuyển chuột trên bản đồ, nhấp để đặt bàn · R xoay bàn · Esc để hủy'
+                : <span title={LAYOUT_EDIT.gridNote}>{LAYOUT_EDIT.gridLabel(GRID_CELL_MM)}</span>}
+            </span>
             : desk ? <span className="sw-selected-caption">{`Đang chọn ${desk.seat.code}${outsideScope ? ' · ngoài khu vực đang xem' : ''}`}</span> : null}
         </div>
         <div className="sw-map-stage" ref={attachStage}>
@@ -1370,6 +1462,7 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
                 preview={pendingDesk?.placement ? { placement: pendingDesk.placement, valid: pendingValidation?.valid === true } : undefined}
                 deskHeight={scene.deskHeight}
                 mmPerPt={dataset.layout.floor.mmPerPt}
+                chairTileSize={area.chairTileSize}
                 dragging={editor.drag?.moved === true}
                 onRotate={rotateSelected}
                 obstacles={area.displayObstacles ?? area.obstacles}
@@ -1412,7 +1505,7 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
           rotateHint={LAYOUT_EDIT.rotateBlocked}
           boundaryWarning={editor.nearBoundary(visibleDesk.workstation.id) ? LAYOUT_EDIT.boundaryWarning : undefined}
           onReset={() => { editor.resetPlacement(visibleDesk.workstation.id); svgRef.current?.focus() }}
-          canDelete={Boolean(onAuthoredEntityChange)}
+          canDelete={Boolean(onAuthoredEntityChange && visibleDesk.workstation.source?.kind === 'user-authored')}
           onDelete={() => deleteDesk(visibleDesk.workstation.id)}
         />
       )}
@@ -1433,7 +1526,7 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
         onRegisterEmployee={registerEmployee}
         onUndo={undoAllocationChange}
         onDelete={deleteDesk}
-        canDelete={Boolean(onAuthoredEntityChange)}
+        canDelete={Boolean(onAuthoredEntityChange && desk.workstation.source?.kind === 'user-authored')}
         showHeader={!editing}
         onClose={() => { onSelect(null); svgRef.current?.focus() }}
         onVerify={onVerify}

@@ -1,12 +1,12 @@
 import { memo, useId, useMemo } from 'react'
-import { placementBounds } from '../domain/placement'
+import { getChairBounds, placementBounds } from '../domain/placement'
 import { clipPolygonToBBox } from '../domain/geometry'
 import type { PlacementValidation, SpatialGrid, SpatialPlacement } from '../domain/placement'
 import type { BBox, FloorObstacle } from '../domain/spatial'
 import { LAYOUT_EDIT } from '../labels'
 import { buildEditOverlay, placementOutline, rotateHandleAnchor } from './editGeometry'
 import type { EditableArea } from './layoutDraft'
-import { projectedPoints } from './scene'
+import { projectedPoints, rectangle } from './scene'
 
 /**
  * Editing affordances drawn inside the scene. None of this exists in view
@@ -47,6 +47,7 @@ export interface EditAffordancesProps {
   preview?: { placement: SpatialPlacement; valid: boolean }
   deskHeight: number
   mmPerPt: number
+  chairTileSize?: number
   dragging: boolean
   onRotate: (entityId: string) => void
   obstacles?: readonly FloorObstacle[]
@@ -59,6 +60,7 @@ export function EditAffordances({
   preview,
   deskHeight,
   mmPerPt,
+  chairTileSize,
   dragging,
   onRotate,
   obstacles,
@@ -113,11 +115,21 @@ export function EditAffordances({
       </defs>
       <g pointerEvents="none" aria-hidden="true">
         {preview && (
-          <polygon
-            className={`sw-edit-placement-preview${preview.valid ? '' : ' is-invalid'}`}
-            data-pending-workstation-id={preview.placement.entityId}
-            points={placementOutline(preview.placement, deskHeight)}
-          />
+          <g data-pending-workstation-id={preview.placement.entityId}>
+            {(() => {
+              const chair = getChairBounds(preview.placement, chairTileSize)
+              return chair ? (
+                <polygon
+                  className={`sw-edit-placement-chair-preview${preview.valid ? '' : ' is-invalid'}`}
+                  points={projectedPoints(rectangle(chair))}
+                />
+              ) : null
+            })()}
+            <polygon
+              className={`sw-edit-placement-preview${preview.valid ? '' : ' is-invalid'}`}
+              points={placementOutline(preview.placement, deskHeight)}
+            />
+          </g>
         )}
         {collidingObstacles.map(({ obstacle: obs, clips }) => (
           <g

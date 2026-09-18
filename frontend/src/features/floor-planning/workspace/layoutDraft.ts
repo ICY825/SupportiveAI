@@ -96,7 +96,10 @@ export function determineWorkstationRotation(ws: Workstation): QuarterRotation {
  */
 export function placementFromWorkstation(ws: Workstation): SpatialPlacement {
   const [x0, y0, x1, y1] = ws.bbox
-  const rotation = normalizeRotation(ws.rotationDeg)
+  // The extractor records the desk's footprint axis as 0/90. The paired chair
+  // carries the missing facing direction, so preserve all four orientations in
+  // the editor instead of making a new desk guess which side is occupied.
+  const rotation = determineWorkstationRotation(ws)
   const turned = rotation % 180 !== 0
   return {
     entityId: ws.id,

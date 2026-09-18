@@ -372,7 +372,7 @@ describe('desk selection → workspace inspector', () => {
     expect(screen.getByRole('button', { name: '+ Thêm bàn' })).toBeTruthy()
   }, 30000)
 
-  it('deletes a default desk from layout editing and remembers the removal', async () => {
+  it('does not offer deletion for an extracted desk in layout editing', async () => {
     await openWorkspace()
     clickDesk(OCCUPIED)
     await screen.findByRole('complementary', { name: /^F16-.-065$/ })
@@ -380,11 +380,8 @@ describe('desk selection → workspace inspector', () => {
 
     const editInspector = document.querySelector<HTMLElement>('.sw-edit-inspector')
     expect(editInspector).not.toBeNull()
-    expect(within(editInspector!).getByRole('button', { name: 'Xóa bàn' })).toBeTruthy()
-    await userEvent.setup().click(within(editInspector!).getByRole('button', { name: 'Xóa bàn' }))
-
-    expect(document.querySelector('.sw-edit-inspector')).toBeNull()
-    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('27')
+    expect(within(editInspector!).queryByRole('button', { name: 'Xóa bàn' })).toBeNull()
+    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('28')
   }, 30000)
 
   it('places an authored desk at a valid mouse position instead of the map origin', async () => {

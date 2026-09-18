@@ -11,7 +11,7 @@ import { SpatialWorkspace } from '../workspace/SpatialWorkspace'
 let dataset: FloorDataset
 /** A desk in the middle of a cluster, so a short drag lands on its neighbour. */
 const DESK = 'ws-16-065'
-const ROTATABLE_DESK = 'ws-16-094'
+const ROTATABLE_DESK = 'ws-16-068'
 
 beforeAll(async () => {
   dataset = await FLOORS[0].load()

@@ -32,6 +32,7 @@ import {
 } from '../workspace/layoutDraft'
 import { buildWorkspaceScene, project, unproject, unprojectDelta } from '../workspace/scene'
 import { defaultWorkspaceScope } from '../workspace/scope'
+import { buildWorkspaceDisplayAreasForScope } from '../workspace/displayAreas'
 
 const desk = (over: Partial<SpatialPlacement> = {}): SpatialPlacement => ({
   entityId: 'a',
@@ -303,6 +304,49 @@ describe('floor 16 placements, boundary and projection', () => {
       // a sub-cell drag from the original resolves back onto the original
       expect(snapPlacementToGrid(translatePlacement(original, grid.cellSize * 0.3, 0), grid)).toEqual(original)
     }
+  })
+
+  it('derives four-way facing from the extracted chair side', () => {
+    expect(placementFromWorkstation(dataset.workstations.find((ws) => ws.id === 'ws-16-065')!).rotation).toBe(180)
+    expect(placementFromWorkstation(dataset.workstations.find((ws) => ws.id === 'ws-16-068')!).rotation).toBe(0)
+    expect(placementFromWorkstation(dataset.workstations.find((ws) => ws.id === 'ws-16-201')!).rotation).toBe(90)
+    expect(placementFromWorkstation(dataset.workstations.find((ws) => ws.id === 'ws-16-202')!).rotation).toBe(270)
+  })
+
+  it('reports the real chair conflict beside desk 206 at the requested snapped cell', () => {
+    const department = { kind: 'department' as const, departmentId: 'dept-ai-data' }
+    const areaDefinition = buildWorkspaceDisplayAreasForScope(dataset, department).find((area) => area.id === 'ai-area-d')!
+    const scene = buildWorkspaceScene(dataset, areaDefinition.scope, {
+      workstationIds: areaDefinition.workstationIds,
+      contextBounds: areaDefinition.contextBBox,
+      includeContextWorkstations: true,
+    })
+    const area = deriveEditableArea(dataset, scene)
+    const base = basePlacements(dataset.workstations)
+    const template = placementFromWorkstation(dataset.workstations.find((ws) => ws.id === 'ws-16-201')!)
+    const [x0, y0] = area.grid.origin
+    const footprint = placementFootprint({ ...template, rotation: 270 })
+    const candidate = snapPlacementToGrid({
+      entityId: 'ws-16-a911',
+      x: x0 + 12 * area.grid.cellSize + footprint.width / 2,
+      y: y0 + footprint.depth / 2,
+      width: template.width,
+      depth: template.depth,
+      rotation: 270,
+    }, area.grid)
+    const validation = validatePlacement(candidate, {
+      others: Object.values(base),
+      boundary: area.boundary,
+      roomBoundary: area.roomBoundary,
+      departmentZone: area.departmentZone,
+      obstacles: area.obstacles,
+      tolerance: area.tolerance,
+      boundaryTolerance: area.boundaryTolerance,
+      chairTileSize: area.chairTileSize,
+    })
+    expect(validation.valid).toBe(false)
+    expect(validation.reasons).toContainEqual({ type: 'overlap', entityId: 'ws-16-206', target: 'chair' })
+    expect(placementBounds(candidate)[0]).toBeCloseTo(x0 + 12 * area.grid.cellSize, 6)
   })
 
   it('inverts the scene projection exactly, which is what pointer drags rely on', () => {

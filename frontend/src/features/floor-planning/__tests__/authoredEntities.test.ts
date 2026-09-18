@@ -75,6 +75,20 @@ describe('authored spatial entities', () => {
     expect(desk.verification).toBe('UNVERIFIED')
     expect(desk.rotationDeg).toBe(90)
     expect(desk.bbox).toEqual([27, 24, 33, 36])
+    expect(desk.chair).toEqual({ bbox: [21, 27, 27, 33], center: [24, 30] })
+  })
+
+  it('normalizes oversized chairs on authored desks loaded from storage', () => {
+    const legacy = {
+      ...authoredDesk(),
+      chair: { bbox: [21, 24, 27, 36] as [number, number, number, number], center: [24, 30] as [number, number] },
+    }
+    const hydrated = applyAuthoredEntities(dataset, {
+      ...EMPTY_AUTHORED_ENTITIES,
+      workstations: [legacy],
+    })
+
+    expect(hydrated.workstations[0].chair).toEqual({ bbox: [21, 27, 27, 33], center: [24, 30] })
   })
 
   it('starts at 900 and never reuses a high-water number after deletion', () => {
