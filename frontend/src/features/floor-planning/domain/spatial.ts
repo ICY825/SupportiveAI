@@ -201,6 +201,17 @@ export interface DeskCluster extends Omit<SpatialEntity, 'source'> {
   workstationIds: string[]
 }
 
+/** UI focus metadata layered over canonical floor geometry; never a Zone. */
+export interface FloorDisplayAreaDefinition {
+  id: string
+  label: string
+  short: string
+  departmentCode: string
+  polygon?: Point[]
+  bbox?: BBox
+  contextPaddingMm?: number
+}
+
 export interface Workstation extends SpatialEntity {
   clusterId: string
   zoneId: string | null
@@ -258,6 +269,8 @@ export interface FloorDataset {
   workstations: Workstation[]
   objects: FloorObject[]
   extraction: ExtractionReport
+  /** Optional floor-authored UI grouping metadata, separate from source zones. */
+  displayAreas?: FloorDisplayAreaDefinition[]
   /** human-readable source name shown in the UI */
   sourceName: string
 }

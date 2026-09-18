@@ -119,6 +119,18 @@ ZONES = [
     },
 ]
 
+# UI focus scopes, deliberately separate from source zones. Membership is
+# derived from workstation geometry at runtime so extraction cluster ids may
+# change without making desks disappear from the picker.
+DISPLAY_AREAS = [
+    {"id": "ai-area-a", "label": "Khu vực A", "short": "A", "departmentCode": "AI", "bbox": [946.51, 245.73, 991.87, 342.21], "contextPaddingMm": 2645.7275},
+    {"id": "ai-area-b", "label": "Khu vực B", "short": "B", "departmentCode": "AI", "bbox": [882.43, 255.95, 922.03, 329.68], "contextPaddingMm": 2645.7275},
+    {"id": "ai-area-c", "label": "Khu vực C", "short": "C", "departmentCode": "AI", "bbox": [825.70, 284.32, 865.44, 341.06], "contextPaddingMm": 2645.7275},
+    {"id": "ai-area-d", "label": "Khu vực D", "short": "D", "departmentCode": "AI", "bbox": [825.70, 359.20, 991.87, 370.58], "contextPaddingMm": 2645.7275},
+    {"id": "ai-area-e", "label": "Khu vực E", "short": "E", "departmentCode": "AI", "bbox": [946.51, 482.03, 991.87, 550.00], "contextPaddingMm": 2645.7275},
+    {"id": "ai-area-f", "label": "Khu vực F", "short": "F", "departmentCode": "AI", "bbox": [813.74, 632.37, 910.22, 654.98], "contextPaddingMm": 2645.7275},
+]
+
 # Room-level annotations: highlight + red text box "Phòng CBLĐ <person name>".
 # Only the room type is imported. The occupant name is assignment data and is
 # deliberately NOT imported (Phase 2, requires HR verification).

@@ -1,4 +1,5 @@
 import type { FloorDataset, Point } from '../domain/spatial'
+import { validateDisplayAreaDefinitions } from '../workspace/displayAreas'
 
 export interface ValidationIssue {
   level: 'error' | 'warning'
@@ -76,6 +77,8 @@ export function validateFloorDataset(ds: FloorDataset): ValidationIssue[] {
       issues.push({ level: 'error', entityId: o.id, message: 'UNKNOWN object must carry UNKNOWN verification' })
     }
   }
+
+  for (const issue of validateDisplayAreaDefinitions(ds)) issues.push(issue)
 
   return issues
 }

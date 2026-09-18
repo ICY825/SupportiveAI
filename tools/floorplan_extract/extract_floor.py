@@ -16,6 +16,7 @@ Outputs (floor data only, no UI code):
     <out>/<floor>.zones.json         zones + rooms taken from markup annotations
     <out>/<floor>.workstations.json  desk clusters + workstations (rule-based)
     <out>/<floor>.objects.json       facilities and UNKNOWN objects
+    <out>/<floor>.display-areas.json floor-specific UI focus metadata
     <out>/<floor>.extraction.json    extraction report (counts, rules, hidden items)
     <public>/floor-sources/<floor>.webp   source raster for the overlay
 """
@@ -1015,6 +1016,7 @@ def extract(cfg, pdf_path: Path, out_dir: Path, public_dir: Path):
         "labels": label_out,
     })
     write(f"{stem}.zones.json", {**generated, "zones": zones, "rooms": rooms})
+    write(f"{stem}.display-areas.json", {**generated, "displayAreas": getattr(cfg, "DISPLAY_AREAS", [])})
     write(f"{stem}.workstations.json", {**generated, "rule": rule, "clusters": clusters_out, "workstations": ws_out})
     write(f"{stem}.objects.json", {**generated, "objects": objects_out})
     write(f"{stem}.obstacles.json", {**generated, "obstacles": obstacles_out})

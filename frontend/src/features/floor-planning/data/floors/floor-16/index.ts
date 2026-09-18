@@ -8,13 +8,14 @@ import type { FloorDataset } from '../../../domain/spatial'
  * `tools/floorplan_extract/extract_floor.py floor16` — do not edit by hand.
  */
 export default async function loadFloor16(): Promise<FloorDataset> {
-  const [layout, zones, workstations, objects, obstacles, extraction] = await Promise.all([
+  const [layout, zones, workstations, objects, obstacles, extraction, displayAreas] = await Promise.all([
     import('@data/floors/floor-16/floor16.layout.json'),
     import('@data/floors/floor-16/floor16.zones.json'),
     import('@data/floors/floor-16/floor16.workstations.json'),
     import('@data/floors/floor-16/floor16.objects.json'),
     import('@data/floors/floor-16/floor16.obstacles.json'),
     import('@data/floors/floor-16/floor16.extraction.json'),
+    import('@data/floors/floor-16/floor16.display-areas.json'),
   ])
   return buildDataset(
     {
@@ -24,6 +25,7 @@ export default async function loadFloor16(): Promise<FloorDataset> {
       objects: objects.default,
       obstacles: obstacles.default,
       extraction: extraction.default,
+      displayAreas: displayAreas.default,
     },
     {
       // Not stated on the PDF; confirmed by the team (CAD xref layers are prefixed "TNP").

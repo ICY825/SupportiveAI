@@ -23,7 +23,7 @@ import {
   project,
   sceneBounds,
 } from '../workspace/scene'
-import { buildWorkspaceDisplayAreas, buildWorkspaceDisplayAreasForScope, DISPLAY_CONTEXT_PADDING_PT } from '../workspace/displayAreas'
+import { buildWorkspaceDisplayAreas, buildWorkspaceDisplayAreasForScope, DISPLAY_CONTEXT_PADDING_PT, validateDisplayAreaDefinitions } from '../workspace/displayAreas'
 import { defaultWorkspaceScope, resolveWorkspaceScope, type WorkspaceScope } from '../workspace/scope'
 
 let dataset: FloorDataset
@@ -97,6 +97,49 @@ describe('workspace scope selection', () => {
     const workstationIds = areas.flatMap((area) => area.workstationIds)
     expect(new Set(workstationIds).size).toBe(154)
     expect(workstationIds).toEqual(expect.arrayContaining(dataset.workstations.filter((workstation) => workstation.zoneId === 'zone-16-ai-platform').map((workstation) => workstation.id)))
+  })
+
+  it('loads Floor 16 display areas as dedicated metadata with stable curated membership', () => {
+    expect(dataset.displayAreas?.map((area) => area.id)).toEqual([
+      'ai-area-a', 'ai-area-b', 'ai-area-c', 'ai-area-d', 'ai-area-e', 'ai-area-f',
+    ])
+    const original = buildWorkspaceDisplayAreas(dataset).map((area) => [...area.workstationIds])
+    const reordered = {
+      ...dataset,
+      clusters: [...dataset.clusters].reverse(),
+      workstations: dataset.workstations.map((workstation, index) => ({
+        ...workstation,
+        clusterId: `re-extracted-${index}`,
+      })),
+    }
+    expect(buildWorkspaceDisplayAreas(reordered).map((area) => [...area.workstationIds])).toEqual(original)
+  })
+
+  it('reports stale and overlapping display metadata instead of silently dropping it', () => {
+    expect(validateDisplayAreaDefinitions(dataset)).toEqual([])
+    const stale = {
+      ...dataset,
+      displayAreas: [
+        ...(dataset.displayAreas ?? []),
+        { id: 'ai-area-stale', label: 'Khu vực stale', short: 'S', departmentCode: 'AI', bbox: [10, 10, 20, 20] as [number, number, number, number] },
+      ],
+    }
+    expect(validateDisplayAreaDefinitions(stale)).toContainEqual(expect.objectContaining({
+      level: 'warning',
+      entityId: 'ai-area-stale',
+    }))
+
+    const overlapping = {
+      ...dataset,
+      displayAreas: [
+        ...(dataset.displayAreas ?? []),
+        { id: 'ai-area-overlap', label: 'Khu vực overlap', short: 'O', departmentCode: 'AI', bbox: [946, 245, 992, 343] as [number, number, number, number] },
+      ],
+    }
+    expect(validateDisplayAreaDefinitions(overlapping)).toContainEqual(expect.objectContaining({
+      level: 'error',
+      entityId: 'ai-area-a',
+    }))
   })
 
   it('keeps expanded context separate from active desk membership', () => {
