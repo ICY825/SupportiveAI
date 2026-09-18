@@ -1069,7 +1069,7 @@ def main():
     sys.path.insert(0, str(HERE))
     cfg = importlib.import_module(f"floors.{args.floor}")
     fid = cfg.FLOOR["id"]
-    out = Path(args.out) if args.out else REPO / f"frontend/src/features/floor-planning/data/floors/{fid}"
+    out = Path(args.out) if args.out else REPO / f"data/floors/{fid}"
     report = extract(cfg, REPO / cfg.FLOOR["sourcePdf"], out, Path(args.public))
     summary = {k: report[k] for k in ("scale", "desks", "chairSymbolsDetected", "classificationCounts", "clusters",
                                       "workstationsByZone", "zoneLabelFigures", "objects", "obstacles", "unmappedCadLayers")}

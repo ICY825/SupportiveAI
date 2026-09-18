@@ -10,7 +10,7 @@
     /* Bundler mode */
     "moduleResolution": "bundler",
     /* `@/…` là alias mã Đề 3 đang dùng ở src/api — giữ nguyên theo thỏa thuận Issue #1 */
-    "paths": { "@/*": ["./src/*"] },
+    "paths": { "@/*": ["./src/*"], "@data/*": ["../data/*"] },
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",

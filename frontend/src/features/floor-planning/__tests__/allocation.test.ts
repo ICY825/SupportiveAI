@@ -11,12 +11,12 @@ import type { FloorAllocationData, Seat } from '../domain/allocation'
 import { buildDeskIndex } from '../domain/desk'
 import { validateAssignment } from '../domain/assignment'
 import type { FloorDataset, Workstation } from '../domain/spatial'
-import floor16Layout from '../data/floors/floor-16/floor16.layout.json'
-import floor16Zones from '../data/floors/floor-16/floor16.zones.json'
-import floor16Workstations from '../data/floors/floor-16/floor16.workstations.json'
-import floor16Objects from '../data/floors/floor-16/floor16.objects.json'
-import floor16Obstacles from '../data/floors/floor-16/floor16.obstacles.json'
-import floor16Extraction from '../data/floors/floor-16/floor16.extraction.json'
+import floor16Layout from '@data/floors/floor-16/floor16.layout.json'
+import floor16Zones from '@data/floors/floor-16/floor16.zones.json'
+import floor16Workstations from '@data/floors/floor-16/floor16.workstations.json'
+import floor16Objects from '@data/floors/floor-16/floor16.objects.json'
+import floor16Obstacles from '@data/floors/floor-16/floor16.obstacles.json'
+import floor16Extraction from '@data/floors/floor-16/floor16.extraction.json'
 
 const NOW = new Date('2026-09-17T03:00:00Z')
 

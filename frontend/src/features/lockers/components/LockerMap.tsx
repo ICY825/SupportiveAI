@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type WheelEvent as ReactWheelEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import type { LockerItem } from '../types'
 import { LockerMarker } from './LockerMarker'
-import floor16Layout from '../../floor-planning/data/floors/floor-16/floor16.layout.json'
+import floor16Layout from '@data/floors/floor-16/floor16.layout.json'
 import type { BaseLayer } from '../../floor-planning/domain/spatial'
 import { ViewControls } from '../../floor-planning/components/FloorMapControls'
 import { STATUS_META } from '../lockersData'

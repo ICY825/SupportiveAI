@@ -7,12 +7,19 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // Dataset mặt bằng nằm ngoài `frontend/` để backend đọc được cùng một
+      // nguồn — xem data/README.md.
+      '@data': fileURLToPath(new URL('../data', import.meta.url)),
+    },
   },
   // Backend chạy ở cổng khác. Proxy `/api/*` thay vì bật CORS: trình duyệt chỉ
   // thấy một origin, nên không có preflight và không phải khai danh sách origin.
   // Thay cho `rewrites()` của Next (xem frontend/legacy/mail-next/next.config.mjs).
   server: {
+    // Dev server phải được phép đọc `data/` ở ngoài thư mục gốc của Vite.
+    fs: { allow: ['..'] },
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8000',

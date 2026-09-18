@@ -106,7 +106,9 @@ out/
 docs/references/
 
 # Dữ liệu thật (danh sách nhân sự, file mẫu chấm KPI) - chỉ giữ .gitkeep
-/data/
+# Dùng `/data/*` chứ không phải `/data/`: git không mở lại được file nằm trong
+# một thư mục đã bị loại, nên `/data/` sẽ vô hiệu hóa các dòng `!` bên dưới.
+/data/*
 docs/kpi/ground-truth/*
 !docs/kpi/ground-truth/.gitkeep
 

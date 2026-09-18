@@ -8,7 +8,7 @@ python3 -m venv .venv && .venv/bin/pip install -r tools/floorplan_extract/requir
 .venv/bin/python tools/floorplan_extract/extract_floor.py floor16
 ```
 
-Writes to `frontend/src/features/floor-planning/data/floors/<floor-id>/` and
+Writes to `data/floors/<floor-id>/` at the repository root (see `data/README.md`) and
 `frontend/public/floor-sources/<floor-id>.webp`. Generated files must not be edited by hand.
 
 ## How it works
@@ -38,7 +38,7 @@ that change, physical desks do not.
 1. Copy `floors/floor16.py` to `floors/floor17.py`; set the PDF path, grid spans, layer map,
    and the annotation IDs of its zones (list them with PyMuPDF `page.annots()`).
 2. Run `extract_floor.py floor17` and review `floor17.extraction.json` plus the map in debug mode.
-3. Add `frontend/src/features/floor-planning/data/floors/floor-17/index.ts` (copy floor-16) and
+3. Add `frontend/src/features/floor-planning/data/floors/floor-17/index.ts` — the loader stays in the frontend, only the JSON lives in `data/` — (copy floor-16) and
    register it in `data/registry.ts`.
 
 Other drawings may use different layer names, desk sizes or no markup; the config is where

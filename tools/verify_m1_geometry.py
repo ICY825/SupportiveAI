@@ -15,9 +15,9 @@ def r2(v):
 
 def run_checks():
     repo_root = Path(__file__).resolve().parents[1]
-    obstacles_path = repo_root / "frontend/src/features/floor-planning/data/floors/floor-16/floor16.obstacles.json"
-    workstations_path = repo_root / "frontend/src/features/floor-planning/data/floors/floor-16/floor16.workstations.json"
-    zones_path = repo_root / "frontend/src/features/floor-planning/data/floors/floor-16/floor16.zones.json"
+    obstacles_path = repo_root / "data/floors/floor-16/floor16.obstacles.json"
+    workstations_path = repo_root / "data/floors/floor-16/floor16.workstations.json"
+    zones_path = repo_root / "data/floors/floor-16/floor16.zones.json"
 
     print("=" * 80)
     print("CHALLENGER M1-1: GEOMETRY & COLLISION ADVERSARIAL VERIFICATION REPORT")

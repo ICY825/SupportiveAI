@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DATASET_DIR = REPO_ROOT / "frontend/src/features/floor-planning/data/floors/floor-16"
+DATASET_DIR = REPO_ROOT / "data/floors/floor-16"
 
 EXPECTED_JSON_FILES = [
     "floor16.layout.json",

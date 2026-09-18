@@ -1,7 +1,7 @@
 # Floor 16 — extraction findings (V1 POC)
 
 Source: `docs/references/260710_VSF_Layout tang 16.pdf` — "MẶT BẰNG CẢI TẠO TẦNG 16", scale 1/150.
-Generated data: `frontend/src/features/floor-planning/data/floors/floor-16/` (see `floor16.extraction.json`).
+Generated data: `data/floors/floor-16/` (see `floor16.extraction.json`).
 
 ## The PDF
 
