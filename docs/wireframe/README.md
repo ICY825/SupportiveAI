@@ -1,13 +1,21 @@
 # Wireframe — Trung tâm Hành chính Vinsmart Future (Thiết kế dùng chung)
 
+> ⚠️ **Bản tham chiếu thị giác, không phải đặc tả.** Chỗ nào wireframe lệch với tài liệu
+> trong `docs/architecture/` thì **theo tài liệu kiến trúc**.
+>
+> Riêng **Đề 3**, bảng dưới mô tả *"AI nhận diện tem bưu cục"* — điều này **không đúng**:
+> phân hệ đã chốt là **không có thành phần AI** ([mail-tracking §1.3](../architecture/mail-tracking.md#13-ghi-chú-về-ai)),
+> vì dữ liệu vào đã có cấu trúc nên không có gì để OCR. Các điểm lệch khác liệt kê ở
+> [mục 16](../architecture/mail-tracking.md#16-khác-biệt-so-với-wireframe).
+
 Wireframe màn hình quản trị tích hợp 4 đề bài của pilot, chia sẻ ngôn ngữ thiết kế chung giữa các nhóm phát triển.
 
 ## Phân định vai trò & Phân hệ
-- **Đang sử dụng (2 phân hệ đã triển khai & tích hợp vào ứng dụng):**
+- **Đang sử dụng (3 phân hệ đã triển khai & tích hợp vào ứng dụng):**
   1. **Đề bài 1: Mặt bằng văn phòng** (`#1b` / route `#/floor-planning`): Sơ đồ Tầng 16 Technopark Tower với 2 chế độ *Bố trí chỗ ngồi* (Zone B - AI & Data 116 chỗ ngồi, card thống kê 2 cột tối giản không màu, điều hướng khu vực) và *Xác minh mặt bằng* (CAD / lớp hình học thực địa).
   2. **Đề bài 2: Quản lý tủ locker** (`#1c` / route `#/lockers`): Sơ đồ 3 khu tủ L1–L3, chế độ Sơ đồ / Danh sách, quy tắc thu hồi và cấp phát tự động.
-- **Sắp triển khai (2 phân hệ đồng đội đảm nhiệm):**
-  3. **Đề bài 3: Chuyển phát nhanh / thư đến** (`#1d`): Bảng tiếp nhận thư/vận đơn, quy tắc thông báo tự động (email/Teams), AI nhận diện tem bưu cục.
+  3. **Đề bài 3: Chuyển phát nhanh / thư đến** (`#1d` / route `#/mail/batches`): Bảng tiếp nhận thư/vận đơn, quy tắc thông báo tự động, trang quét QR công khai tại khu để đơn. **Không có thành phần AI** — xem cảnh báo đầu trang.
+- **Sắp triển khai (1 phân hệ, chưa có người nhận):**
   4. **Đề bài 4: Quản lý công văn đến/đi** (`#1e`): Danh sách công văn theo hạn, PDF viewer với vùng bôi đỏ, panel AI bóc tách OCR (Human-in-the-loop).
 - **Wireframe này là thiết kế dùng chung (Shared Design):** Cung cấp layout shell, thanh điều hướng `AppNav` 210px, thanh công cụ `topbar`, token màu sắc và panel ngữ cảnh chuẩn để các nhóm đồng đội dễ dàng tích hợp và đồng bộ UX.
 

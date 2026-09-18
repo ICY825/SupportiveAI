@@ -1,0 +1,241 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font: 13px/1.45 var(--font);
+  color: var(--ink);
+  background: var(--canvas);
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+.app-shell {
+  display: flex;
+  height: 100%;
+}
+
+.app-nav {
+  --nav-pad: 10px;
+  width: 210px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--sidebar);
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------- brand */
+
+.app-brand {
+  flex: none;
+  display: grid;
+  place-items: center;
+  margin: 0 var(--nav-pad);
+  padding: 16px 0 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px 6px 0 0;
+}
+
+.app-brand img {
+  display: block;
+  width: 104px;
+  height: auto;
+}
+
+/* ---------------------------------------------------------------- items */
+
+.app-nav-heading {
+  margin: 16px 0 4px;
+  padding: 0 calc(var(--nav-pad) + 8px);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.app-nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--nav-pad);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.app-nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 36px;
+  padding: 0 8px;
+  border-radius: 7px;
+  color: rgba(255, 255, 255, 0.68);
+  text-decoration: none;
+}
+
+.app-nav-item svg {
+  flex: none;
+}
+
+.app-nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+a.app-nav-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.app-nav-item.is-active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.app-nav-item.is-active .app-nav-label {
+  font-weight: 600;
+}
+
+.app-nav-item.is-active::before {
+  content: '';
+  position: absolute;
+  left: calc(-1 * var(--nav-pad));
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--vsf-red);
+}
+
+.app-nav-item.is-disabled {
+  color: rgba(255, 255, 255, 0.34);
+  cursor: not-allowed;
+}
+
+.app-nav-item:focus-visible,
+.app-brand:focus-visible,
+.app-nav-toggle:focus-visible,
+.app-nav-settings:focus-visible,
+.app-nav-expand:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--sidebar), 0 0 0 4px rgba(230, 16, 47, 0.85);
+}
+
+/* ---------------------------------------------------------------- footer */
+
+.app-nav-foot {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px calc(var(--nav-pad) + 2px) 10px var(--nav-pad);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.app-nav-settings {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.app-nav-settings svg {
+  flex: none;
+}
+
+.app-nav-settings:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.app-nav-settings.is-open {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.app-nav-toggle {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+}
+
+.app-nav-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+/* collapsed: only a small tab on the left edge, level with the page top bar */
+.app-nav-expand {
+  position: fixed;
+  z-index: 40;
+  left: 0;
+  top: 10px;
+  width: 18px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0 6px 6px 0;
+  background: var(--sidebar);
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  box-shadow: 1px 1px 4px rgba(28, 27, 26, 0.18);
+  transition: width 120ms ease-out;
+}
+
+.app-nav-expand:hover {
+  width: 24px;
+  color: #fff;
+}
+
+.app-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.app-content {
+  flex: 1;
+  min-width: 0;
+}

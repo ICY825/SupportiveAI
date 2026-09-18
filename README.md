@@ -28,12 +28,12 @@
 
 ## Ký hiệu dùng trong tài liệu
 
-| Ký hiệu | Ý nghĩa |
-|---|---|
-| ✅ | Đã chốt |
-| 🚧 | Đang thiết kế / cần làm rõ thêm |
-| ❓ | Chưa có quyết định — cần người chịu trách nhiệm trả lời |
-| ⏭ | Ngoài phạm vi pilot, để pha sau |
+| Ký hiệu | Ý nghĩa                                                 |
+| ------- | ------------------------------------------------------- |
+| ✅      | Đã chốt                                                 |
+| 🚧      | Đang thiết kế / cần làm rõ thêm                         |
+| ❓      | Chưa có quyết định — cần người chịu trách nhiệm trả lời |
+| ⏭      | Ngoài phạm vi pilot, để pha sau                         |
 
 ---
 
@@ -41,12 +41,12 @@
 
 Phòng Hành chính triển khai thử nghiệm **4 đề bài ứng dụng AI** trong 6 tuần, nhằm đẩy mạnh ứng dụng AI vào nghiệp vụ hành chính, giảm thao tác thủ công và đánh giá hiệu quả thực tế của từng giải pháp.
 
-| # | Đề bài | Đầu mối nghiệp vụ | Hiện trạng |
-|---|---|---|---|
-| 1 | Quy hoạch văn phòng | Nguyễn Thị Thu Hương | Khó theo dõi tình trạng sử dụng chỗ ngồi thực tế; mất nhiều thời gian khi có nhân sự mới hoặc thay đổi cơ cấu |
-| 2 | Quản lý tủ locker | Lưu Hải Nam | Cấp phát/thu hồi thực hiện thủ công, khó theo dõi tình trạng sử dụng |
-| 3 | Chuyển phát nhanh | Phạm Thị Duyên | Việc thông báo nhận thư/chuyển phát và xác nhận đã nhận còn thủ công |
-| 4 | Quản lý công văn đến/đi | Vũ Phương Thảo | Công văn tần suất lớn; đọc, nhập liệu, xử lý còn nhiều thao tác thủ công |
+| #   | Đề bài                  | Đầu mối nghiệp vụ    | Hiện trạng                                                                                                    |
+| --- | ----------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------- |
+| 1   | Quy hoạch văn phòng     | Nguyễn Thị Thu Hương | Khó theo dõi tình trạng sử dụng chỗ ngồi thực tế; mất nhiều thời gian khi có nhân sự mới hoặc thay đổi cơ cấu |
+| 2   | Quản lý tủ locker       | Lưu Hải Nam          | Cấp phát/thu hồi thực hiện thủ công, khó theo dõi tình trạng sử dụng                                          |
+| 3   | Chuyển phát nhanh       | Phạm Thị Duyên       | Việc thông báo nhận thư/chuyển phát và xác nhận đã nhận còn thủ công                                          |
+| 4   | Quản lý công văn đến/đi | Vũ Phương Thảo       | Công văn tần suất lớn; đọc, nhập liệu, xử lý còn nhiều thao tác thủ công                                      |
 
 Nhận xét cốt lõi: **4 đề bài này không độc lập.** Cả 4 đều cần cùng một danh mục nhân sự/phòng ban, cùng một cơ chế thông báo và nhắc hạn, cùng một cách theo dõi trạng thái và báo cáo. Nếu làm 4 hệ thống rời, Phòng Hành chính phải đồng bộ danh sách nhân sự ở 4 nơi và dùng 4 giao diện khác nhau.
 
@@ -75,10 +75,10 @@ Nhận xét cốt lõi: **4 đề bài này không độc lập.** Cả 4 đều
 Phân tích kỹ thì 4 đề bài gom được thành 2 mô hình dữ liệu:
 
 **Nhóm A — Cấp phát tài nguyên (Đề 1 + Đề 2)**
-Chỗ ngồi và tủ locker về bản chất là cùng một thực thể: *một tài nguyên vật lý, gắn với một vị trí, được cấp cho một nhân sự, có trạng thái và có lịch sử*. Đề 1 chỉ khác ở phần tối ưu và trực quan hóa sơ đồ mặt bằng.
+Chỗ ngồi và tủ locker về bản chất là cùng một thực thể: _một tài nguyên vật lý, gắn với một vị trí, được cấp cho một nhân sự, có trạng thái và có lịch sử_. Đề 1 chỉ khác ở phần tối ưu và trực quan hóa sơ đồ mặt bằng.
 
 **Nhóm B — Xử lý luồng đến/đi (Đề 3 + Đề 4)**
-Thư chuyển phát và công văn đến đi theo cùng một vòng đời: *nhận → nhận diện thông tin → xác định người nhận → thông báo → theo dõi xác nhận → nhắc quá hạn → báo cáo*. Đề 4 có thêm luồng công văn đi và mức trích xuất AI sâu hơn.
+Thư chuyển phát và công văn đến đi theo cùng một vòng đời: _nhận → nhận diện thông tin → xác định người nhận → thông báo → theo dõi xác nhận → nhắc quá hạn → báo cáo_. Đề 4 có thêm luồng công văn đi và mức trích xuất AI sâu hơn.
 
 ### 3.2. Sơ đồ tầng
 
@@ -104,14 +104,14 @@ Thư chuyển phát và công văn đến đi theo cùng một vòng đời: *nh
 
 ### 3.3. Nguyên tắc kiến trúc
 
-| Quyết định | Lý do | Trạng thái |
-|---|---|---|
-| **Modular monolith** — một codebase, một database, các phân hệ tách biệt | Team nhỏ, dữ liệu chia sẻ nhiều, 6 tuần không đủ cho microservices | ✅ |
-| **Lõi chung là thư viện, không phải ràng buộc** | Phải dừng/giữ được từng đề bài độc lập để đánh giá | ✅ |
-| **Workflow engine cấu hình được** | 4 nghiệp vụ có state machine khác nhau; engine không được ép về một luồng cứng | ✅ |
-| **AI tách thành lớp dịch vụ riêng** | Tái sử dụng được, và thay được nhà cung cấp mà không đụng nghiệp vụ | ✅ |
-| **Human-in-the-loop bắt buộc** | AI không tự quyết; mọi kết quả đều qua người xác nhận | ✅ |
-| **Ghi log mọi lần người sửa kết quả AI** | Đây là mẫu số duy nhất để tính "độ chính xác" và "tỷ lệ tự động hóa" | ✅ |
+| Quyết định                                                               | Lý do                                                                          | Trạng thái |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------ | ---------- |
+| **Modular monolith** — một codebase, một database, các phân hệ tách biệt | Team nhỏ, dữ liệu chia sẻ nhiều, 6 tuần không đủ cho microservices             | ✅         |
+| **Lõi chung là thư viện, không phải ràng buộc**                          | Phải dừng/giữ được từng đề bài độc lập để đánh giá                             | ✅         |
+| **Workflow engine cấu hình được**                                        | 4 nghiệp vụ có state machine khác nhau; engine không được ép về một luồng cứng | ✅         |
+| **AI tách thành lớp dịch vụ riêng**                                      | Tái sử dụng được, và thay được nhà cung cấp mà không đụng nghiệp vụ            | ✅         |
+| **Human-in-the-loop bắt buộc**                                           | AI không tự quyết; mọi kết quả đều qua người xác nhận                          | ✅         |
+| **Ghi log mọi lần người sửa kết quả AI**                                 | Đây là mẫu số duy nhất để tính "độ chính xác" và "tỷ lệ tự động hóa"           | ✅         |
 
 ---
 
@@ -161,31 +161,69 @@ Thư chuyển phát và công văn đến đi theo cùng một vòng đời: *nh
 
 **KPI:** Thời gian tra cứu/cập nhật; số thao tác thủ công giảm; độ chính xác dữ liệu.
 
-> Đây là phân hệ đơn giản nhất nhưng chạy qua *toàn bộ* lõi chung — nên được làm trước để kiểm chứng lõi có đúng không.
+> Đây là phân hệ đơn giản nhất nhưng chạy qua _toàn bộ_ lõi chung — nên được làm trước để kiểm chứng lõi có đúng không.
 
 ---
 
 ### 4.3. Đề 3 — Chuyển phát nhanh
 
-**Mục tiêu:** Tự động hóa thông báo và theo dõi tình trạng nhận thư/chuyển phát.
+**Mục tiêu:** Tự động hóa việc thông báo và theo dõi tình trạng nhận thư/chuyển phát của nhân sự.
+
+> **Phạm vi:** Đề bài này **không có thành phần AI**. Lễ tân đã phân loại và cung cấp dữ liệu có cấu trúc, nên bài toán thuần túy là tự động hóa quy trình. Đây không phải điểm yếu — rủi ro kỹ thuật thấp, giá trị vận hành thấy ngay, và phân hệ này chạy qua _toàn bộ_ lõi chung nên là phép thử tốt nhất cho nền tảng trước khi làm Đề 4. Cần thống nhất trước với ban lãnh đạo về cách đánh giá (xem [mục 12](#12-vấn-đề-chưa-chốt), A6).
+>
+> **Chốt 16/09/2026:** luồng nghiệp vụ Đề 3 theo [`docs/architecture/mail-tracking.md`](docs/architecture/mail-tracking.md). Wireframe chỉ là bản tham chiếu thị giác giai đoạn đầu; panel "AI · Nhận diện vận đơn" và tab "Gửi đi" trong wireframe **không thuộc phạm vi** — xem mục 16 của tài liệu đó.
+>
+> **Cập nhật 17/09/2026 — [CR-001](docs/architecture/CR-001-de3-cap-nhat-theo-file-that.md):** đã có file mẫu thật từ lễ tân. File **không có** số điện thoại, mã vận đơn và phòng ban, nên khóa khớp và khóa khử trùng lặp đều đổi. Tài liệu thiết kế lên bản **0.4**.
+
+**Hiện trạng:** Lễ tân nhận kiện, phân loại và gửi file danh sách lên Phòng HC. Phòng HC phải đọc file, soạn thông báo cho từng người, rồi tự theo dõi ai đã lấy ai chưa. Toàn bộ khúc này đang làm tay.
+
+**Luồng nghiệp vụ**
+
+```
+Lễ tân gửi file danh sách (.xlsx, 6 cột)
+  → HC tải lên, hệ thống khớp nhân sự theo tên và đánh dấu dòng nghi trùng
+  → HC soát lại trên màn hình trước khi gửi
+  → Gửi thông báo hàng loạt cho các dòng đã sẵn sàng, gộp theo người
+      · dòng chưa khớp được nằm lại ở "Chờ khớp", KHÔNG chặn cả lô
+      · HC xử lý dần ở màn hình "Chờ khớp" xuyên lô, gán xong thì gửi ngay
+  → Người nhận xuống lấy, xác nhận bằng QR dán tại khu để đơn
+  → Nhắc tự động các trường hợp chưa nhận theo SLA
+  → Báo cáo tổng hợp theo kỳ
+```
 
 **Chức năng**
 
-- Ghi nhận thư/kiện đến: mã vận đơn, đơn vị vận chuyển, người nhận, thời gian đến.
-- Nhận diện người nhận (quét mã vận đơn / OCR nhãn / nhập tay) và khớp với danh mục nhân sự.
-- Tự động gửi thông báo tới người nhận khi có thư.
-- Người nhận xác nhận đã nhận (qua link, QR hoặc ký điện tử).
-- Ghi nhận trạng thái: chưa nhận / đã nhận / quá hạn.
-- Tự động nhắc lại các trường hợp chưa nhận sau ngưỡng SLA.
+- Tiếp nhận file `.xlsx`/`.csv` từ lễ tân; khử trùng lặp bằng khóa tổ hợp, dạng **cảnh báo mềm** — trùng thì đánh dấu để HC quyết, không tự bỏ dòng.
+- Khớp người nhận với danh mục nhân sự **theo tên**, có bảng alias học từ mỗi lần HC chọn.
+- Màn hình soát trước khi gửi — bắt buộc có người xác nhận, không gửi thẳng từ file.
+- Tự động gửi thông báo tới người nhận, gộp theo người (một người nhiều kiện chỉ nhận một thông báo).
+- **Gửi một phần:** dòng chưa khớp được không chặn phần còn lại của lô; có màn hình "Chờ khớp" xuyên lô để xử lý dần.
+- Xác nhận đã nhận bằng QR dán tại khu để đơn (đường chính) hoặc link trong thông báo (đường phụ).
+- Theo dõi trạng thái: `Chờ khớp` / `Đã thông báo` / `Đã nhận` / `Tồn đọng`.
+- Tự động nhắc lại các trường hợp chưa nhận theo ngưỡng SLA, tính theo giờ đồng hồ.
+- Màn hình danh sách quá hạn cho HC dùng hằng ngày.
 - Báo cáo tổng hợp tình trạng nhận thư theo kỳ.
 
-**Dữ liệu đầu vào:** Thông tin người nhận, đơn vị, mã vận đơn, thời gian nhận.
+**Dữ liệu đầu vào:** File danh sách từ lễ tân — **sáu cột**: `stt`, `người gửi`, `ngày nhận`, `số lượng`, `nội dung`, `người nhận`.
 
-**KPI:** Thời gian xử lý; tỷ lệ thông báo tự động; tỷ lệ thư chưa nhận.
+> ⚠️ File **không có** số điện thoại, mã vận đơn hay phòng ban. Vì vậy:
+>
+> - **Khớp theo tên là chính.** Tên trên phong bì viết không chuẩn — thiếu họ, hoa thường lẫn lộn — nên không quy tắc nào khớp được lần đầu. Cái khớp được là bảng `matching_alias` **học từ mỗi lần HC chọn**: tỷ lệ khớp tự động thấp ở tuần đầu rồi tăng dần. Đó là hành vi đúng của thiết kế, nên KPI phải báo **theo tuần**, không phải trung bình cả kỳ.
+> - **Một dòng không phải một kiện.** Lễ tân gộp nhiều kiện cùng nguồn trong cùng ngày vào một dòng rồi ghi `số lượng`, nên mọi con số phải nói rõ đang đếm dòng hay đếm kiện.
+> - Nhánh khớp theo số điện thoại vẫn nằm trong mã. Khi lễ tân thêm cột, bật bằng `MAIL_MATCH_BY_PHONE=true` — không phải sửa code.
 
-**Chưa rõ** ❓ Nguồn dữ liệu vận đơn đến từ đâu: API hãng vận chuyển, email tự động, hay nhập tay/quét mã? Quyết định này ảnh hưởng lớn tới khối lượng công việc.
+**KPI:** Thời gian xử lý; tỷ lệ thông báo tự động; **tỷ lệ khớp tự động theo tuần**; số thao tác HC mỗi lô; tỷ lệ thư chưa nhận.
 
----
+**Ngoài phạm vi pilot** ⏭
+
+- Tự động đọc hộp thư để tiếp nhận file (pilot dùng tải tay).
+- Lễ tân nhập trực tiếp vào hệ thống thay vì gửi file.
+- Ký điện tử.
+- Tích hợp API hãng vận chuyển — API được thiết kế cho bên gửi, không phục vụ được bên nhận.
+
+**Ước lượng:** ~6.9 ngày công. **Backend đã xong toàn bộ**; phần còn lại là 5 màn hình frontend (~3.1 ngày).
+
+## 📄 Thiết kế chi tiết: [`docs/architecture/mail-tracking.md`](docs/architecture/mail-tracking.md)
 
 ### 4.4. Đề 4 — Quản lý công văn đến/đi
 
@@ -291,7 +329,7 @@ Mọi chuyển đổi trạng thái đều ghi lại: người thực hiện, th
 
 ### 6.2. Nguyên tắc
 
-- **Không tự động xử lý mà không có người xác nhận.** Trong pilot, AI chỉ *đề xuất*, người quyết.
+- **Không tự động xử lý mà không có người xác nhận.** Trong pilot, AI chỉ _đề xuất_, người quyết.
 - **Kiểm tra bằng quy tắc là trụ chính, confidence của mô hình chỉ là tín hiệu phụ.** Số công văn có đúng định dạng không? Ngày có hợp lệ không? Phòng ban có trong danh mục không? Người nhận có khớp nhân sự đang làm việc không? Đây là những tín hiệu kiểm chứng được. Confidence do LLM tự báo cáo không phải xác suất đã hiệu chỉnh — không nên dùng làm cơ sở duy nhất.
 - **Đánh giá độ tin cậy theo từng trường, không theo cả tài liệu.** Số công văn có thể đọc rất chắc trong khi deadline lại mơ hồ; một điểm số chung sẽ che mất chỗ sai.
 - **Ngưỡng cụ thể phải hiệu chỉnh từ dữ liệu thật**, không chốt trước trong tài liệu thiết kế.
@@ -318,7 +356,9 @@ OCR tiếng Việt với công văn hành chính: dấu thanh, dấu đỏ chồ
 `resource_assignment` (lịch sử cấp phát)
 
 **Luồng đến/đi**
-`mail_item` (thư/kiện: mã vận đơn, đơn vị vận chuyển, người nhận)
+`mail_item` (một dòng trong file lễ tân: người gửi, người nhận, ngày nhận, số lượng, nội dung)
+`matching_alias` (tên thô trên phong bì → nhân sự, học từ mỗi lần HC chọn)
+`mail_match_feedback` (HC sửa gì, máy đề xuất gì — mẫu số KPI của Đề 3)
 `document` (công văn: số/ký hiệu, loại, chủ đề, deadline)
 `document_attachment`
 
@@ -341,18 +381,23 @@ OCR tiếng Việt với công văn hành chính: dấu thanh, dấu đỏ chồ
 
 > ⚠️ Toàn bộ mục này **chưa chốt**. Nhiều lựa chọn phụ thuộc vào quy mô tải thực tế mà hiện chưa có số liệu (xem [mục 12](#12-vấn-đề-chưa-chốt)).
 
-| Lớp | Dự kiến | Ghi chú |
-|---|---|---|
-| Backend | Python + FastAPI | 🚧 |
-| Database | PostgreSQL | 🚧 |
-| Frontend | React 19 + TypeScript + Vite | ✅ Đã chọn (ADR 0001: Pure SVG map rendering, no heavy map library) |
-| Lưu trữ file | Filesystem + backup | Đủ cho pilot; bọc sẵn lớp abstraction để đổi sang S3/MinIO sau |
-| Scheduler | APScheduler | Đủ nếu tải chỉ vài chục job/ngày |
-| Queue | ⏭ | Chỉ thêm khi có bằng chứng cần |
-| OCR | ❓ | Quyết định bằng spike, không chốt trước |
-| LLM | ❓ | Phụ thuộc chính sách dữ liệu — xem mục 12 |
-| Agent framework | ⏭ | Luồng hiện tại là pipeline tuyến tính, chưa cần |
-| Vector DB | ⏭ | Pilot không có nghiệp vụ nào cần |
+| Lớp             | Dự kiến             | Ghi chú                                                        |
+| --------------- | ------------------- | -------------------------------------------------------------- |
+| Backend         | Python + FastAPI    | 🚧                                                             |
+| Database        | PostgreSQL          | 🚧                                                             |
+| Frontend        | React 19 + TypeScript + Vite | ✅ Đã chọn ([ADR 0001](docs/decisions/0001-floor-planning-web-stack-and-floor-data.md)), cả bốn phân hệ ([ADR 0002](docs/decisions/0002-shared-core-and-module-boundaries.md)) |
+| Lưu trữ file    | Filesystem + backup | Đủ cho pilot; bọc sẵn lớp abstraction để đổi sang S3/MinIO sau |
+| Scheduler       | APScheduler         | Đủ nếu tải chỉ vài chục job/ngày                               |
+| Queue           | ⏭                  | Chỉ thêm khi có bằng chứng cần                                 |
+| OCR             | ❓                  | Quyết định bằng spike, không chốt trước                        |
+| LLM             | ❓                  | Phụ thuộc chính sách dữ liệu — xem mục 12                      |
+| Agent framework | ⏭                  | Luồng hiện tại là pipeline tuyến tính, chưa cần                |
+| Vector DB       | ⏭                  | Pilot không có nghiệp vụ nào cần                               |
+
+> ✅ **Đã giải, 18/09/2026.** Màn hình Đề 3 từng dựng trên Next.js 14 App Router, lệch với
+> ADR 0001. Issue #1 chốt chuyển sang Vite và việc đó đã xong: bốn phân hệ giờ nằm trong một
+> ứng dụng Vite duy nhất, định tuyến bằng `react-router` ở chế độ hash. Lý do và những gì
+> phải đổi ghi ở [ADR 0002](docs/decisions/0002-shared-core-and-module-boundaries.md).
 
 **Nguyên tắc chọn:** mỗi thành phần thêm vào đều tốn ngày setup và debug. Trong 6 tuần, thời gian đó lấy từ đúng phần quan trọng nhất là vận hành thật. Chỉ thêm khi có lý do cụ thể, không thêm theo thói quen.
 
@@ -378,7 +423,19 @@ backend/
 │   └── scheduler/
 └── tests/
 
-frontend/                       # React 19 + TypeScript + Vite (ADR 0001)
+frontend/                       # React 19 + TypeScript + Vite (ADR 0001, ADR 0002)
+├── src/
+│   ├── app/                    # vỏ ứng dụng: bảng route, thanh điều hướng,
+│   │   │                       #   chắn đăng nhập, trang đăng nhập
+│   ├── api/                    # client gọi backend + DTO
+│   ├── components/             # thành phần dùng chung
+│   ├── features/               # 4 đề bài, chia dọc giống backend
+│   ├── shared/                 # auth, format, nhãn tiếng Việt
+│   └── styles/
+└── package.json
+
+data/                           # dataset mặt bằng, backend và frontend cùng đọc
+└── floors/
 
 docs/
 ├── architecture/
@@ -392,7 +449,7 @@ docs/
 
 ### Nguyên tắc
 
-Pilot có **6 tuần**, không phải 6 tuần để build. Mục tiêu là đánh giá hiệu quả thực tế — mà muốn có số liệu thì hệ thống phải *chạy thật* một thời gian đủ dài.
+Pilot có **6 tuần**, không phải 6 tuần để build. Mục tiêu là đánh giá hiệu quả thực tế — mà muốn có số liệu thì hệ thống phải _chạy thật_ một thời gian đủ dài.
 
 ```
 Tuần 0     │ Chuẩn bị (làm ngay, trước khi code)
@@ -449,17 +506,17 @@ Mọi KPI trong đề bài đều là **so sánh** ("giảm bao nhiêu", "nhanh 
 
 ### Bảng KPI
 
-| Đề | KPI | Cách đo |
-|---|---|---|
-| 1 | Thời gian lập phương án | So thời gian từ lúc nhận yêu cầu tới lúc chốt sơ đồ, trước/sau |
-| 1 | Độ chính xác phương án | Tỷ lệ gợi ý chỗ ngồi được chấp nhận không sửa |
-| 2 | Thời gian tra cứu/cập nhật | Bấm giờ thao tác mẫu, trước/sau |
-| 2 | Số thao tác thủ công | Đếm số bước trong quy trình, trước/sau |
-| 3 | Tỷ lệ thông báo tự động | Số thư được thông báo tự động / tổng số thư |
-| 3 | Tỷ lệ thư chưa nhận | Số thư quá SLA chưa xác nhận / tổng số thư |
-| 4 | Độ chính xác nhận diện | Đối chiếu kết quả AI với ground truth, tính theo **từng trường** |
-| 4 | Tỷ lệ tự động hóa | Số công văn người duyệt không sửa gì / tổng số |
-| 4 | Tỷ lệ bỏ sót deadline | Số công văn quá hạn không được nhắc / tổng số |
+| Đề  | KPI                        | Cách đo                                                          |
+| --- | -------------------------- | ---------------------------------------------------------------- |
+| 1   | Thời gian lập phương án    | So thời gian từ lúc nhận yêu cầu tới lúc chốt sơ đồ, trước/sau   |
+| 1   | Độ chính xác phương án     | Tỷ lệ gợi ý chỗ ngồi được chấp nhận không sửa                    |
+| 2   | Thời gian tra cứu/cập nhật | Bấm giờ thao tác mẫu, trước/sau                                  |
+| 2   | Số thao tác thủ công       | Đếm số bước trong quy trình, trước/sau                           |
+| 3   | Tỷ lệ thông báo tự động    | Số thư được thông báo tự động / tổng số thư                      |
+| 3   | Tỷ lệ thư chưa nhận        | Số thư quá SLA chưa xác nhận / tổng số thư                       |
+| 4   | Độ chính xác nhận diện     | Đối chiếu kết quả AI với ground truth, tính theo **từng trường** |
+| 4   | Tỷ lệ tự động hóa          | Số công văn người duyệt không sửa gì / tổng số                   |
+| 4   | Tỷ lệ bỏ sót deadline      | Số công văn quá hạn không được nhắc / tổng số                    |
 
 ---
 
@@ -467,37 +524,47 @@ Mọi KPI trong đề bài đều là **so sánh** ("giảm bao nhiêu", "nhanh 
 
 Đây là phần quan trọng nhất của tài liệu ở giai đoạn này. Mỗi mục cần một người trả lời trước khi bắt đầu build.
 
+> 📋 **Riêng Đề 3 đã có checklist thi hành:** [`docs/checklist-truoc-khi-chay.md`](docs/checklist-truoc-khi-chay.md) — liệt kê đúng những gì còn thiếu để chạy thật, xếp theo mức độ chặn, kèm phiếu câu hỏi gom sẵn theo từng đầu mối (HR / IT / lễ tân / HC).
+
 ### Nhóm A — Chặn tiến độ (phải trả lời trong Tuần 0)
 
-| # | Câu hỏi | Ảnh hưởng nếu không trả lời |
-|---|---|---|
-| A1 | **Team có bao nhiêu người, ai làm gì?** 4 đầu mối trong đề bài là người nghiệp vụ, không phải dev. | Toàn bộ lộ trình là phỏng đoán |
-| A2 | **Quy mô thực tế**: bao nhiêu nhân sự, công văn/ngày, locker, thư/tuần? | Mọi lựa chọn hạ tầng đều không có căn cứ |
-| A3 | **Dữ liệu công văn có được gửi ra dịch vụ AI bên ngoài không?** Có phân loại độ mật không? Có cần che thông tin nhạy cảm trước khi gửi không? | Không trả lời được thì không chọn được LLM, và có rủi ro pháp lý/nội bộ |
-| A4 | **Danh sách nhân sự chuẩn đã có chưa?** Mã nhân viên có duy nhất không? | Cả 4 phân hệ gãy ở cùng một chỗ |
-| A5 | **Có mẫu dữ liệu thật chưa?** Scan công văn, log vận đơn, danh sách locker, sơ đồ mặt bằng. | Không spike được, không đo được |
+| #   | Câu hỏi                                                                                                                                       | Ảnh hưởng nếu không trả lời                                             |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| A1  | **Team có bao nhiêu người, ai làm gì?** 4 đầu mối trong đề bài là người nghiệp vụ, không phải dev.                                            | Toàn bộ lộ trình là phỏng đoán                                          |
+| A2  | **Quy mô thực tế**: bao nhiêu nhân sự, công văn/ngày, locker, thư/tuần?                                                                       | Mọi lựa chọn hạ tầng đều không có căn cứ                                |
+| A3  | **Dữ liệu công văn có được gửi ra dịch vụ AI bên ngoài không?** Có phân loại độ mật không? Có cần che thông tin nhạy cảm trước khi gửi không? | Không trả lời được thì không chọn được LLM, và có rủi ro pháp lý/nội bộ |
+| A4  | **Danh sách nhân sự chuẩn đã có chưa?** Mã nhân viên có duy nhất không?<br>✅ 16/09/2026: đã xác nhận **có số điện thoại đầy đủ, mỗi người một số** (gỡ chặn phần khớp của Đề 3). Còn lại: mã nhân viên có duy nhất không. | Cả 4 phân hệ gãy ở cùng một chỗ                                         |
+| A5  | **Có mẫu dữ liệu thật chưa?** Scan công văn, log vận đơn, danh sách locker, sơ đồ mặt bằng.                                                   | Không spike được, không đo được                                         |
 
 ### Nhóm B — Ảnh hưởng phạm vi
 
-| # | Câu hỏi |
-|---|---|
-| B1 | **Công văn đi** có nằm trong phạm vi pilot không? Đề bài ghi "đến/đi" nhưng thiết kế hiện chỉ có luồng đến. |
-| B2 | Nguồn dữ liệu vận đơn của Đề 3: API hãng vận chuyển, email, hay nhập tay? |
-| B3 | Kênh thông báo: email, Teams, hay Zalo OA? |
-| B4 | Hệ thống HR hiện tại là gì, có API không, đồng bộ tần suất nào? |
-| B5 | Dữ liệu locker và chỗ ngồi hiện đang nằm ở đâu (Excel, giấy)? Migration ra sao? |
-| B6 | Email server là Exchange hay Google? |
+| #   | Câu hỏi                                                                                                     |
+| --- | ----------------------------------------------------------------------------------------------------------- |
+| B1  | **Công văn đi** có nằm trong phạm vi pilot không? Đề bài ghi "đến/đi" nhưng thiết kế hiện chỉ có luồng đến. |
+| B2  | Kênh thông báo: email, Teams, hay Zalo OA?                                                                  |
+| B3  | Hệ thống HR hiện tại là gì, có API không, đồng bộ tần suất nào?                                             |
+| B4  | Dữ liệu locker và chỗ ngồi hiện đang nằm ở đâu (Excel, giấy)? Migration ra sao?                             |
+| B5  | Email server là Exchange hay Google?                                                                        |
+
+#### Còn cần làm rõ ❓
+
+| #   | Câu hỏi                                                                                                                   | Ảnh hưởng                                           |
+| --- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| 1   | Cấu trúc file cụ thể: tên cột, có dòng tiêu đề không, một hay nhiều sheet, định dạng ngày giờ. **Cần một file mẫu thật.** | Quyết định 0.5–1 ngày công phần đọc file            |
+| 2   | Trường "đơn vị" trong file có khớp được với danh mục phòng ban không, hay là tên tự do?                                   | Nếu khớp được thì là tín hiệu phụ tốt khi tên trùng |
+| 3   | Quy định hiện tại về thư tồn đọng: sau bao lâu thì trả lại / xử lý thế nào?                                               | Cần số thật để đặt SLA, không tự nghĩ ra            |
+| 4   | Lễ tân gửi file mấy lần một ngày? Một file gộp nhiều kiện hay tách?                                                       | Ảnh hưởng thiết kế `mail_batch`                     |
 
 ### Nhóm C — Thiết kế cần làm rõ
 
-| # | Câu hỏi |
-|---|---|
-| C1 | **Phân quyền công văn** cần theo phòng ban và độ mật, tức là row-level chứ không chỉ role-level. Mô hình cụ thể ra sao? |
-| C2 | Ngưỡng tin cậy để AI tự đề xuất vs bắt nhập tay — hiệu chỉnh từ ground truth ở tuần nào? |
-| C3 | ~~Công nghệ frontend.~~ → ✅ **Đã chốt:** React 19 + TypeScript + Vite + Pure SVG/CSS (ADR 0001). |
-| C4 | ~~Quy ước màu và ký hiệu trên sơ đồ chỗ ngồi (Đề 1).~~ → ✅ **Đã chốt:** 5 mã màu trạng thái vận hành tại `docs/wireframe` và `tokens.css`. |
-| C5 | Chính sách lưu trữ và xoá file scan công văn. |
-| C6 | Kế hoạch UAT: ai test, test cái gì, tiêu chí nghiệm thu. |
+| #   | Câu hỏi                                                                                                                 |
+| --- | ----------------------------------------------------------------------------------------------------------------------- |
+| C1  | **Phân quyền công văn** cần theo phòng ban và độ mật, tức là row-level chứ không chỉ role-level. Mô hình cụ thể ra sao? |
+| C2  | Ngưỡng tin cậy để AI tự đề xuất vs bắt nhập tay — hiệu chỉnh từ ground truth ở tuần nào?                                |
+| C3  | ~~Công nghệ frontend.~~ → ✅ **Đã chốt:** React 19 + TypeScript + Vite + Pure SVG/CSS (ADR 0001).                        |
+| C4  | ~~Quy ước màu và ký hiệu trên sơ đồ chỗ ngồi (Đề 1).~~ → ✅ **Đã chốt:** 5 mã màu trạng thái vận hành tại `docs/wireframe`. |
+| C5  | Chính sách lưu trữ và xoá file scan công văn.                                                                           |
+| C6  | Kế hoạch UAT: ai test, test cái gì, tiêu chí nghiệm thu.                                                                |
 
 ---
 
@@ -521,14 +588,14 @@ Mọi KPI trong đề bài đều là **so sánh** ("giảm bao nhiêu", "nhanh 
 
 ## Liên hệ
 
-| Vai trò | Người phụ trách |
-|---|---|
-| Đề 1 — Quy hoạch VP | Nguyễn Thị Thu Hương |
-| Đề 2 — Quản lý tủ locker | Lưu Hải Nam |
-| Đề 3 — Chuyển phát nhanh | Phạm Thị Duyên |
-| Đề 4 — Công văn đến/đi | Vũ Phương Thảo |
-| Kiến trúc / Dev lead | ❓ |
+| Vai trò                  | Người phụ trách      |
+| ------------------------ | -------------------- |
+| Đề 1 — Quy hoạch VP      | Nguyễn Thị Thu Hương |
+| Đề 2 — Quản lý tủ locker | Lưu Hải Nam          |
+| Đề 3 — Chuyển phát nhanh | Phạm Thị Duyên       |
+| Đề 4 — Công văn đến/đi   | Vũ Phương Thảo       |
+| Kiến trúc / Dev lead     | ❓                   |
 
 ---
 
-*Tài liệu ở trạng thái Draft. Các mục đánh dấu ❓ cần được quyết định trước khi bắt đầu implement.*
+_Tài liệu ở trạng thái Draft. Các mục đánh dấu ❓ cần được quyết định trước khi bắt đầu implement._

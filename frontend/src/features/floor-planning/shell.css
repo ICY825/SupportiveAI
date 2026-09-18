@@ -1,0 +1,364 @@
+/*
+ * Product shell shared by both floor-planning modes.
+ *
+ * "Xác minh mặt bằng" and "Bố trí chỗ ngồi" render the same floor with two very
+ * different renderers, but they are one tool. Everything that is not the map
+ * itself — cards, titles, toolbars, badges, buttons, focus — is defined once
+ * here so the two modes cannot drift apart. Renderer-specific rules stay in
+ * floorPlanning.css (technical) and workspace/workspace.css (operational).
+ */
+
+.fp-page {
+  /* radius */
+  --fp-r-sm: 4px;
+  --fp-r: 6px;
+  --fp-r-card: 10px;
+
+  /* spacing */
+  --fp-pad-card: 18px;
+  --fp-pad-panel: 16px;
+  --fp-gap: 12px;
+
+  /* type scale */
+  --fp-t-micro: 10.5px;
+  --fp-t-small: 11.5px;
+  --fp-t-body: 12.5px;
+  --fp-t-section: 13px;
+  --fp-t-page: 15px;
+  --fp-t-title: 20px;
+
+  /* controls */
+  --fp-control-h: 28px;
+  --fp-btn-h: 32px;
+
+  /*
+   * Docked inspector, shared by both modes so the right edge never moves when
+   * the mode tabs are toggled. Sized from the viewport so it gives width back
+   * to the map as the window narrows, and never takes a fifth of a wide screen.
+   */
+  --fp-inspector-w: clamp(300px, 21vw, 392px);
+
+  /* one focus treatment for the whole feature: brand ring outside, inset on maps */
+  --fp-focus-inset: inset 0 0 0 2px rgba(210, 24, 31, 0.6);
+}
+
+/* ---------------------------------------------------------------- surfaces */
+
+.fp-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--fp-r-card);
+}
+
+/* header row of a card or docked panel: title block on the left, tools on the right */
+.fp-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* ---------------------------------------------------------------- type */
+
+.fp-eyebrow {
+  margin: 0 0 6px;
+  font-size: var(--fp-t-micro);
+  font-weight: 600;
+  letter-spacing: 0.045em;
+  color: var(--muted);
+}
+
+.fp-eyebrow span {
+  padding: 0 6px;
+  color: var(--line-strong);
+}
+
+/* the largest heading inside a mode */
+.fp-page-title {
+  margin: 0 0 5px;
+  font-size: 22px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+/* an identifier (desk code, workstation id) reads as data, not prose */
+.fp-card-title {
+  margin: 0 0 12px;
+  font: 600 var(--fp-t-title) / 1.25 var(--mono);
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.fp-section-title {
+  margin: 0 0 10px;
+  font-size: var(--fp-t-small);
+  font-weight: 600;
+  color: var(--fp-text-2);
+}
+
+/* ---------------------------------------------------------------- buttons */
+
+.fp-btn {
+  height: var(--fp-btn-h);
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--fp-r);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--fp-t-body);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.fp-btn:hover {
+  border-color: #b9b2a8;
+  background: #faf9f7;
+}
+
+.fp-btn.is-primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+.fp-btn.is-primary:hover {
+  background: #33312e;
+}
+
+/* A refused action must look refused: Save is blocked on an invalid layout. */
+.fp-btn:disabled,
+.fp-btn:disabled:hover {
+  opacity: 0.4;
+  cursor: default;
+  border-color: var(--line-strong);
+  background: var(--paper);
+}
+
+.fp-btn.is-primary:disabled,
+.fp-btn.is-primary:disabled:hover {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+/* full-width action at the foot of an inspector */
+.fp-btn.is-wide {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  color: var(--fp-text-2);
+}
+
+.fp-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border: 0;
+  border-radius: var(--fp-r);
+  background: transparent;
+  color: var(--fp-text-2);
+  cursor: pointer;
+}
+
+.fp-icon-btn:hover,
+.fp-icon-btn[aria-expanded='true'] {
+  background: var(--canvas-2);
+  color: var(--ink);
+}
+
+/* ---------------------------------------------------------------- toolbars */
+
+/* Floating control cluster over a map. Both renderers use the same one. */
+.fp-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 2px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--line);
+  border-radius: var(--fp-r);
+  box-shadow: 0 1px 3px rgba(28, 27, 26, 0.06);
+}
+
+.fp-toolbar button {
+  min-width: var(--fp-control-h);
+  height: var(--fp-control-h);
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--fp-r-sm);
+  background: transparent;
+  color: var(--fp-text-2);
+  font-size: var(--fp-t-body);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.fp-toolbar button:hover:not(:disabled) {
+  background: var(--canvas-2);
+  color: var(--ink);
+}
+
+.fp-toolbar button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.fp-toolbar output {
+  min-width: 40px;
+  text-align: center;
+  font: var(--fp-t-micro) var(--mono);
+  color: var(--fp-text-2);
+}
+
+.fp-btn-group {
+  display: flex;
+  align-items: center;
+}
+
+.fp-btn-group + .fp-btn-group,
+.fp-btn-group + button,
+.fp-toolbar > .fp-btn-accent {
+  margin-left: 2px;
+  padding-left: 2px;
+  border-left: 1px solid var(--fp-hairline);
+}
+
+.fp-toolbar .fp-btn-accent {
+  color: var(--vsf-red-deep);
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------- badges */
+
+/* Status pill. The colour comes from the mode's own status palette. */
+.fp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: var(--fp-r-sm);
+  font-size: var(--fp-t-small);
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* Neutral label: a mode name, a data caveat. Never a state. */
+.fp-tag {
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--fp-r);
+  background: var(--paper);
+  color: var(--fp-text-2);
+  font-size: var(--fp-t-small);
+  white-space: nowrap;
+}
+
+/*
+ * Every block of either side panel is a disclosure. One rule set drives the
+ * heading, the chevron and the open/closed state, so a section added later
+ * cannot end up looking different from "Chi tiết kỹ thuật".
+ */
+.fp-section > summary,
+.fp-technical summary,
+.fp-raw summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+  border-radius: 2px;
+  font-size: var(--fp-t-small);
+  font-weight: 600;
+  color: var(--fp-text-2);
+  cursor: pointer;
+  list-style: none;
+}
+
+.fp-section > summary::-webkit-details-marker,
+.fp-technical summary::-webkit-details-marker,
+.fp-raw summary::-webkit-details-marker {
+  display: none;
+}
+
+.fp-section > summary::before,
+.fp-technical summary::before,
+.fp-raw summary::before {
+  content: '▸';
+  flex: none;
+  font-size: 10px;
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+
+.fp-section[open] > summary::before,
+.fp-technical[open] summary::before,
+.fp-raw[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.fp-section > summary:hover,
+.fp-technical summary:hover,
+.fp-raw summary:hover {
+  color: var(--ink);
+}
+
+/* the heading keeps its semantics inside the summary */
+.fp-section > summary h3 {
+  margin: 0;
+  font: inherit;
+  color: inherit;
+}
+
+/* ---------------------------------------------------------------- map key */
+
+/*
+ * Vertical key for a map, in that map's side panel. Both modes use it, each
+ * with its own swatch: the operational view shows seat markers, the technical
+ * view shows extraction-state outlines.
+ */
+.fp-key,
+.sw-key {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.fp-key li,
+.sw-key li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: var(--fp-t-small);
+  color: var(--fp-text-2);
+  cursor: help;
+}
+
+/* ---------------------------------------------------------------- metadata */
+
+/* Label/value list shared by both inspectors' metadata sections. */
+.fp-facts {
+  display: grid;
+  gap: 14px;
+  margin: 18px 0 20px;
+}
+
+.fp-facts dt {
+  margin-bottom: 3px;
+  font-size: var(--fp-t-micro);
+  color: var(--muted);
+}
+
+.fp-facts dd {
+  margin: 0;
+  font-size: var(--fp-t-small);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}

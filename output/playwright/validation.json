@@ -1,0 +1,56 @@
+{
+  "statesChecked": 5,
+  "desks": 19,
+  "selectionTimes": [
+    {
+      "code": "065",
+      "pointerUpToTwoFramesMs": 18
+    },
+    {
+      "code": "066",
+      "pointerUpToTwoFramesMs": 20.5
+    },
+    {
+      "code": "067",
+      "pointerUpToTwoFramesMs": 24.700000000186265
+    },
+    {
+      "code": "068",
+      "pointerUpToTwoFramesMs": 24.600000000093132
+    },
+    {
+      "code": "069",
+      "pointerUpToTwoFramesMs": 22
+    }
+  ],
+  "sizes": [
+    {
+      "width": 1600,
+      "scrollWidth": 1600,
+      "sceneWidth": 1036
+    },
+    {
+      "width": 1440,
+      "scrollWidth": 1440,
+      "sceneWidth": 876
+    },
+    {
+      "width": 1280,
+      "scrollWidth": 1280,
+      "sceneWidth": 716
+    },
+    {
+      "width": 1024,
+      "scrollWidth": 1024,
+      "sceneWidth": 776
+    },
+    {
+      "width": 768,
+      "scrollWidth": 768,
+      "sceneWidth": 520
+    }
+  ],
+  "errors": [],
+  "writes": [],
+  "svgElements": 576
+}
