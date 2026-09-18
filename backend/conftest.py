@@ -22,6 +22,7 @@ from app.platform.workflow.registry import WorkflowRegistry
 
 # Import để mọi bảng có trong Base.metadata.
 from app.modules.document_flow.mail.models import MailBatch, MailItem  # noqa: F401
+from app.modules.resource_allocation.seat.models import SeatAssignment  # noqa: F401
 from app.platform.audit.models import AuditLog  # noqa: F401
 from app.platform.notification.models import Notification, NotificationItem  # noqa: F401
 from app.platform.workflow.models import SLAEvent, WorkflowHistory, WorkflowInstance  # noqa: F401

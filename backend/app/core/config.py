@@ -120,6 +120,13 @@ class Settings(BaseSettings):
     # Để trống thì bỏ qua kiểm tra.
     upn_domain_hint: str = ""
 
+    # --- Quy hoạch chỗ ngồi ---
+    # Thư mục dataset mặt bằng, sinh từ tools/floorplan_extract (data/README.md).
+    # Backend chỉ ĐỌC, để biết mã chỗ ngồi nào có thật: Issue #2 mục 3 chốt
+    # backend không bao giờ tự tạo chỗ ngồi. Để trống thì suy ra `data/floors`
+    # ở gốc repo.
+    floor_data_dir: str = ""
+
     # --- Lưu trữ file ---
     storage_root: str = "./var/storage"
 

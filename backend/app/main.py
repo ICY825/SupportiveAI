@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 from app.platform.audit.models import AuditLog  # noqa: E402,F401
 from app.platform.notification.models import Notification, NotificationItem  # noqa: E402,F401
 from app.platform.workflow.models import SLAEvent, WorkflowHistory, WorkflowInstance  # noqa: E402,F401
+from app.modules.resource_allocation.seat.models import SeatAssignment  # noqa: E402,F401
 from app.shared.department.models import Department  # noqa: E402,F401
 from app.shared.employee.models import Employee, EmployeeRole  # noqa: E402,F401
 from app.shared.location.models import Location  # noqa: E402,F401

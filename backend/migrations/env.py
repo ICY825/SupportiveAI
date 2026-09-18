@@ -17,6 +17,7 @@ from app.core.database import Base, UtcDateTime
 
 # Import để mọi bảng có mặt trong Base.metadata trước khi autogenerate.
 from app.modules.document_flow.mail.models import MailBatch, MailItem  # noqa: F401
+from app.modules.resource_allocation.seat.models import SeatAssignment  # noqa: F401
 from app.platform.audit.models import AuditLog  # noqa: F401
 from app.platform.notification.models import Notification, NotificationItem  # noqa: F401
 from app.platform.workflow.models import (  # noqa: F401
