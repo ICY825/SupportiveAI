@@ -17,6 +17,7 @@ import {
   snapPointToGrid,
   translatePlacement,
   validatePlacement,
+  wrapRotation,
   type PlacementContext,
   type SpatialGrid,
   type SpatialPlacement,
@@ -24,6 +25,7 @@ import {
 import type { FloorDataset, FloorObstacle, Point, Room, Zone } from '../domain/spatial'
 
 import {
+  applyPlacements,
   basePlacements,
   deriveEditableArea,
   gridForEntity,
@@ -845,6 +847,45 @@ describe('Milestone 2 - Multi-Layer Validation Engine', () => {
         obstacleKind: 'column',
         obstacleName: 'Cột bê tông (>A / 7-6)',
       })
+    })
+  })
+
+  describe('non-orthogonal desks keep the angle the drawing carries', () => {
+    it('composes a quarter turn onto a measured 45 degrees instead of rounding it', async () => {
+      const dataset = await FLOORS[0].load()
+      const diagonal = dataset.workstations.filter((w) => w.rotationDeg % 90 !== 0)
+      // Floor 16's angled facade run. If a re-extraction ever squares these
+      // off, this test should be deleted deliberately, not silently weakened.
+      expect(diagonal.length).toBe(18)
+
+      const ws = dataset.workstations.find((w) => w.id === 'ws-16-195')!
+      expect(ws.rotationDeg).toBe(45)
+
+      const scene = { ...buildWorkspaceScene(dataset, defaultWorkspaceScope(dataset)), workstations: [ws] }
+      const base = basePlacements(scene.workstations)
+      const turned = rotatePlacementBy(base[ws.id], 90)
+      const edited = applyPlacements(scene, base, { [ws.id]: turned })
+
+      expect(edited.workstations[0].rotationDeg).toBe(135)
+      expect(normalizeRotation(ws.rotationDeg + 90)).toBe(180)
+    })
+
+    it('agrees with normalizeRotation for every orthogonal desk', async () => {
+      const dataset = await FLOORS[0].load()
+      const orthogonal = dataset.workstations.filter((w) => w.rotationDeg % 90 === 0)
+      expect(orthogonal.length).toBe(364)
+
+      for (const ws of orthogonal) {
+        for (const turn of [0, 90, 180, 270]) {
+          expect(wrapRotation(ws.rotationDeg + turn)).toBe(normalizeRotation(ws.rotationDeg + turn))
+        }
+      }
+    })
+
+    it('wraps a full turn back to the measured angle', () => {
+      expect(wrapRotation(45 + 360)).toBe(45)
+      expect(wrapRotation(45 - 90)).toBe(315)
+      expect(wrapRotation(0)).toBe(0)
     })
   })
 })

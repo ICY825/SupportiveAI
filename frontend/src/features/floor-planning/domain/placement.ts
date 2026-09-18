@@ -141,6 +141,17 @@ export function normalizeRotation(deg: number): QuarterRotation {
   return ((((turns % 4) + 4) % 4) * 90) as QuarterRotation
 }
 
+/**
+ * Wraps a measured angle into [0, 360) without snapping it to a quarter.
+ *
+ * The counterpart to `normalizeRotation`: use that one where a value must be
+ * one of the four editable facings, and this one wherever the angle the
+ * drawing actually carries has to survive. Floor 16 has 18 desks measured at
+ * 44.5°–45.5° along the angled facade, and `Math.round(45 / 90)` is 1 — so
+ * rounding reports them as turned a full quarter from where they are drawn.
+ */
+export const wrapRotation = (deg: number): number => ((deg % 360) + 360) % 360
+
 /** Rotation swaps the footprint: a 1200×600 desk turned 90° occupies 600×1200. */
 export function placementFootprint(placement: SpatialPlacement): { width: number; depth: number } {
   return placement.rotation % 180 === 0

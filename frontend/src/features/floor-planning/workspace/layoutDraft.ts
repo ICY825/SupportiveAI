@@ -22,6 +22,7 @@ import {
   placementTransform,
   transformBBox,
   validatePlacement,
+  wrapRotation,
   type PlacementBoundary,
   type PlacementValidation,
   type QuarterRotation,
@@ -403,7 +404,11 @@ export function applyPlacements(
       polygon,
       center: move(ws.center),
       bbox: bboxOfPoints(polygon),
-      rotationDeg: normalizeRotation(ws.rotationDeg + (to.rotation - from.rotation)),
+      // The quarter turn is the editor's; the base angle is the drawing's.
+      // Composing them with normalizeRotation rounded the sum, so a desk drawn
+      // at 45° and turned once was described as 180° — a facing it has never
+      // had. For the orthogonal desks both spellings agree exactly.
+      rotationDeg: wrapRotation(ws.rotationDeg + (to.rotation - from.rotation)),
       chair: ws.chair ? { center: move(ws.chair.center), bbox: transformBBox(ws.chair.bbox, move) } : null,
     }
   })
