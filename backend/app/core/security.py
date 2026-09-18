@@ -67,14 +67,19 @@ def decode_access_token(token: str) -> dict[str, Any]:
     return _decode(token, TOKEN_TYPE_ACCESS)
 
 
-def create_confirm_token(entity_type: str, entity_id: str, *, jti: str) -> str:
+def create_confirm_token(
+    entity_type: str, entity_id: str, *, jti: str, claims: dict[str, Any] | None = None
+) -> str:
     """Token cho link xác nhận gửi qua thông báo.
 
-    `jti` là mã duy nhất của lần phát token. Việc đảm bảo **dùng một lần**
-    cần một nơi lưu jti đã dùng — xem ghi chú ở cuối file.
+    `jti` là mã duy nhất của lần phát token. `claims` cho module gắn thêm
+    phạm vi riêng (ví dụ danh sách kiện trong một email) — không được đè
+    các khóa chuẩn.
     """
+    extra = dict(claims or {})
     return _encode(
-        {"sub": f"{entity_type}:{entity_id}", "ent": entity_type, "eid": entity_id, "jti": jti},
+        {**extra, "sub": f"{entity_type}:{entity_id}", "ent": entity_type,
+         "eid": entity_id, "jti": jti},
         timedelta(hours=settings.confirm_token_ttl_hours),
         TOKEN_TYPE_CONFIRM,
     )
@@ -84,10 +89,10 @@ def decode_confirm_token(token: str) -> dict[str, Any]:
     return _decode(token, TOKEN_TYPE_CONFIRM)
 
 
-# ⚠️ CHƯA HOÀN CHỈNH — cần quyết định kiến trúc.
+# Về "dùng một lần" (mail-tracking.md §12) — chốt 18/09/2026: KHÔNG áp.
 #
-# mail-tracking.md §12 yêu cầu link xác nhận "có thời hạn, dùng một lần".
-# Phần "có thời hạn" đã xong bằng `exp` ở trên. Phần "dùng một lần" cần lưu
-# lại các `jti` đã tiêu, mà README §5.4 mô tả xác nhận là cơ chế dùng chung
-# cho cả 4 phân hệ — trong khi repository-structure.md §3 lại không có gói
-# `platform/confirmation/`. Chưa tự thêm gói mới; xem báo cáo cuối Tuần 1.
+# Một email gộp nhiều kiện, người nhận có thể lấy làm hai lần; link dùng
+# một lần thì lần sau hết đường xác nhận. Thay vào đó token bị giới hạn
+# phạm vi: chỉ đúng các kiện trong email đó, và việc xác nhận lại một kiện
+# đã nhận không đổi gì. Nhờ vậy không cần nơi lưu `jti` đã tiêu. `jti` vẫn
+# được phát để sau này thu hồi được nếu cần.

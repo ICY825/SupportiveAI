@@ -6,13 +6,21 @@ import hashlib
 import logging
 from collections.abc import Sequence
 from datetime import UTC, datetime, time, timedelta
+from urllib.parse import urlencode
 
+import segno
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import utcnow
-from app.core.exceptions import ConflictError, NotFoundError, ValidationError
+from app.core.exceptions import (
+    AuthenticationError,
+    ConflictError,
+    NotFoundError,
+    ValidationError,
+)
+from app.core.security import decode_confirm_token
 from app.modules.document_flow.mail import notifications
 from app.modules.document_flow.mail.events import MailAbandoned, MailOverdue, MailReceived
 from app.modules.document_flow.mail.matcher import MatchResult, RecipientMatcher
@@ -585,6 +593,63 @@ class MailService:
                 )
             )
         return rows
+
+    def confirm_link_items(self, token: str) -> tuple[Employee, list[MailItem]]:
+        """Người nhận mở link trong email: trả về đúng các kiện của email đó.
+
+        Kiểm thêm ngoài chữ ký của token: kiện phải **vẫn** thuộc người đó
+        (HC có thể đã sửa người nhận sau khi gửi). Kiện đã nhận vẫn trả về
+        để trang hiện "đã nhận" thay vì biến mất khó hiểu.
+        """
+        payload = decode_confirm_token(token)
+        if payload.get("ent") != notifications.CONFIRM_ENTITY:
+            raise AuthenticationError("Link không dùng cho việc xác nhận nhận hàng")
+        employee = self.employees.get(payload.get("eid") or "")
+        if employee is None:
+            raise AuthenticationError("Link không còn hợp lệ")
+        items = [self.repo.get_item(i) for i in payload.get("items") or []]
+        return employee, [i for i in items if i is not None and i.employee_id == employee.id]
+
+    def confirm_by_link(self, token: str, item_ids: Sequence[str]) -> list[MailItem]:
+        """Xác nhận đã nhận qua link email — không cần đăng nhập (§7.2, đường phụ).
+
+        Token dùng lại được (chốt 18/09/2026): người nhận lấy 3 kiện làm hai
+        lần thì lần sau vẫn bấm được. Phạm vi bị giới hạn vào kiện trong
+        email, và xác nhận lại kiện đã nhận thì không đổi gì.
+        """
+        employee, items = self.confirm_link_items(token)
+        allowed = {i.id: i for i in items}
+        if not item_ids:
+            raise ValidationError("Chưa chọn kiện nào")
+        unknown = [i for i in item_ids if i not in allowed]
+        if unknown:
+            # Không nói kiện đó có tồn tại hay không.
+            raise NotFoundError("Kiện không nằm trong thông báo này")
+        return [
+            self.confirm_collect(
+                item_id, handover_method=HandoverMethod.SELF_LINK, collected_by=employee.id
+            )
+            for item_id in dict.fromkeys(item_ids)
+        ]
+
+    @staticmethod
+    def station_sign() -> dict:
+        """Nội dung tấm biển QR dán tại khu để đơn (§7.2, đường chính).
+
+        URL cố định kèm mã trạm, nên chỉ in một lần — đổi mã trạm hoặc đổi
+        địa chỉ hệ thống thì in lại.
+        """
+        # Frontend dùng HashRouter nên đường dẫn trang nằm sau `#/`.
+        base = f"{settings.public_base_url.rstrip('/')}/#/station"
+        token = settings.mail_station_token
+        url = f"{base}?{urlencode({'t': token})}" if token else base
+        qr = segno.make(url, error="m")
+        return {
+            "url": url,
+            "svg": qr.svg_inline(scale=10, border=2, omitsize=True),
+            "station_token_configured": bool(token),
+            "https": url.startswith("https://"),
+        }
 
     def confirm_collect(
         self,

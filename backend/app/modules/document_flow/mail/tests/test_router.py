@@ -508,3 +508,52 @@ class TestXoaLo:
                                headers=hc_headers).json()["batch_id"]
         response = client.delete(f"/api/mail/batches/{batch_id}", headers=nv_headers)
         assert response.status_code == 403
+
+
+class TestLinkXacNhan:
+    """Link trong email — công khai, xác thực bằng token (§7.2, đường phụ)."""
+
+    @pytest.fixture
+    def token(self, db, lo_da_gui):
+        import re
+
+        from app.platform.notification.models import Notification
+
+        mail = db.query(Notification).one()
+        return re.search(r"/confirm\?token=(\S+)", mail.body).group(1)
+
+    def test_mo_link_khong_can_dang_nhap(self, client, token):
+        response = client.post("/api/mail/confirm/lookup", json={"token": token})
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["recipient_name"] == "Nguyễn Văn An"
+        assert len(body["items"]) == 2
+
+    def test_xac_nhan_qua_link(self, client, token):
+        items = client.post("/api/mail/confirm/lookup", json={"token": token}).json()["items"]
+        response = client.post("/api/mail/confirm/collect",
+                               json={"token": token, "item_ids": [items[0]["item_id"]]})
+        assert response.status_code == 200, response.text
+        statuses = {i["item_id"]: i["status"] for i in response.json()["items"]}
+        assert statuses[items[0]["item_id"]] == MailStatus.COLLECTED
+        assert statuses[items[1]["item_id"]] == MailStatus.NOTIFIED
+
+    def test_token_sai_tra_401(self, client):
+        response = client.post("/api/mail/confirm/lookup", json={"token": "x" * 40})
+        assert response.status_code == 401
+
+    def test_khong_can_ma_tram(self, client, token, monkeypatch):
+        monkeypatch.setattr(settings, "mail_station_token", "bi-mat")
+        response = client.post("/api/mail/confirm/lookup", json={"token": token})
+        assert response.status_code == 200
+
+
+class TestBienQr:
+    def test_hc_lay_duoc_ma_qr(self, client, hc_headers):
+        response = client.get("/api/mail/station/sign", headers=hc_headers)
+        assert response.status_code == 200
+        assert response.json()["svg"].startswith("<svg")
+
+    def test_nhan_vien_thuong_khong_xem_duoc(self, client, nv_headers):
+        """URL trong QR chứa mã trạm."""
+        assert client.get("/api/mail/station/sign", headers=nv_headers).status_code == 403

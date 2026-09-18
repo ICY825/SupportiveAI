@@ -53,8 +53,13 @@ class Settings(BaseSettings):
     # Tối thiểu 32 byte cho HS256. Môi trường thật phải đặt SECRET_KEY riêng.
     secret_key: str = "dev-only-change-me-32-bytes-minimum!!"
     access_token_ttl_minutes: int = 8 * 60
-    # Link xác nhận gửi qua email (mail-tracking.md §12)
-    confirm_token_ttl_hours: int = 72
+    # Link xác nhận gửi qua email (mail-tracking.md §12). Phải dài hơn mốc
+    # tồn đọng T+5: người nhận vẫn được lấy hàng sau mốc đó, và email đầu
+    # tiên là thứ họ còn giữ.
+    confirm_token_ttl_hours: int = 14 * 24
+    # Địa chỉ người nhận mở được từ điện thoại — dùng để dựng link trong
+    # email và URL nhúng trong QR dán tại khu để đơn. Không có dấu `/` cuối.
+    public_base_url: str = "http://localhost:5173"
 
     # --- Bật/tắt module (repository-structure.md §7) ---
     # `NoDecode` để pydantic-settings đừng cố đọc giá trị env bằng JSON;

@@ -761,7 +761,9 @@ Workflow, notification và audit log dùng chung của nền tảng. `workflow_i
 | Nhân viên HC | `hc`       | Tải file, soát, gửi thông báo, xem màn hình kiện quá hạn, xem toàn bộ báo cáo |
 | Nhân viên    | `employee` | Xem kiện của chính mình, tự xác nhận đã nhận                                  |
 
-Link xác nhận gửi qua email cần token có thời hạn, dùng một lần, để tránh người khác xác nhận hộ.
+Link xác nhận gửi qua email cần token có thời hạn để tránh người khác xác nhận hộ.
+
+> ✅ **Chốt 18/09/2026: link dùng lại được, không dùng một lần.** Một email gộp nhiều kiện và người nhận có thể lấy làm hai lần; link dùng một lần thì lần sau hết đường xác nhận. Thay vào đó token (ký bằng `SECRET_KEY`) chỉ có hiệu lực với **đúng các kiện trong email đó** và vẫn phải thuộc người nhận đó; xác nhận lại kiện đã nhận thì không đổi gì. Hạn `CONFIRM_TOKEN_TTL_HOURS` = 14 ngày — dài hơn mốc tồn đọng T+5 vì người nhận vẫn lấy được hàng sau mốc đó. Link trỏ tới `PUBLIC_BASE_URL/#/confirm?token=…` (frontend dùng HashRouter), API `POST /mail/confirm/lookup` và `/mail/confirm/collect`.
 
 Màn hình "Chờ khớp" xuyên lô ([§6.4](#64-gửi-một-phần)) và endpoint tải file đều thuộc quyền `mail.manage` — chỉ HC.
 

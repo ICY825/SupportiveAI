@@ -20,6 +20,9 @@ from app.modules.document_flow.mail.schemas import (
     AssignRecipient,
     BatchSummary,
     CollectRequest,
+    ConfirmLinkCollect,
+    ConfirmLinkLookup,
+    ConfirmLinkView,
     ConfirmReview,
     DuplicateReference,
     ImportResult,
@@ -35,6 +38,7 @@ from app.modules.document_flow.mail.schemas import (
     SendResult,
     StationItem,
     StationLookup,
+    StationSign,
 )
 from app.modules.document_flow.mail.service import MailService
 from app.shared.employee.dependencies import CurrentEmployee, CurrentPrincipal, DbSession, requires
@@ -96,8 +100,57 @@ def station_collect(item_id: str, db: DbSession) -> MailItemRead:
 
 
 # ----------------------------------------------------------------------
+# Link trong email — KHÔNG yêu cầu đăng nhập, xác thực bằng token
+# ----------------------------------------------------------------------
+#
+# Token ký bằng SECRET_KEY, mang người nhận + đúng các kiện trong email đó,
+# hạn `CONFIRM_TOKEN_TTL_HOURS`. Không cần mã trạm: người có link đã chứng
+# minh được mình đọc được email.
+
+
+def _confirm_view(employee, items: list[MailItem]) -> ConfirmLinkView:
+    return ConfirmLinkView(
+        recipient_name=employee.full_name,
+        items=[
+            StationItem(
+                item_id=i.id,
+                sender=i.sender_raw,
+                content_type=i.content_type,
+                quantity=i.quantity,
+                recipient_name=employee.full_name,
+                received_at=i.received_at,
+                status=i.status,
+            )
+            for i in items
+        ],
+    )
+
+
+@router.post("/confirm/lookup", response_model=ConfirmLinkView)
+def confirm_link_lookup(payload: ConfirmLinkLookup, db: DbSession) -> ConfirmLinkView:
+    """Người nhận mở link trong email: hiện các kiện của email đó."""
+    employee, items = MailService(db).confirm_link_items(payload.token)
+    return _confirm_view(employee, items)
+
+
+@router.post("/confirm/collect", response_model=ConfirmLinkView)
+def confirm_link_collect(payload: ConfirmLinkCollect, db: DbSession) -> ConfirmLinkView:
+    """Xác nhận đã nhận các kiện được chọn, rồi trả lại trạng thái mới."""
+    service = MailService(db)
+    service.confirm_by_link(payload.token, payload.item_ids)
+    employee, items = service.confirm_link_items(payload.token)
+    return _confirm_view(employee, items)
+
+
+# ----------------------------------------------------------------------
 # Nhân viên HC
 # ----------------------------------------------------------------------
+
+
+@router.get("/station/sign", response_model=StationSign)
+def station_sign(principal: HcPrincipal) -> StationSign:
+    """Mã QR để in dán tại khu để đơn. Chỉ HC — URL chứa mã trạm."""
+    return StationSign(**MailService.station_sign())
 
 
 def _import_result(db, batch, warnings: list[str] | None = None) -> ImportResult:

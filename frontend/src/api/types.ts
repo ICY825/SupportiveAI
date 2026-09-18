@@ -189,6 +189,20 @@ export interface StationItem {
   status: MailStatus;
 }
 
+/** Trang mở từ link trong email: đúng các kiện của email đó. */
+export interface ConfirmLinkView {
+  recipient_name: string;
+  items: StationItem[];
+}
+
+/** Nội dung tấm biển QR dán tại khu để đơn. */
+export interface StationSign {
+  url: string;
+  svg: string;
+  station_token_configured: boolean;
+  https: boolean;
+}
+
 // --- Báo cáo ---
 
 export interface WeeklyMatchRate {

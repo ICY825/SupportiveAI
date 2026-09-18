@@ -1,5 +1,6 @@
 import { api } from '@/api/client';
 import type {
+  ConfirmLinkView,
   ImportResult,
   MailBatch,
   MailBatchDetail,
@@ -8,6 +9,7 @@ import type {
   PendingMatchItem,
   SendResult,
   StationItem,
+  StationSign,
 } from '@/api/types';
 
 // --- Lô và màn hình soát ---
@@ -112,4 +114,23 @@ export function stationCollect(itemId: string, stationToken: string | null) {
     anonymous: true,
     stationToken,
   });
+}
+
+/** Mã QR in dán tại khu để đơn — chỉ HC, vì URL chứa mã trạm. */
+export function getStationSign() {
+  return api.get<StationSign>('/mail/station/sign');
+}
+
+// --- Link trong email (công khai, xác thực bằng token trong link) ---
+
+export function confirmLinkLookup(token: string) {
+  return api.post<ConfirmLinkView>('/mail/confirm/lookup', { token }, { anonymous: true });
+}
+
+export function confirmLinkCollect(token: string, itemIds: string[]) {
+  return api.post<ConfirmLinkView>(
+    '/mail/confirm/collect',
+    { token, item_ids: itemIds },
+    { anonymous: true },
+  );
 }

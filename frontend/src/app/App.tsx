@@ -5,10 +5,12 @@ import { LockerManagementPage } from '../features/lockers/pages/LockerManagement
 import { MailShell } from '../features/mail/MailShell'
 import BatchDetailPage from '../features/mail/pages/BatchDetailPage'
 import BatchesPage from '../features/mail/pages/BatchesPage'
+import ConfirmPage from '../features/mail/pages/ConfirmPage'
 import ItemsPage from '../features/mail/pages/ItemsPage'
 import PendingMatchPage from '../features/mail/pages/PendingMatchPage'
 import ReportsPage from '../features/mail/pages/ReportsPage'
 import StationPage from '../features/mail/pages/StationPage'
+import StationSignPage from '../features/mail/pages/StationSignPage'
 import { SessionProvider } from '../shared/auth'
 import { AppNav } from './AppNav'
 import LoginPage from './LoginPage'
@@ -38,7 +40,8 @@ interface ShellProps {
 
 /**
  * The navigation rail plus whatever module is open. Wraps every signed-in
- * screen; `/login` and `/station` sit outside it on purpose — see routes below.
+ * screen; `/login`, `/station` and `/confirm` sit outside it on purpose — see
+ * routes below.
  */
 function AppShell({ settingsOpen, settingsApplicable, onSettingsOpenChange }: ShellProps) {
   const activeModule = activeModuleFor(useLocation().pathname)
@@ -77,14 +80,17 @@ export function App() {
       <SessionProvider>
         <Routes>
           {/*
-           * The only two routes outside the sign-in guard.
+           * The only three routes outside the sign-in guard.
            *
            * `/station` is the QR screen at the parcel bench: most employees
            * have no account and must confirm on the spot, so it must never ask
-           * for one. `/login` cannot sit behind the guard either, or signing in
-           * would require being signed in.
+           * for one. `/confirm` is the link in the notification email, for the
+           * same people — the token in the link says who they are. `/login`
+           * cannot sit behind the guard either, or signing in would require
+           * being signed in.
            */}
           <Route path="/station" element={<StationPage />} />
+          <Route path="/confirm" element={<ConfirmPage />} />
           <Route path="/login" element={<LoginPage />} />
 
           {/*
@@ -122,6 +128,7 @@ export function App() {
                 <Route path="pending-match" element={<PendingMatchPage />} />
                 <Route path="items" element={<ItemsPage />} />
                 <Route path="reports" element={<ReportsPage />} />
+                <Route path="station-sign" element={<StationSignPage />} />
               </Route>
 
               <Route path="*" element={<Navigate to="/floor-planning" replace />} />

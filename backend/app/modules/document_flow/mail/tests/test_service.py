@@ -731,3 +731,128 @@ class TestXoaLo:
     def test_lo_khong_ton_tai(self, service):
         with pytest.raises(NotFoundError):
             service.delete_batch("khong-co")
+
+
+# ----------------------------------------------------------------------
+# Link xác nhận trong email (§7.2, đường phụ) và biển QR tại khu để đơn
+# ----------------------------------------------------------------------
+
+def _token_trong(mail) -> str:
+    import re
+
+    return re.search(r"/confirm\?token=(\S+)", mail.body).group(1)
+
+
+class TestLinkXacNhan:
+    @pytest.fixture
+    def da_gui(self, service, nhan_su, db):
+        batch = nap(service, [row(sender="cty nam hải"), row(sender="cty hùng long", quantity=2),
+                              row(name="Trần Thị Bình")], uploaded_by=nhan_su["an"].id)
+        service.send_batch(batch.id)
+        mails = {m.recipient_employee_id: m for m in db.query(Notification)}
+        return batch, mails[nhan_su["an"].id], mails[nhan_su["binh"].id]
+
+    def test_email_co_link_va_nut_bam(self, da_gui, monkeypatch):
+        _, mail, _ = da_gui
+        assert "/#/confirm?token=" in mail.body
+        assert _token_trong(mail)
+
+    def test_link_dung_dia_chi_public(self, service, nhan_su, db, monkeypatch):
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "public_base_url", "https://ho-tro.congty.vn/")
+        batch = nap(service, [row()], uploaded_by=nhan_su["an"].id)
+        service.send_batch(batch.id)
+        assert "https://ho-tro.congty.vn/#/confirm?token=" in db.query(Notification).one().body
+
+    def test_ban_html_escape_du_lieu_tu_file(self):
+        """Tên người gửi lấy thẳng từ file lễ tân — không được lọt thành HTML."""
+        from app.modules.document_flow.mail import notifications
+        from app.platform.notification import NotificationPayload, Recipient
+
+        recipient = Recipient(employee_id="e1", display_name="An <b>", email="an@example.com")
+        payload = NotificationPayload(
+            recipient=recipient, entity_type="mail_item", entity_id="i1",
+            context={"sender": "<script>x</script>", "quantity": 1},
+        )
+        html = notifications.render_received(recipient, [payload]).html
+        assert "Tôi đã nhận hàng" in html
+        assert "<script>" not in html and "<b>" not in html
+
+    def test_link_chi_hien_kien_cua_email_do(self, service, da_gui, nhan_su):
+        _, mail_an, _ = da_gui
+        employee, items = service.confirm_link_items(_token_trong(mail_an))
+        assert employee.id == nhan_su["an"].id
+        assert len(items) == 2
+        assert all(i.employee_id == nhan_su["an"].id for i in items)
+
+    def test_xac_nhan_qua_link(self, service, da_gui, nhan_su):
+        _, mail_an, _ = da_gui
+        token = _token_trong(mail_an)
+        _, items = service.confirm_link_items(token)
+
+        done = service.confirm_by_link(token, [items[0].id])
+        assert done[0].status == MailStatus.COLLECTED
+        assert done[0].handover_method == HandoverMethod.SELF_LINK
+        assert done[0].collected_by == nhan_su["an"].id
+
+    def test_lay_lam_hai_lan_van_dung_lai_duoc_link(self, service, da_gui):
+        """Chốt 18/09/2026: link không dùng một lần."""
+        _, mail_an, _ = da_gui
+        token = _token_trong(mail_an)
+        _, items = service.confirm_link_items(token)
+
+        service.confirm_by_link(token, [items[0].id])
+        service.confirm_by_link(token, [items[0].id, items[1].id])
+        assert all(i.status == MailStatus.COLLECTED for i in items)
+
+    def test_khong_xac_nhan_duoc_kien_ngoai_email(self, service, da_gui):
+        batch, mail_an, _ = da_gui
+        cua_binh = next(i for i in batch.items if i.recipient_name_raw == "Trần Thị Bình")
+        with pytest.raises(NotFoundError):
+            service.confirm_by_link(_token_trong(mail_an), [cua_binh.id])
+        assert cua_binh.status == MailStatus.NOTIFIED
+
+    def test_token_dang_nhap_khong_dung_thay_duoc(self, service, nhan_su):
+        from app.core.exceptions import AuthenticationError
+        from app.core.security import create_access_token
+
+        with pytest.raises(AuthenticationError):
+            service.confirm_link_items(create_access_token(nhan_su["an"].id))
+
+    def test_token_het_han(self, service, nhan_su, db, monkeypatch):
+        from app.core.config import settings
+        from app.core.exceptions import AuthenticationError
+
+        monkeypatch.setattr(settings, "confirm_token_ttl_hours", -1)
+        batch = nap(service, [row()], uploaded_by=nhan_su["an"].id)
+        service.send_batch(batch.id)
+        with pytest.raises(AuthenticationError):
+            service.confirm_link_items(_token_trong(db.query(Notification).one()))
+
+    def test_token_bi_sua_thi_tu_choi(self, service, da_gui):
+        from app.core.exceptions import AuthenticationError
+
+        _, mail_an, _ = da_gui
+        with pytest.raises(AuthenticationError):
+            service.confirm_link_items(_token_trong(mail_an)[:-3] + "abc")
+
+
+class TestBienQr:
+    def test_url_kem_ma_tram(self, monkeypatch):
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "public_base_url", "https://ho-tro.congty.vn")
+        monkeypatch.setattr(settings, "mail_station_token", "ma tram&1")
+        sign = MailService.station_sign()
+        assert sign["url"] == "https://ho-tro.congty.vn/#/station?t=ma+tram%261"
+        assert sign["svg"].startswith("<svg")
+        assert sign["station_token_configured"] and sign["https"]
+
+    def test_chua_dat_ma_tram_thi_bao(self, monkeypatch):
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "mail_station_token", "")
+        sign = MailService.station_sign()
+        assert sign["url"].endswith("/#/station")
+        assert not sign["station_token_configured"]

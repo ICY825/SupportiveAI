@@ -9,8 +9,8 @@
  * lúc đang đăng nhập:
  *
  * 1. `/mail/*` mở toang cho người chưa đăng nhập;
- * 2. `/station` đòi đăng nhập, trong khi người quét QR tại khu để đơn không có
- *    tài khoản (mail-tracking.md §7.2).
+ * 2. `/station` hay `/confirm` đòi đăng nhập, trong khi người quét QR tại khu
+ *    để đơn hoặc bấm link trong email không có tài khoản (mail-tracking.md §7.2).
  */
 
 import { cleanup, render, screen } from '@testing-library/react'
@@ -20,6 +20,7 @@ import { App } from '../App'
 
 const me = vi.fn()
 const listBatches = vi.fn()
+const confirmLinkLookup = vi.fn()
 
 vi.mock('../../api/auth', () => ({
   me: () => me(),
@@ -33,6 +34,9 @@ vi.mock('../../api/mail', () => ({
   getReport: vi.fn(),
   stationLookup: vi.fn(),
   stationCollect: vi.fn(),
+  confirmLinkLookup: (token: string) => confirmLinkLookup(token),
+  confirmLinkCollect: vi.fn(),
+  getStationSign: vi.fn(() => new Promise(() => {})),
 }))
 
 beforeAll(() => {
@@ -71,6 +75,8 @@ beforeEach(() => {
   me.mockReset()
   listBatches.mockReset()
   listBatches.mockResolvedValue([])
+  confirmLinkLookup.mockReset()
+  confirmLinkLookup.mockResolvedValue({ recipient_name: 'Trần Thu Hà', items: [] })
 })
 
 afterEach(() => {
@@ -96,6 +102,26 @@ describe('route guard', () => {
     expect(await screen.findByText('Xác nhận đã nhận hàng')).toBeTruthy()
     expect(screen.queryByLabelText('Mã nhân viên')).toBeNull()
     expect(window.location.hash).toBe('#/station?t=station-token')
+  })
+
+  it('opens the email confirm link with no session and no sign-in prompt', async () => {
+    window.location.hash = '#/confirm?token=link-token'
+    render(<App />)
+
+    expect(await screen.findByText('Kiện hàng của', { exact: false })).toBeTruthy()
+    expect(screen.queryByLabelText('Mã nhân viên')).toBeNull()
+    expect(confirmLinkLookup).toHaveBeenCalledWith('link-token')
+    expect(window.location.hash).toBe('#/confirm?token=link-token')
+  })
+
+  it('sends an anonymous visitor from the QR sign screen to the sign-in page', async () => {
+    // Ai cầm URL trên biển là gọi được API xác nhận của khu để đơn, nên màn
+    // hình in biển chỉ dành cho HC.
+    window.location.hash = '#/mail/station-sign'
+    render(<App />)
+
+    expect(await screen.findByLabelText('Mã nhân viên')).toBeTruthy()
+    expect(window.location.hash).toBe('#/login')
   })
 
   it('lets a signed-in employee through to the mail screens', async () => {

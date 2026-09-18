@@ -15,7 +15,7 @@ import { useSession } from '../../shared/auth'
 import './mail.css'
 
 /**
- * Bốn màn hình của Đề 3. Ở wireframe đây là `view-toggle` trên topbar —
+ * Các màn hình của Đề 3. Ở wireframe đây là `view-toggle` trên topbar —
  * thanh điều hướng chỉ liệt kê phân hệ, không lồng màn hình con vào.
  */
 const MAIL_VIEWS = [
@@ -23,6 +23,7 @@ const MAIL_VIEWS = [
   { to: '/mail/pending-match', label: 'Chờ khớp' },
   { to: '/mail/items', label: 'Kiện hàng' },
   { to: '/mail/reports', label: 'Báo cáo' },
+  { to: '/mail/station-sign', label: 'Biển QR' },
 ]
 
 export function MailShell() {

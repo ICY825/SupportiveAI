@@ -18,6 +18,9 @@ dependencies = [
     "openpyxl>=3.1",
     # FastAPI cần cho endpoint tải file lên (POST /mail/batches/upload).
     "python-multipart>=0.0.9",
+    # Sinh mã QR dán tại khu để đơn (GET /mail/station/sign). Python thuần,
+    # không kéo thêm phụ thuộc nào.
+    "segno>=1.6",
 ]
 
 [project.optional-dependencies]

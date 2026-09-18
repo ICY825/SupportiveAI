@@ -241,5 +241,33 @@ class StationItem(BaseModel):
     status: str
 
 
+class ConfirmLinkLookup(BaseModel):
+    """Token lấy từ link trong email (§7.2, đường phụ).
+
+    Gửi trong body chứ không đặt lên đường dẫn API, để token không nằm
+    trong access log của reverse proxy.
+    """
+
+    token: str = Field(min_length=10, max_length=4096)
+
+
+class ConfirmLinkCollect(ConfirmLinkLookup):
+    item_ids: list[str] = Field(min_length=1, max_length=100)
+
+
+class ConfirmLinkView(BaseModel):
+    recipient_name: str
+    items: list[StationItem]
+
+
+class StationSign(BaseModel):
+    """Nội dung tấm biển QR in dán tại khu để đơn."""
+
+    url: str
+    svg: str
+    station_token_configured: bool
+    https: bool
+
+
 class CollectRequest(BaseModel):
     handover_method: str
