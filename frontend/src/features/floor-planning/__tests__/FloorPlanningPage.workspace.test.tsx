@@ -132,11 +132,16 @@ describe('desk selection → workspace inspector', () => {
     expect(screen.getByText(/Không tìm thấy kết quả/)).toBeTruthy()
   }, 30000)
 
-  it('offers six display areas and renders canonical context without expanding the target count', async () => {
+  /**
+   * Seven, not six: A–F were drawn around the block east of the lift cores, and
+   * G collects the western block the team named as the same department. Every
+   * desk in a department must be reachable from the picker.
+   */
+  it('offers seven display areas and renders canonical context without expanding the target count', async () => {
     await openWorkspace()
     expect(document.querySelector('.sw-map-stage .sw-map-controls')).not.toBeNull()
     const picker = screen.getByRole('combobox', { name: 'Tập trung khu vực' }) as HTMLSelectElement
-    expect(picker.options).toHaveLength(7)
+    expect(picker.options).toHaveLength(8)
     expect([...picker.options].slice(1).map((option) => option.textContent)).toEqual([
       'Khu vực A',
       'Khu vực B',
@@ -144,6 +149,7 @@ describe('desk selection → workspace inspector', () => {
       'Khu vực D',
       'Khu vực E',
       'Khu vực F',
+      'Khu vực G',
     ])
     const editButton = screen.getByRole('button', { name: /Chỉnh sửa bố trí/ })
     expect(editButton).not.toHaveProperty('disabled', true)

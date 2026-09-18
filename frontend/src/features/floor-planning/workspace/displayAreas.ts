@@ -74,7 +74,7 @@ export function buildWorkspaceDisplayAreasForScope(dataset: FloorDataset, depart
   }
   const bounds = floorBounds(dataset)
 
-  const definitions = departmentScope.departmentId === 'dept-ai-data'
+  const curated = departmentScope.departmentId === 'dept-ai-data'
     ? AI_AREA_DEFINITIONS
     : resolved.zoneIds.map((zoneId, index) => ({
         id: `zone-area-${zoneId}`,
@@ -82,6 +82,38 @@ export function buildWorkspaceDisplayAreasForScope(dataset: FloorDataset, depart
         short: String(index + 1),
         clusterIds: dataset.clusters.filter((cluster) => cluster.zoneId === zoneId).map((cluster) => cluster.id),
       }))
+
+  /**
+   * Any accepted cluster no definition claims still needs somewhere to be.
+   *
+   * The six AI areas were drawn around the block east of the lift cores. When
+   * the team named the western block as the same department, its five clusters
+   * — 38 desks — belonged to a department whose area picker could not reach
+   * them: visible on the overview, impossible to focus, impossible to edit.
+   *
+   * Collecting the remainder by zone keeps that from recurring. Re-extraction
+   * that finds a new cluster, or another zone joining a department, lands in an
+   * area instead of vanishing from the picker.
+   */
+  const claimed = new Set(curated.flatMap((definition) => definition.clusterIds))
+  const leftoverByZone = new Map<string, string[]>()
+  for (const [clusterId, workstations] of byCluster) {
+    if (claimed.has(clusterId)) continue
+    const zoneId = workstations[0]?.zoneId
+    if (!zoneId) continue
+    leftoverByZone.set(zoneId, [...(leftoverByZone.get(zoneId) ?? []), clusterId])
+  }
+  const definitions = [
+    ...curated,
+    ...[...leftoverByZone.entries()].map(([zoneId, clusterIds], index) => ({
+      id: `zone-area-${zoneId}`,
+      // Carry on the same lettering the curated areas use, so the picker reads
+      // as one sequence rather than two naming schemes.
+      label: `Khu vực ${String.fromCharCode(65 + curated.length + index)}`,
+      short: String.fromCharCode(65 + curated.length + index),
+      clusterIds,
+    })),
+  ]
 
   return definitions.flatMap((definition) => {
     const workstations = definition.clusterIds.flatMap((clusterId) => byCluster.get(clusterId) ?? [])

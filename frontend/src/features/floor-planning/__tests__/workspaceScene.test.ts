@@ -84,17 +84,18 @@ describe('workspace scope selection', () => {
   })
 
   /**
-   * The six curated areas were drawn for the block east of the lift cores, and
-   * they still cover only that block — the department's other 38 desks have no
-   * area to focus. That gap is real and visible here on purpose.
+   * A–F were drawn around the block east of the lift cores. G is the western
+   * block, collected automatically: every cluster a curated area does not claim
+   * still has to be reachable, or its desks are visible on the overview and
+   * impossible to focus or edit.
    */
-  it('partitions the eastern AI block into six disjoint display areas', () => {
+  it('partitions the whole department into seven disjoint display areas', () => {
     const areas = buildWorkspaceDisplayAreas(dataset)
-    expect(areas).toHaveLength(6)
-    expect(areas.map((area) => area.workstationIds.length)).toEqual([28, 21, 15, 14, 22, 16])
-    expect(areas.flatMap((area) => area.clusterIds)).toHaveLength(21)
+    expect(areas).toHaveLength(7)
+    expect(areas.map((area) => area.workstationIds.length)).toEqual([28, 21, 15, 14, 22, 16, 38])
+    expect(areas.flatMap((area) => area.clusterIds)).toHaveLength(26)
     const workstationIds = areas.flatMap((area) => area.workstationIds)
-    expect(new Set(workstationIds).size).toBe(116)
+    expect(new Set(workstationIds).size).toBe(154)
     expect(workstationIds).toEqual(expect.arrayContaining(dataset.workstations.filter((workstation) => workstation.zoneId === 'zone-16-ai-platform').map((workstation) => workstation.id)))
   })
 
