@@ -46,8 +46,6 @@ export function seatsOf(dataset: FloorDataset, layoutVersion: string): Seat[] {
       id: seatIdOf(workstation.id),
       code: seatCodeOf(dataset, workstation),
       workstationId: workstation.id,
-      status: 'ACTIVE',
-      seatType: 'FIXED',
       // Backend chưa giữ phòng ban của ghế, và đoán theo khu vực thì sai khi
       // một khu chứa nhiều phòng. Để trống cho tới khi có người chốt.
       departmentId: null,

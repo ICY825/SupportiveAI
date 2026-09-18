@@ -115,7 +115,7 @@ export function WorkspaceProperties({ desk, showDepartment }: { desk: DeskRecord
           ['Khu vực', workstation.zoneId ? (zone?.name ?? UNLABELED_ZONE) : 'Ngoài các khu vực'],
           ['Tầng', workstation.floorId.replace(/^floor-/, '')],
           ['Phòng ban', showDepartment ? (desk.department?.name ?? 'Chưa phân bổ') : null],
-          ['Loại chỗ', SEAT_TYPE[seat.seatType]],
+          ['Loại chỗ', seat.seatType ? SEAT_TYPE[seat.seatType] : undefined],
         ]}
       />
     </InspectorSection>

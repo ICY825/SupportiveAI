@@ -8,10 +8,11 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
       // Dataset mặt bằng nằm ngoài `frontend/` để backend đọc được cùng một
       // nguồn — xem data/README.md.
+      // Keep this specific prefix before the broad `@` alias.
       '@data': fileURLToPath(new URL('../data', import.meta.url)),
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
   // Backend chạy ở cổng khác. Proxy `/api/*` thay vì bật CORS: trình duyệt chỉ

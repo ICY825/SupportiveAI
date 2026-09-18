@@ -305,6 +305,7 @@ export function FloorPlanningPage({
           allocationStore={allocation.status === 'live' ? liveAllocationStore : undefined}
           onAllocationCommitted={allocation.status === 'live' ? allocation.reload : undefined}
           onSearchEmployees={allocation.status === 'live' ? searchDirectory : undefined}
+          reconcile={allocation.status === 'live' ? allocation.reconcile : null}
         />
       )}
       {effectiveDataset && view === 'verification' && (

@@ -29,8 +29,10 @@ export interface Seat {
   /** human-facing desk code, e.g. F16-A-023 */
   code: string
   workstationId: string
-  status: SeatStatus
-  seatType: SeatType
+  /** Operational status, when the source system records one. */
+  status?: SeatStatus
+  /** Seating classification, when the source system records one. */
+  seatType?: SeatType
   /** department the seat is allocated to; null = not allocated */
   departmentId: string | null
   capabilities?: SeatCapabilities

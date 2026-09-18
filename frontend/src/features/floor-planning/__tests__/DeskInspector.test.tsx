@@ -114,6 +114,16 @@ describe('DeskInspector', () => {
     expect(within(panel).getByRole('button', { name: /Gán nhân sự/ })).toBeTruthy()
   })
 
+  it('omits unknown live seat facts instead of displaying invented values', () => {
+    renderInspector(
+      desk('available', {}, { status: undefined, seatType: undefined }),
+      { source: { kind: 'api', asOf: NOW.toISOString() } },
+    )
+    const panel = screen.getByRole('complementary')
+    expect(within(panel).queryByText('Loại chỗ')).toBeNull()
+    expect(within(panel).queryByText('Cố định')).toBeNull()
+  })
+
   it('reserved: shows who it is reserved for and when it starts', () => {
     renderInspector(desk('reserved', { reservation: person(nam, { type: 'reservation', validFrom: '2026-09-16T01:00:00Z' }) }))
     const panel = screen.getByRole('complementary')

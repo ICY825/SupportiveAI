@@ -63,6 +63,8 @@ describe('buildLiveAllocation', () => {
     expect(allocation.devices).toEqual([])
     expect(allocation.departments).toEqual([])
     expect(allocation.seats.every((seat) => seat.departmentId === null)).toBe(true)
+    expect(allocation.seats.every((seat) => seat.status === undefined)).toBe(true)
+    expect(allocation.seats.every((seat) => seat.seatType === undefined)).toBe(true)
   })
 
   it('drops an assignment pointing at a desk the drawing no longer has', () => {

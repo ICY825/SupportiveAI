@@ -38,6 +38,11 @@
 
 .sw-heading { display: flex; justify-content: space-between; gap: 16px; align-items: center; flex: none; padding: 14px var(--sw-gutter, 20px) 12px; border-bottom: 1px solid var(--sw-line); }
 .sw-breadcrumb { margin-bottom: 6px; }
+.sw-reconcile-notice { margin: 8px 0 0; color: var(--sw-invalid); font-size: var(--fp-t-small); line-height: 1.4; }
+.sw-reconcile-notice a { color: inherit; font-weight: 600; }
+.sw-reconcile-list { margin: 18px 0 2px; border-top: 1px solid var(--sw-line); padding-top: 12px; font-size: var(--fp-t-small); }
+.sw-reconcile-list summary { cursor: pointer; font-weight: 600; }
+.sw-reconcile-list ul { margin: 10px 0 0; padding-left: 18px; color: var(--sw-muted); line-height: 1.6; }
 
 /* takes whatever height the heading leaves; the scene reframes itself to fit */
 .sw-map-panel { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }

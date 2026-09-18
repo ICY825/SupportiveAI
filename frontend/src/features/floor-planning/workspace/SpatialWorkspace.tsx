@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { ApiError } from '@/api/client'
+import type { ReconcileReport } from '@/api/seats'
 import type { Employee, FloorAllocationData, Seat } from '../domain/allocation'
 import { createDemoAllocation } from '../allocation/demoAllocation'
 import {
@@ -77,6 +79,11 @@ const REDO_HINT = isMac() ? '⌘⇧Z' : 'Ctrl+Y'
 
 function Status({ desk }: { desk: DeskRecord }) {
   return <span className="fp-chip sw-status" data-status={desk.status}><svg viewBox="-2 -2 4 4" aria-hidden="true"><SeatSymbol status={desk.status} /></svg>{DESK_STATUS[desk.status].label}</span>
+}
+
+function allocationWriteError(error: unknown): string {
+  if (error instanceof ApiError) return error.message
+  return 'Không thể lưu thay đổi. Dữ liệu chỗ ngồi đã được làm mới.'
 }
 
 /** The map's own marker, at legend size, so the key teaches the map literally. */
@@ -171,8 +178,8 @@ function CompactInspector({
   canUndo: boolean
   onSearchEmployees?: (query: string) => Promise<Employee[]>
   onRegisterEmployee?: (employee: Employee) => void
-  onApplyMutations: (mutations: readonly AllocationMutation[]) => void
-  onUndo: () => void
+  onApplyMutations: (mutations: readonly AllocationMutation[]) => Promise<void>
+  onUndo: () => Promise<void>
   onDelete: (workstationId: string) => void
   canDelete?: boolean
   onClose: () => void
@@ -199,7 +206,7 @@ function CompactInspector({
   }
 
   const updateAssignmentState = (update: Partial<typeof currentAssignmentState>) => {
-    setAssignmentState({ ...currentAssignmentState, ...update, seatId: desk.seat.id })
+    setAssignmentState((current) => ({ ...current, ...update, seatId: desk.seat.id }))
   }
 
   const selectEmployee = (employee: FloorAllocationData['employees'][number]) => {
@@ -220,7 +227,9 @@ function CompactInspector({
       updateAssignmentState({ notice: plan.reasons.map(assignmentIssueText).join(' · ') })
       return
     }
-    onApplyMutations(plan.mutations)
+    void onApplyMutations(plan.mutations).catch((error) => {
+      updateAssignmentState({ notice: allocationWriteError(error) })
+    })
     updateAssignmentState({ editorOpen: false, notice: SEAT_ASSIGNMENT.assigned(employee.name) })
   }
 
@@ -230,7 +239,9 @@ function CompactInspector({
       updateAssignmentState({ notice: 'Không có phân công đang hiệu lực' })
       return
     }
-    onApplyMutations(plan.mutations)
+    void onApplyMutations(plan.mutations).catch((error) => {
+      updateAssignmentState({ notice: allocationWriteError(error) })
+    })
     updateAssignmentState({ notice: SEAT_ASSIGNMENT.released })
   }
 
@@ -253,7 +264,7 @@ function CompactInspector({
       <summary>
         <h3>Thông tin chỗ ngồi</h3>
       </summary>
-      <dl className="fp-facts"><div><dt>Khu vực</dt><dd>{desk.zone?.name ?? 'Chưa có nhãn'}</dd></div><div><dt>Bộ phận</dt><dd>{desk.department?.name ?? 'Chưa có dữ liệu'}</dd></div><div><dt>Loại chỗ ngồi</dt><dd>{SEAT_TYPE[desk.seat.seatType]}</dd></div></dl>
+      <dl className="fp-facts"><div><dt>Khu vực</dt><dd>{desk.zone?.name ?? 'Chưa có nhãn'}</dd></div><div><dt>Bộ phận</dt><dd>{desk.department?.name ?? 'Chưa có dữ liệu'}</dd></div>{desk.seat.seatType && <div><dt>Loại chỗ ngồi</dt><dd>{SEAT_TYPE[desk.seat.seatType]}</dd></div>}</dl>
     </details>
     {canAssign && (
       <section className="sw-assignment-editor" aria-label="Chỉnh sửa phân công">
@@ -280,7 +291,11 @@ function CompactInspector({
         {assignmentNotice && (
           <p className="sw-assignment-notice" role="status" aria-live="polite">
             <span>{assignmentNotice}</span>
-            {canUndo && <button type="button" className="fp-link" onClick={() => { onUndo(); updateAssignmentState({ notice: 'Đã hoàn tác' }) }}>{SEAT_ASSIGNMENT.undo}</button>}
+            {canUndo && <button type="button" className="fp-link" onClick={() => {
+              void onUndo()
+                .then(() => updateAssignmentState({ notice: 'Đã hoàn tác' }))
+                .catch((error) => updateAssignmentState({ notice: allocationWriteError(error) }))
+            }}>{SEAT_ASSIGNMENT.undo}</button>}
           </p>
         )}
       </section>
@@ -310,7 +325,7 @@ interface PendingDesk {
   placement: SpatialPlacement | null
 }
 
-export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, searchSlot, onDirtyChange, authoredEntities, onAuthoredEntityChange, layoutStore = sessionLayoutStore, allocationSource, allocationStore = sessionAllocationStore, onAllocationCommitted, onSearchEmployees }: {
+export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, searchSlot, onDirtyChange, authoredEntities, onAuthoredEntityChange, layoutStore = sessionLayoutStore, allocationSource, allocationStore = sessionAllocationStore, onAllocationCommitted, onSearchEmployees, reconcile }: {
   dataset: FloorDataset
   selected: EntityRef | null
   onSelect: (ref: EntityRef | null) => void
@@ -331,6 +346,8 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
   allocationStore?: AllocationStore
   /** the API store has no local history, so the page refetches after a write */
   onAllocationCommitted?: () => void
+  /** server-side check for assignments that no longer match the drawing */
+  reconcile?: ReconcileReport | null
   /**
    * Look an employee up in the staff directory instead of filtering the seated
    * people already on screen. Without it an empty desk can never be filled
@@ -345,6 +362,8 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     return applyAllocationMutations(baseAllocation, sessionAllocationStore.read(dataset.layout.floor.id) ?? [])
   })
   const allocationRef = useRef(allocation)
+  const undoMutationsRef = useRef<readonly AllocationMutation[] | null>(null)
+  const [canUndo, setCanUndo] = useState(false)
 
   // Real data arrives after the first render, and again after every write.
   // Adopt it wholesale: the server is the truth about who sits where, so a
@@ -353,6 +372,10 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     if (!allocationSource) return
     allocationRef.current = allocationSource
     setAllocation(allocationSource)
+    if (allocationSource.source.kind === 'api') {
+      undoMutationsRef.current = null
+      setCanUndo(false)
+    }
   }, [allocationSource])
 
   // Authored desks arrive through the spatial dataset after the demo
@@ -397,10 +420,7 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     setAllocation(next)
   }, [])
 
-  const undoMutationsRef = useRef<readonly AllocationMutation[] | null>(null)
-  const [canUndo, setCanUndo] = useState(false)
-
-  const applyAllocationChange = useCallback((mutations: readonly AllocationMutation[]) => {
+  const applyAllocationChange = useCallback(async (mutations: readonly AllocationMutation[]) => {
     if (mutations.length === 0) return
     const before = allocationRef.current
     const next = applyAllocationMutations(before, mutations)
@@ -409,10 +429,24 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     setAllocation(next)
     undoMutationsRef.current = inverseAllocationMutations(before, mutations, { at: new Date().toISOString(), actor: 'demo-admin' })
     setCanUndo(true)
-    void allocationStore.append(dataset.layout.floor.id, mutations).then(() => onAllocationCommitted?.())
+    try {
+      await allocationStore.append(dataset.layout.floor.id, mutations)
+      onAllocationCommitted?.()
+    } catch (error) {
+      // The optimistic state must never survive a rejected live write. Restore
+      // the snapshot immediately, then ask the server for the newest truth.
+      if (allocationRef.current === next) {
+        allocationRef.current = before
+        setAllocation(before)
+      }
+      undoMutationsRef.current = null
+      setCanUndo(false)
+      onAllocationCommitted?.()
+      throw error
+    }
   }, [allocationStore, dataset.layout.floor.id, onAllocationCommitted])
 
-  const undoAllocationChange = useCallback(() => {
+  const undoAllocationChange = useCallback(async () => {
     const mutations = undoMutationsRef.current
     if (!mutations || mutations.length === 0) return
     const before = allocationRef.current
@@ -421,7 +455,16 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     setAllocation(next)
     undoMutationsRef.current = null
     setCanUndo(false)
-    void allocationStore.append(dataset.layout.floor.id, mutations).then(() => onAllocationCommitted?.())
+    try {
+      await allocationStore.append(dataset.layout.floor.id, mutations)
+      onAllocationCommitted?.()
+    } catch (error) {
+      if (allocationRef.current === next) {
+        allocationRef.current = before
+        setAllocation(before)
+      }
+      throw error
+    }
   }, [allocationStore, dataset.layout.floor.id, onAllocationCommitted])
 
   const overviewScope = useMemo(() => defaultWorkspaceScope(dataset), [dataset])
@@ -1098,6 +1141,18 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
           <p className="fp-eyebrow sw-breadcrumb">{dataset.building.name} <span>/</span> {dataset.layout.floor.name} <span>/</span> {overviewScene.resolvedScope.label}{scope.kind === 'bbox' ? <><span>/</span> {scopeLabel}</> : null}</p>
           {/* Seat count and scope live in the side panel's summary, not here. */}
           <h2 className="fp-page-title">{scopeLabel}</h2>
+          {reconcile && reconcile.stale.length > 0 && (
+            <p className="sw-reconcile-notice" role="status">
+              <strong>{reconcile.stale.length} phân công không khớp mặt bằng.</strong>{' '}
+              <a
+                href="#stale-seat-assignments"
+                onClick={(event) => {
+                  event.preventDefault()
+                  document.getElementById('stale-seat-assignments')?.scrollIntoView({ block: 'nearest' })
+                }}
+              >Xem danh sách đối chiếu</a>
+            </p>
+          )}
         </div>
         <div className="sw-heading-actions">
             {editing ? (
@@ -1243,7 +1298,7 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
         desk={desk}
         allocation={allocation}
         now={now}
-        canUndo={canUndo}
+        canUndo={canUndo && allocation.source.kind === 'demo'}
         onApplyMutations={applyAllocationChange}
         onSearchEmployees={onSearchEmployees}
         onRegisterEmployee={registerEmployee}
@@ -1273,6 +1328,18 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
           </div>
         )}
       </ScopeSummary>
+      {reconcile && reconcile.stale.length > 0 && (
+        <details id="stale-seat-assignments" className="sw-reconcile-list" open>
+          <summary>Danh sách phân công cần đối chiếu ({reconcile.stale.length})</summary>
+          <ul>
+            {reconcile.stale.map((item) => (
+              <li key={item.assignment_id}>
+                <span className="fp-mono">{item.workstation_id}</span> · {item.employee_code} · {item.reason === 'missing-seat' ? 'không có trên mặt bằng' : 'khác phiên bản mặt bằng'}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
     {exitPrompt && (
       <UnsavedChangesDialog

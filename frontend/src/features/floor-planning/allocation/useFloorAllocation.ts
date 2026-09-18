@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ApiError } from '@/api/client'
-import { listAssignments } from '@/api/seats'
+import { listAssignments, reconcileFloor, type ReconcileReport } from '@/api/seats'
 import { useOptionalSession } from '@/shared/auth'
 import type { FloorAllocationData } from '../domain/allocation'
 import type { FloorDataset } from '../domain/spatial'
@@ -30,6 +30,8 @@ export interface FloorAllocation {
   status: AllocationStatus
   /** Lý do phải lùi về dữ liệu minh họa, nếu có. */
   error: string | null
+  /** Assignments that no longer match the current drawing, if checked. */
+  reconcile: ReconcileReport | null
   reload: () => void
 }
 
@@ -45,6 +47,7 @@ export function useFloorAllocation(
   const [live, setLive] = useState<FloorAllocationData | null>(null)
   const [status, setStatus] = useState<AllocationStatus>('demo')
   const [error, setError] = useState<string | null>(null)
+  const [reconcile, setReconcile] = useState<ReconcileReport | null>(null)
   const [nonce, setNonce] = useState(0)
 
   useEffect(() => {
@@ -52,11 +55,13 @@ export function useFloorAllocation(
       setLive(null)
       setStatus('demo')
       setError(null)
+      setReconcile(null)
       return
     }
 
     let cancelled = false
     setStatus('loading')
+    setReconcile(null)
     listAssignments(floorId)
       .then((assignments) => {
         if (cancelled) return
@@ -74,6 +79,15 @@ export function useFloorAllocation(
             : 'Không đọc được dữ liệu chỗ ngồi từ máy chủ.',
         )
       })
+    reconcileFloor(floorId)
+      .then((report) => {
+        if (!cancelled) setReconcile(report)
+      })
+      .catch(() => {
+        // Reconciliation is an advisory check. A permissions or network
+        // failure here must not hide otherwise valid live assignments.
+        if (!cancelled) setReconcile(null)
+      })
     return () => {
       cancelled = true
     }
@@ -81,5 +95,5 @@ export function useFloorAllocation(
 
   const reload = useCallback(() => setNonce((value) => value + 1), [])
 
-  return { data: live ?? demo, status, error, reload }
+  return { data: live ?? demo, status, error, reconcile, reload }
 }
