@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
+import { searchEmployees } from '@/api/employees'
 import { createApiAllocationStore } from '../allocation/apiAllocationStore'
 import { createDemoAllocation } from '../allocation/demoAllocation'
 import { useFloorAllocation } from '../allocation/useFloorAllocation'
@@ -29,6 +30,7 @@ import {
   type AuthoredEntities,
   type AuthoredEntityChanges,
 } from '../domain/authoredEntities'
+import type { Employee as AllocationEmployee } from '../domain/allocation'
 import type { RoomType } from '../domain/roomTypes'
 import type { BBox, EntityRef, FloorDataset, Point, VerificationState } from '../domain/spatial'
 import {
@@ -228,6 +230,22 @@ export function FloorPlanningPage({
     [floorId, allocation.reload],
   )
 
+  /**
+   * Staff directory lookup for the seat picker. Live data only ever names the
+   * people who already hold a seat, so without this an empty desk could not be
+   * filled from the map at all.
+   */
+  const searchDirectory = useCallback(async (query: string): Promise<AllocationEmployee[]> => {
+    const found = await searchEmployees(query)
+    return found.map((person) => ({
+      id: person.id,
+      employeeCode: person.employee_code,
+      name: person.full_name,
+      departmentId: person.department_id,
+      presence: 'unknown',
+    }))
+  }, [])
+
   return (
     <div className={`fp-page${view === 'workspace' ? ' is-spatial-page' : ''}`}>
       <header className="fp-topbar">
@@ -286,6 +304,7 @@ export function FloorPlanningPage({
           allocationSource={allocation.status === 'live' ? allocation.data : undefined}
           allocationStore={allocation.status === 'live' ? liveAllocationStore : undefined}
           onAllocationCommitted={allocation.status === 'live' ? allocation.reload : undefined}
+          onSearchEmployees={allocation.status === 'live' ? searchDirectory : undefined}
         />
       )}
       {effectiveDataset && view === 'verification' && (

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import type { FloorAllocationData, Seat } from '../domain/allocation'
+import type { Employee, FloorAllocationData, Seat } from '../domain/allocation'
 import { createDemoAllocation } from '../allocation/demoAllocation'
 import {
   applyAllocationMutations,
@@ -162,11 +162,15 @@ function CompactInspector({
   onClose,
   onVerify,
   showHeader = true,
+  onSearchEmployees,
+  onRegisterEmployee,
 }: {
   desk: DeskRecord
   allocation: FloorAllocationData
   now: Date
   canUndo: boolean
+  onSearchEmployees?: (query: string) => Promise<Employee[]>
+  onRegisterEmployee?: (employee: Employee) => void
   onApplyMutations: (mutations: readonly AllocationMutation[]) => void
   onUndo: () => void
   onDelete: (workstationId: string) => void
@@ -199,8 +203,16 @@ function CompactInspector({
   }
 
   const selectEmployee = (employee: FloorAllocationData['employees'][number]) => {
+    // Người tìm được từ danh mục nhân sự chưa có trong dữ liệu của tầng — họ
+    // chưa ngồi đâu cả. Cho vào trước khi kiểm, nếu không `validateAssignment`
+    // trả `unknown-employee` cho đúng người mà ta vừa chọn.
+    const known = allocation.employees.some((existing) => existing.id === employee.id)
+    if (!known) onRegisterEmployee?.(employee)
+    const base = known
+      ? allocation
+      : { ...allocation, employees: [...allocation.employees, employee] }
     const plan = planAssignment(
-      allocation,
+      base,
       { seatId: desk.seat.id, employeeId: employee.id },
       { now, actor: 'demo-admin', move: desk.status === 'occupied' },
     )
@@ -252,6 +264,7 @@ function CompactInspector({
         ) : (
           <>
             <EmployeePicker
+              onSearch={onSearchEmployees}
               employees={allocation.employees}
               departments={allocation.departments}
               seats={allocation.seats}
@@ -297,7 +310,7 @@ interface PendingDesk {
   placement: SpatialPlacement | null
 }
 
-export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, searchSlot, onDirtyChange, authoredEntities, onAuthoredEntityChange, layoutStore = sessionLayoutStore, allocationSource, allocationStore = sessionAllocationStore, onAllocationCommitted }: {
+export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, searchSlot, onDirtyChange, authoredEntities, onAuthoredEntityChange, layoutStore = sessionLayoutStore, allocationSource, allocationStore = sessionAllocationStore, onAllocationCommitted, onSearchEmployees }: {
   dataset: FloorDataset
   selected: EntityRef | null
   onSelect: (ref: EntityRef | null) => void
@@ -318,6 +331,12 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
   allocationStore?: AllocationStore
   /** the API store has no local history, so the page refetches after a write */
   onAllocationCommitted?: () => void
+  /**
+   * Look an employee up in the staff directory instead of filtering the seated
+   * people already on screen. Without it an empty desk can never be filled
+   * from live data, because a list of assignments only names its occupants.
+   */
+  onSearchEmployees?: (query: string) => Promise<Employee[]>
 }) {
   const [now] = useState(() => new Date())
   const [allocation, setAllocation] = useState<FloorAllocationData>(() => {
@@ -363,6 +382,20 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
       return next
     })
   }, [dataset.layout.floor.id, dataset.layout.floor.level, dataset.workstations, dataset.zones])
+
+  /**
+   * Someone found in the directory is not part of this floor's data yet — they
+   * sit nowhere. Add them before anything validates or renders the assignment,
+   * and update the ref synchronously, because `applyAllocationChange` reads the
+   * ref in the same tick and drops mutations for people it does not know.
+   */
+  const registerEmployee = useCallback((employee: Employee) => {
+    const current = allocationRef.current
+    if (current.employees.some((existing) => existing.id === employee.id)) return
+    const next = { ...current, employees: [...current.employees, employee] }
+    allocationRef.current = next
+    setAllocation(next)
+  }, [])
 
   const undoMutationsRef = useRef<readonly AllocationMutation[] | null>(null)
   const [canUndo, setCanUndo] = useState(false)
@@ -1212,6 +1245,8 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
         now={now}
         canUndo={canUndo}
         onApplyMutations={applyAllocationChange}
+        onSearchEmployees={onSearchEmployees}
+        onRegisterEmployee={registerEmployee}
         onUndo={undoAllocationChange}
         onDelete={deleteDesk}
         canDelete={Boolean(onAuthoredEntityChange)}
