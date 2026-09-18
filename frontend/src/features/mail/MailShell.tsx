@@ -6,24 +6,27 @@
  * thanh điều hướng đã là `app/AppNav.tsx` — nếu giữ cả hai thì người dùng
  * thấy hai rail chồng nhau, mỗi cái nói một chuyện khác về đề nào đã chạy.
  *
- * Nên chỉ phần topbar của wireframe (artboard 1a) ở lại đây: tiêu đề phân hệ,
- * bộ chuyển bốn màn hình, người dùng và nút thoát.
+ * Nên chỉ phần topbar ở lại đây, dựng bằng `.fp-topbar` dùng chung để khớp
+ * với Mặt bằng văn phòng và Tủ locker: tên phân hệ, tab màn hình, người dùng
+ * và nút thoát.
  */
 
 import { Link, Outlet, useLocation } from 'react-router'
 import { useSession } from '../../shared/auth'
+import markUrl from '../../assets/brand/vsf-mark.png'
+import '../floor-planning/floorPlanning.css'
 import './mail.css'
 
 /**
- * Các màn hình của Đề 3. Ở wireframe đây là `view-toggle` trên topbar —
- * thanh điều hướng chỉ liệt kê phân hệ, không lồng màn hình con vào.
+ * Các màn hình của Đề 3, hiện thành tab trên topbar — thanh điều hướng chỉ
+ * liệt kê phân hệ, không lồng màn hình con vào.
  */
 const MAIL_VIEWS = [
-  { to: '/mail/batches', label: 'Lô thư' },
-  { to: '/mail/pending-match', label: 'Chờ khớp' },
-  { to: '/mail/items', label: 'Kiện hàng' },
+  { to: '/mail/batches', label: 'Danh sách thư đến' },
+  { to: '/mail/pending-match', label: 'Chưa rõ người nhận' },
+  { to: '/mail/items', label: 'Theo dõi lấy hàng' },
   { to: '/mail/reports', label: 'Báo cáo' },
-  { to: '/mail/station-sign', label: 'Biển QR' },
+  { to: '/mail/station-sign', label: 'In mã QR' },
 ]
 
 export function MailShell() {
@@ -31,86 +34,38 @@ export function MailShell() {
   const { employee, signOut } = useSession()
 
   return (
-    <div
-      className="mail-scope"
-      style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', minWidth: 0 }}
-    >
-      <header
-        style={{
-          height: 'var(--topbar-height)',
-          flex: 'none',
-          background: '#fff',
-          borderBottom: '1px solid var(--border)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 14,
-          padding: '0 18px',
-        }}
-      >
-        <span style={{ font: '600 14.5px var(--font-sans)' }}>
-          Trung tâm Hành chính · Chuyển phát nhanh
-        </span>
+    <div className="fp-page mail-scope">
+      {/* Cùng topbar với Mặt bằng văn phòng và Tủ locker: logo khi rail thu gọn, tên phân hệ, tab chế độ xem. */}
+      <header className="fp-topbar">
+        <a className="fp-brand-collapsed" href="#/floor-planning" aria-label="Vin Smart Future · Trung tâm Hành chính">
+          <img src={markUrl} alt="Vin Smart Future" width="26" height="26" />
+        </a>
+        <h1>Chuyển phát nhanh</h1>
 
-        <ViewToggle pathname={pathname} />
+        <ViewTabs pathname={pathname} />
 
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span
-            aria-hidden
-            style={{
-              width: 26,
-              height: 26,
-              borderRadius: '50%',
-              background: '#e6e2db',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 11,
-              fontWeight: 600,
-              color: 'var(--text-muted-strong)',
-            }}
-          >
+        <div className="fp-topbar-actions mail-user">
+          <span className="mail-user-avatar" aria-hidden>
             {initials(employee?.full_name)}
           </span>
-          <span style={{ fontSize: 11.5, color: 'var(--text-muted-strong)' }}>
-            {employee?.full_name ?? ''}
-          </span>
-          <button
-            onClick={signOut}
-            style={{
-              border: '1px solid var(--border-strong)',
-              background: '#fff',
-              borderRadius: 'var(--radius-sm)',
-              padding: '4px 10px',
-              fontSize: 11.5,
-              color: 'var(--text-muted-strong)',
-              cursor: 'pointer',
-            }}
-          >
+          <span className="mail-user-name">{employee?.full_name ?? ''}</span>
+          <button type="button" className="mail-signout" onClick={signOut}>
             Thoát
           </button>
         </div>
       </header>
 
-      <main style={{ flex: 1, padding: '18px 22px', minWidth: 0 }}>
+      <main className="mail-main">
         <Outlet />
       </main>
     </div>
   )
 }
 
-/** `view-toggle` của wireframe: rãnh chìm, nút đang chọn nổi nền trắng. */
-function ViewToggle({ pathname }: { pathname: string }) {
+/** Tab gạch chân giống bộ chuyển "Xác minh / Bố trí" của mặt bằng văn phòng. */
+function ViewTabs({ pathname }: { pathname: string }) {
   return (
-    <nav
-      aria-label="Màn hình Đề 3"
-      style={{
-        display: 'flex',
-        gap: 2,
-        background: 'var(--bg-sunken)',
-        borderRadius: 'var(--radius-sm)',
-        padding: 3,
-      }}
-    >
+    <nav className="fp-view-mode mail-view-tabs" aria-label="Màn hình Chuyển phát nhanh">
       {MAIL_VIEWS.map((view) => {
         const current = pathname === view.to || pathname.startsWith(`${view.to}/`)
         return (
@@ -118,16 +73,7 @@ function ViewToggle({ pathname }: { pathname: string }) {
             key={view.to}
             to={view.to}
             aria-current={current ? 'page' : undefined}
-            style={{
-              padding: '4px 10px',
-              borderRadius: 4,
-              font: '500 11.5px var(--font-sans)',
-              textDecoration: 'none',
-              color: current ? 'var(--text)' : 'var(--text-muted)',
-              background: current ? '#fff' : 'transparent',
-              fontWeight: current ? 600 : 500,
-              boxShadow: current ? '0 1px 2px rgba(0,0,0,.05)' : undefined,
-            }}
+            className={current ? 'is-active' : undefined}
           >
             {view.label}
           </Link>

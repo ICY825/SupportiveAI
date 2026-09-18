@@ -46,33 +46,33 @@ interface View {
 const VIEWS: View[] = [
   {
     key: 'unreceived',
-    label: 'Chưa nhận',
+    label: 'Chưa lấy',
     statuses: ['notified', 'abandoned'],
     hint: 'Đã báo cho người nhận nhưng chưa ai xác nhận lấy — chờ lâu nhất lên đầu',
   },
   {
     key: 'notified',
-    label: 'Đã thông báo',
+    label: 'Đang chờ lấy',
     statuses: ['notified'],
-    hint: 'Chưa tới mốc tồn đọng',
+    hint: `Đã báo, chưa quá ${ABANDON_AFTER_DAYS} ngày`,
   },
   {
     key: 'abandoned',
-    label: 'Tồn đọng',
+    label: `Tồn đọng (quá ${ABANDON_AFTER_DAYS} ngày)`,
     statuses: ['abandoned'],
     hint: `Quá ${ABANDON_AFTER_DAYS} ngày không ai lấy. Vẫn ghi nhận được nếu người ta xuống lấy muộn`,
   },
   {
     key: 'collected',
-    label: 'Đã nhận',
+    label: 'Đã lấy',
     statuses: ['collected'],
-    hint: 'Đã xác nhận lấy — mới nhất lên đầu',
+    hint: 'Đã xác nhận lấy hàng — mới nhất lên đầu',
   },
   {
     key: 'all',
     label: 'Tất cả',
     statuses: ['notified', 'abandoned', 'collected'],
-    hint: 'Mọi kiện đã gửi thông báo. Dòng chưa khớp được nằm ở màn hình “Chờ khớp”',
+    hint: 'Mọi kiện đã gửi thông báo. Dòng chưa rõ người nhận nằm ở tab “Chưa rõ người nhận”',
   },
 ];
 
@@ -165,9 +165,9 @@ export default function ItemsPage() {
   }, [items, term, view.key]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1180 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-        <h1>Kiện hàng</h1>
+        <h1>Theo dõi lấy hàng</h1>
         <span className="small muted">{view.hint}</span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
           <span className="small muted tabular">
@@ -227,15 +227,15 @@ export default function ItemsPage() {
             <thead>
               <tr>
                 <th style={{ width: 90 }}>
-                  {view.key === 'collected' ? 'Nhận lúc' : 'Chờ lấy'}
+                  {view.key === 'collected' ? 'Lấy lúc' : 'Đã chờ'}
                 </th>
-                <th style={{ width: 150 }}>Tên trên file</th>
+                <th style={{ width: 150 }}>Tên lễ tân ghi</th>
                 <th style={{ width: 130 }}>Người gửi</th>
-                <th style={{ width: 44, textAlign: 'right' }}>SL</th>
-                <th style={{ width: 92 }}>Ngày nhận</th>
+                <th style={{ width: 44, textAlign: 'right' }}>Số kiện</th>
+                <th style={{ width: 92 }}>Ngày về</th>
                 <th style={{ width: 130 }}>Đã báo lúc</th>
                 <th style={{ width: 118 }}>Trạng thái</th>
-                <th style={{ width: 190 }}>Xác nhận</th>
+                <th style={{ width: 190 }}>Xác nhận đã lấy</th>
               </tr>
             </thead>
             <tbody>
@@ -248,8 +248,9 @@ export default function ItemsPage() {
       </Card>
 
       <Note>
-        Hệ thống tự nhắc lại ở mốc T+{REMIND_AFTER_DAYS} và chuyển tồn đọng ở T+{ABANDON_AFTER_DAYS},
-        tính theo giờ đồng hồ. Kiện đã tồn đọng vẫn ghi nhận được nếu người ta xuống lấy muộn.
+        Hệ thống tự gửi nhắc sau {REMIND_AFTER_DAYS} ngày và chuyển sang tồn đọng sau{' '}
+        {ABANDON_AFTER_DAYS} ngày kể từ lúc báo. Kiện đã tồn đọng vẫn ghi nhận được nếu người nhận
+        xuống lấy muộn.
       </Note>
     </div>
   );
@@ -311,7 +312,7 @@ function Row({
             onClick={onCollect}
             title="Dùng khi HC tự tay trao kiện, hoặc đối chiếu tờ ký giấy"
           >
-            Đã trao tay
+            Đã trao
           </Button>
         )}
       </td>

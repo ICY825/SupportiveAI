@@ -47,13 +47,13 @@ export default function ReportsPage() {
   const hc = reports.hc_interventions;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1100 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <h1>Báo cáo</h1>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
         <Stat label="Tổng số dòng" value={total} />
         <Stat
-          label="Chờ khớp"
+          label="Chưa rõ người nhận"
           value={status.pending_match ?? 0}
           tone={(status.pending_match ?? 0) > 0 ? 'danger' : undefined}
         />
@@ -62,20 +62,20 @@ export default function ReportsPage() {
           value={status.abandoned ?? 0}
           tone={(status.abandoned ?? 0) > 0 ? 'danger' : undefined}
         />
-        <Stat label="Alias đã học" value={hc.alias_learned} unit="cái tên" />
+        <Stat label="Tên đã ghi nhớ" value={hc.alias_learned} unit="tên" />
       </div>
 
-      <Card title="Tỷ lệ khớp tự động theo tuần">
+      <Card title="Tỷ lệ hệ thống tự nhận ra người nhận, theo tuần">
         <WeeklyChart rows={reports.auto_match_rate_by_week} />
         <Note>
-          Đường này <strong>phải đi lên</strong>: mỗi lần HC chọn tay là một alias được học, nên
-          tuần sau máy khớp được nhiều hơn tuần trước. Đọc một con số trung bình cả kỳ sẽ che mất
+          Đường này <strong>phải đi lên</strong>: mỗi lần HC chọn tay là một tên được ghi nhớ, nên
+          tuần sau hệ thống tự nhận ra nhiều hơn tuần trước. Một con số trung bình cả kỳ sẽ che mất
           điều đó.
         </Note>
       </Card>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        <Card title="Theo bậc khớp">
+        <Card title="Cách xác định người nhận">
           <Distribution
             rows={Object.entries(reports.by_match_method).map(([key, count]) => ({
               label: MATCH_METHOD[key as MatchMethod] ?? key,
@@ -95,7 +95,7 @@ export default function ReportsPage() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        <Card title="Cách xác nhận đã nhận">
+        <Card title="Cách xác nhận đã lấy hàng">
           <Distribution
             rows={Object.entries(reports.by_handover_method).map(([key, count]) => ({
               label: HANDOVER[key as HandoverMethod] ?? key,
@@ -103,8 +103,8 @@ export default function ReportsPage() {
             }))}
           />
           <Note>
-            Tỷ lệ “HC đối chiếu tờ ký” cao nghĩa là người nhận không chịu tự bấm xác nhận — khi đó
-            phải xem lại vị trí dán mã QR, không phải xem lại code.
+            Tỷ lệ “HC xác nhận” cao nghĩa là người nhận không chịu tự bấm xác nhận — khi đó
+            nên xem lại vị trí dán mã QR.
           </Note>
         </Card>
 
@@ -112,8 +112,8 @@ export default function ReportsPage() {
           <Distribution
             rows={[
               { label: 'Số lần HC chọn hoặc sửa', count: hc.total_interventions },
-              { label: 'Máy không đề xuất được ai', count: hc.machine_had_no_suggestion },
-              { label: 'Alias tích lũy', count: hc.alias_learned },
+              { label: 'Hệ thống không gợi ý được ai', count: hc.machine_had_no_suggestion },
+              { label: 'Tên đã ghi nhớ', count: hc.alias_learned },
             ]}
           />
           <Note>
@@ -139,7 +139,7 @@ function WeeklyChart({ rows }: { rows: WeeklyMatchRate[] }) {
             {formatPercent(row.rate)}
           </div>
           <div
-            title={`${row.auto}/${row.total} dòng máy tự khớp`}
+            title={`${row.auto}/${row.total} dòng hệ thống tự nhận ra`}
             style={{
               height: Math.max(4, Math.round(row.rate * 110)),
               background: 'var(--vsf-red)',

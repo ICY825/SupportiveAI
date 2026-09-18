@@ -129,7 +129,7 @@ describe('route guard', () => {
     window.location.hash = '#/mail/batches'
     render(<App />)
 
-    expect(await screen.findByRole('navigation', { name: 'Màn hình Đề 3' })).toBeTruthy()
+    expect(await screen.findByRole('navigation', { name: 'Màn hình Chuyển phát nhanh' })).toBeTruthy()
     expect(window.location.hash).toBe('#/mail/batches')
   })
 

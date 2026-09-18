@@ -33,21 +33,21 @@ export interface Descriptor {
 
 export const TIER: Record<MatchTier, Descriptor> = {
   confirmed: {
-    label: 'Khớp chắc',
+    label: 'Đã rõ người nhận',
     symbol: '✓',
     // Xanh lục = sẵn sàng. Dòng này đi được ngay trong đợt gửi tới.
     tone: 'success',
     hint: 'Điền sẵn, gửi được ngay',
   },
   review: {
-    label: 'Cần soát',
+    label: 'Cần xác nhận',
     symbol: '!',
     // Vàng đồng = chờ duyệt. Máy đã đề xuất, còn chờ người gật.
     tone: 'warn',
     hint: 'Khớp gần đúng — phải bấm xác nhận mới gửi',
   },
   choose: {
-    label: 'Phải chọn',
+    label: 'Chưa có người nhận',
     symbol: '?',
     tone: 'danger',
     hint: 'Chưa xác định được người nhận',
@@ -55,10 +55,10 @@ export const TIER: Record<MatchTier, Descriptor> = {
 };
 
 export const STATUS: Record<MailStatus, Descriptor> = {
-  pending_match: { label: 'Chờ khớp', symbol: '?', tone: 'danger' },
+  pending_match: { label: 'Chưa rõ người nhận', symbol: '?', tone: 'danger' },
   // Xanh lam = đang diễn ra: đã báo, đang chờ người xuống lấy.
   notified: { label: 'Đã thông báo', symbol: '→', tone: 'info' },
-  collected: { label: 'Đã nhận', symbol: '✓', tone: 'success' },
+  collected: { label: 'Đã lấy', symbol: '✓', tone: 'success' },
   // Đỏ đặc — đây là thứ duy nhất trong phân hệ đã vượt hạn và cần HC xử
   // lý. Không dùng tông này cho bất kỳ trạng thái nào khác.
   abandoned: { label: 'Tồn đọng', symbol: '!', tone: 'critical' },
@@ -67,20 +67,20 @@ export const STATUS: Record<MailStatus, Descriptor> = {
 export const MATCH_METHOD: Record<MatchMethod, string> = {
   phone: 'Số điện thoại',
   alias: 'Đã học từ lần trước',
-  name_exact: 'Tên khớp chính xác',
+  name_exact: 'Trùng khớp họ tên',
   name_fuzzy: 'Tên gần đúng',
   manual: 'HC chọn tay',
-  none: 'Không khớp được',
+  none: 'Không xác định được',
 };
 
 export const HANDOVER: Record<HandoverMethod, string> = {
   self_qr_station: 'Quét QR tại khu để đơn',
   self_link: 'Bấm link trong email',
-  hc_reconciled: 'HC đối chiếu tờ ký',
+  hc_reconciled: 'HC xác nhận (trao tay / tờ ký)',
 };
 
 export const DUPLICATE: Descriptor = {
-  label: 'Nghi trùng',
+  label: 'Có thể trùng lô trước',
   symbol: '⧉',
   tone: 'danger',
   hint: 'Trùng với một dòng đã gửi — mặc định không gửi lại',

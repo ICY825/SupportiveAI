@@ -40,11 +40,11 @@ export default function StationSignPage() {
       `}</style>
 
       <div className="no-print" style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-        <h1>Biển QR tại khu để đơn</h1>
+        <h1>In mã QR dán tại khu để hàng</h1>
         <span className="small muted">In ra, dán đúng chỗ tờ giấy ký hiện nay</span>
         <div style={{ marginLeft: 'auto' }}>
           <Button variant="primary" onClick={() => window.print()}>
-            In biển
+            In QR
           </Button>
         </div>
       </div>

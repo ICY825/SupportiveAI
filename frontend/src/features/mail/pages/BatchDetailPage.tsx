@@ -117,20 +117,20 @@ export default function ReviewPage() {
   const waiting = summary.pending_match - ready;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1240 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
         <h1>{batch.source_filename}</h1>
         <span className="small muted">
-          Ngày nhận {formatDate(batch.receipt_date)} · tải lên {formatDateTime(batch.uploaded_at)}
+          Ngày về {formatDate(batch.receipt_date)} · tải lên {formatDateTime(batch.uploaded_at)}
         </span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
           {summary.sent === 0 && (
             <Button variant="ghost" busy={deleting} onClick={onDelete} title="Dùng khi tải nhầm file">
-              Xóa lô
+              Xóa file
             </Button>
           )}
           <Link to="/mail/batches" className="small">
-            ← Danh sách lô
+            ← Danh sách thư
           </Link>
         </div>
       </div>
@@ -142,8 +142,8 @@ export default function ReviewPage() {
           Đã gửi {sent.notified_items} dòng qua {sent.notifications_sent} thông báo
           {sent.notifications_sent < sent.notified_items && ' (đã gộp theo người)'}.
           {sent.pending_match > 0
-            ? ` Còn ${sent.pending_match} dòng chờ khớp — xử lý ở màn hình “Chờ khớp”.`
-            : ' Không còn dòng nào chờ khớp.'}
+            ? ` Còn ${sent.pending_match} dòng chưa rõ người nhận — xử lý ở tab “Chưa rõ người nhận”.`
+            : ' Không còn dòng nào chưa rõ người nhận.'}
           {sent.failed > 0 && ` ⚠ ${sent.failed} thông báo gửi không thành công.`}
         </Banner>
       )}
@@ -157,12 +157,12 @@ export default function ReviewPage() {
           <thead>
             <tr>
               <th style={{ width: 42 }}>STT</th>
-              <th style={{ width: 150 }}>Tên trên file</th>
+              <th style={{ width: 150 }}>Tên lễ tân ghi</th>
               <th style={{ width: 130 }}>Người gửi</th>
-              <th style={{ width: 48, textAlign: 'right' }}>SL</th>
+              <th style={{ width: 48, textAlign: 'right' }}>Số kiện</th>
               <th style={{ width: 90 }}>Nội dung</th>
-              <th>Người nhận</th>
-              <th style={{ width: 128 }}>Mức</th>
+              <th>Nhân viên nhận</th>
+              <th style={{ width: 128 }}>Tình trạng</th>
               <th style={{ width: 210 }}>Thao tác</th>
             </tr>
           </thead>
@@ -192,8 +192,8 @@ export default function ReviewPage() {
       />
 
       <Note>
-        Chọn người nhận cho một dòng thì mọi dòng khác trong lô có cùng tên trên file cũng được
-        áp theo (§4.4), và hệ thống ghi nhớ để lần sau khớp thẳng (§4.5).
+        Chọn người nhận cho một dòng thì mọi dòng khác trong lô có cùng tên lễ tân ghi cũng được
+        áp theo, và hệ thống ghi nhớ tên đó để lần sau tự nhận ra.
       </Note>
     </div>
   );
@@ -213,14 +213,14 @@ function Overview({ batch }: { batch: MailBatchDetail }) {
         </span>
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
-        <StatusPill descriptor={{ ...TIER.confirmed, label: `Khớp chắc ${summary.confirmed}` }} />
-        <StatusPill descriptor={{ ...TIER.review, label: `Cần soát ${summary.review}` }} />
-        <StatusPill descriptor={{ ...TIER.choose, label: `Phải chọn ${summary.choose}` }} />
+        <StatusPill descriptor={{ ...TIER.confirmed, label: `${TIER.confirmed.label} ${summary.confirmed}` }} />
+        <StatusPill descriptor={{ ...TIER.review, label: `${TIER.review.label} ${summary.review}` }} />
+        <StatusPill descriptor={{ ...TIER.choose, label: `${TIER.choose.label} ${summary.choose}` }} />
         <StatusPill
-          descriptor={{ ...DUPLICATE, label: `Nghi trùng ${summary.duplicate_suspect}` }}
+          descriptor={{ ...DUPLICATE, label: `${DUPLICATE.label} ${summary.duplicate_suspect}` }}
         />
         {summary.sent > 0 && (
-          <StatusPill descriptor={{ label: `Đã gửi ${summary.sent}`, symbol: '→', tone: 'neutral' }} />
+          <StatusPill descriptor={{ label: `Đã báo ${summary.sent}`, symbol: '→', tone: 'neutral' }} />
         )}
       </div>
     </Card>
@@ -234,13 +234,13 @@ function Warnings({ batch }: { batch: MailBatchDetail }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {summary.ambiguous_date && (
         <Banner tone="warn">
-          <strong>Ngày trong file mơ hồ.</strong> Đọc được cả hai cách (`dd/mm` và `mm/dd`) nên hệ
-          thống không đoán. Đối chiếu với lễ tân trước khi gửi — ngày sai thì mốc SLA sai theo.
+          <strong>Ngày trong file mơ hồ.</strong> Đọc được cả hai cách (ngày/tháng và tháng/ngày) nên hệ
+          thống không đoán. Đối chiếu với lễ tân trước khi gửi — ngày sai thì hạn lấy hàng sai theo.
         </Banner>
       )}
       {sameDate.length > 0 && (
         <Banner tone="warn">
-          <strong>Đã có lô khác cho ngày nhận này.</strong>{' '}
+          <strong>Đã có lô khác cho ngày về này.</strong>{' '}
           {sameDate.map((b, index) => (
             <span key={b.batch_id}>
               {index > 0 && '; '}
@@ -254,7 +254,7 @@ function Warnings({ batch }: { batch: MailBatchDetail }) {
       {summary.missing_email > 0 && (
         <Banner tone="danger">
           <strong>{summary.missing_email} dòng có người nhận nhưng người đó không có email.</strong>{' '}
-          Thông báo sẽ không tới nơi, mà đồng hồ SLA vẫn chạy và kiện vẫn chuyển tồn đọng — người
+          Thông báo sẽ không tới nơi, trong khi hạn lấy hàng vẫn tính và kiện vẫn chuyển tồn đọng — người
           nhận không bao giờ biết mình có hàng. Bổ sung email vào danh mục nhân sự trước khi gửi.
         </Banner>
       )}
@@ -297,7 +297,7 @@ function Row({
 
       <td>
         {alreadySent ? (
-          <span className="muted">Đã gửi {formatDateTime(item.notified_at)}</span>
+          <span className="muted">Đã báo {formatDateTime(item.notified_at)}</span>
         ) : item.employee_id ? (
           <div>
             <ChosenName item={item} />
@@ -337,8 +337,8 @@ function Row({
         {alreadySent ? null : (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {item.duplicate_suspect && (
-              <Button busy={busy} onClick={onKeepDuplicate} title="Đây là kiện thật, vẫn gửi">
-                Giữ lại
+              <Button busy={busy} onClick={onKeepDuplicate} title="Đây là kiện thật, không phải bản trùng">
+                Vẫn gửi
               </Button>
             )}
             {!item.duplicate_suspect && item.employee_id && !item.ready_to_send && (
@@ -348,7 +348,7 @@ function Row({
             )}
             {item.employee_id && (
               <Button busy={busy} onClick={() => onAssign(null)} title="Chọn lại người nhận">
-                Đổi
+                Chọn lại
               </Button>
             )}
             {!item.employee_id && (
@@ -396,7 +396,7 @@ function SendBar({
   onSend: () => void;
 }) {
   const label =
-    waiting > 0 ? `Gửi ${ready} dòng · ${waiting} dòng chờ khớp` : `Gửi ${ready} dòng`;
+    waiting > 0 ? `Gửi ${ready} dòng · ${waiting} dòng chưa rõ người nhận` : `Gửi ${ready} dòng`;
 
   return (
     <div
@@ -421,7 +421,7 @@ function SendBar({
           </>
         ) : waiting > 0 ? (
           <>
-            Chưa có dòng nào sẵn sàng. Chọn người nhận hoặc xác nhận các dòng “Cần soát” ở trên.
+            Chưa có dòng nào sẵn sàng. Chọn người nhận hoặc xác nhận các dòng “{TIER.review.label}” ở trên.
           </>
         ) : (
           <>Cả lô đã gửi xong.</>

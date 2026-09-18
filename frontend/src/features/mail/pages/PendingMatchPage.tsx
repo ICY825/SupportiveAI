@@ -29,7 +29,7 @@ export default function PendingMatchPage() {
     return listPendingMatch()
       .then(setItems)
       .catch((err) =>
-        setError(err instanceof ApiError ? err.message : 'Không tải được danh sách chờ khớp'),
+        setError(err instanceof ApiError ? err.message : 'Không tải được danh sách chưa rõ người nhận'),
       );
   }, []);
 
@@ -51,16 +51,16 @@ export default function PendingMatchPage() {
   }
 
   if (error && !items) return <ErrorBox error={error} onRetry={load} />;
-  if (!items) return <Loading what="dòng chờ khớp" />;
+  if (!items) return <Loading what="dòng chưa rõ người nhận" />;
 
   const overdue = items.filter((i) => i.overdue).length;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1180 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-        <h1>Chờ khớp</h1>
+        <h1>Chưa rõ người nhận</h1>
         <span className="small muted">
-          Mọi lô · {items.length} dòng chưa xác định được người nhận
+          Tất cả thư trong ngày · {items.length} dòng cần chọn người nhận
         </span>
       </div>
 
@@ -68,25 +68,24 @@ export default function PendingMatchPage() {
 
       {overdue > 0 && (
         <Banner tone="danger">
-          <strong>{overdue} dòng đã chờ quá 2 ngày.</strong> Chúng không tự chuyển sang “Tồn đọng”
-          — “chưa biết báo cho ai” khác hẳn “đã báo nhưng không ai lấy”, gộp lại là mất dấu những
-          kiện thật sự bị bỏ quên. Phải xử lý tay.
+          <strong>{overdue} dòng đã chờ quá 2 ngày.</strong> Hệ thống không tự chuyển các dòng này
+          sang “Tồn đọng” vì người nhận chưa hề được báo. Cần chọn người nhận và gửi thông báo.
         </Banner>
       )}
 
       <Card padded={false}>
         {items.length === 0 ? (
-          <Empty>Không còn dòng nào chờ khớp. </Empty>
+          <Empty>Không còn dòng nào chưa rõ người nhận.</Empty>
         ) : (
           <table className="data">
             <thead>
               <tr>
                 <th style={{ width: 90 }}>Đã chờ</th>
-                <th style={{ width: 150 }}>Tên trên file</th>
+                <th style={{ width: 150 }}>Tên lễ tân ghi</th>
                 <th style={{ width: 130 }}>Người gửi</th>
-                <th style={{ width: 44, textAlign: 'right' }}>SL</th>
-                <th style={{ width: 96 }}>Ngày nhận</th>
-                <th style={{ width: 150 }}>Lô</th>
+                <th style={{ width: 44, textAlign: 'right' }}>Số kiện</th>
+                <th style={{ width: 96 }}>Ngày về</th>
+                <th style={{ width: 150 }}>File</th>
                 <th>Chọn người nhận</th>
                 <th style={{ width: 130 }}>Thao tác</th>
               </tr>
@@ -150,7 +149,7 @@ export default function PendingMatchPage() {
                             busy={busy === item.id}
                             onClick={() => mutate(item.id, () => assignRecipient(item.id, null))}
                           >
-                            Đổi
+                            Chọn lại
                           </Button>
                         </>
                       )}
@@ -164,8 +163,8 @@ export default function PendingMatchPage() {
       </Card>
 
       <Note>
-        Chọn người nhận ở đây cũng được ghi nhớ cho lần sau (§4.5), nên những cái tên khó sẽ
-        thưa dần theo tuần.
+        Người nhận chọn ở đây được hệ thống ghi nhớ cho lần sau, nên các tên khó nhận ra sẽ ít
+        dần theo tuần.
       </Note>
     </div>
   );

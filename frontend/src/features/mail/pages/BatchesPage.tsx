@@ -74,10 +74,10 @@ export default function BatchesPage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 1100 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-        <h1>Lô thư đến</h1>
-        <span className="small muted">Lễ tân gửi file danh sách, HC tải lên rồi soát</span>
+        <h1>Thư đến</h1>
+        <span className="small muted">Lễ tân gửi file danh sách, HC tải lên, kiểm tra rồi gửi thông báo</span>
         <div style={{ marginLeft: 'auto' }}>
           <input
             ref={fileRef}
@@ -88,7 +88,7 @@ export default function BatchesPage() {
             id="batch-file"
           />
           <Button variant="primary" busy={uploading} onClick={() => fileRef.current?.click()}>
-            + Tải file lễ tân
+            Tải file lên
           </Button>
         </div>
       </div>
@@ -104,7 +104,7 @@ export default function BatchesPage() {
         />
       )}
 
-      <Card title="Các lô đã tải" padded={false}>
+      <Card title="Các file đã tải" padded={false}>
         {error ? (
           <div style={{ padding: 14 }}>
             <ErrorBox error={error} onRetry={load} />
@@ -112,23 +112,33 @@ export default function BatchesPage() {
         ) : batches === null ? (
           <Loading what="danh sách lô" />
         ) : batches.length === 0 ? (
-          <Empty>Chưa có lô nào. Bấm “Tải file lễ tân” để bắt đầu.</Empty>
+          <Empty>Chưa có lô nào. Bấm “Tải file lên” để bắt đầu.</Empty>
         ) : (
           <table className="data">
             <thead>
               <tr>
                 <th>File</th>
-                <th>Ngày nhận</th>
-                <th>Tải lên</th>
-                <th style={{ textAlign: 'right' }}>Dòng</th>
-                <th style={{ textAlign: 'right' }}>Đã gửi</th>
-                <th style={{ textAlign: 'right' }}>Chờ khớp</th>
+                <th>Ngày về</th>
+                <th>Thời điểm tải</th>
+                <th style={{ textAlign: 'right' }}>Số dòng</th>
+                <th style={{ textAlign: 'right' }}>Đã báo</th>
+                <th style={{ textAlign: 'right' }}>Chưa rõ người nhận</th>
                 <th>Trạng thái</th>
               </tr>
             </thead>
             <tbody>
               {batches.map((batch) => (
-                <tr key={batch.id}>
+                <tr
+                  key={batch.id}
+                  // Cả dòng bấm được để mở lô. Bàn phím vẫn đi qua liên kết tên
+                  // file; bấm trúng liên kết thì để nó tự điều hướng, tránh đẩy
+                  // hai mục vào lịch sử.
+                  onClick={(event) => {
+                    if ((event.target as HTMLElement).closest('a')) return;
+                    navigate(`/mail/batches/${batch.id}`);
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
                   <td>
                     <Link to={`/mail/batches/${batch.id}`}>{batch.source_filename}</Link>
                     {batch.ambiguous_date && (
@@ -159,14 +169,14 @@ export default function BatchesPage() {
                     {batch.status === 'sent' ? (
                       <StatusPill
                         descriptor={{
-                          label: batch.pending_match_count > 0 ? 'Đã gửi một phần' : 'Đã gửi',
+                          label: batch.pending_match_count > 0 ? 'Đã báo một phần' : 'Đã báo hết',
                           symbol: batch.pending_match_count > 0 ? '◐' : '✓',
                           tone: batch.pending_match_count > 0 ? 'warn' : 'done',
                         }}
                       />
                     ) : (
                       <StatusPill
-                        descriptor={{ label: 'Chờ soát', symbol: '!', tone: 'warn' }}
+                        descriptor={{ label: 'Chưa gửi thông báo', symbol: '!', tone: 'warn' }}
                       />
                     )}
                   </td>
@@ -178,8 +188,8 @@ export default function BatchesPage() {
       </Card>
 
       <Note>
-        Nhận `.xlsx` và `.csv`. Nên xin lễ tân gửi `.xlsx`: trong `.csv` ô ngày mất kiểu dữ
-        liệu, mà định dạng hiện tại là `mm-dd-yy` nên `09/17/26` và `17/09/26` lẫn vào nhau.
+        Nhận file Excel (.xlsx) và .csv. Nên xin lễ tân gửi file Excel: file .csv không giữ được
+        kiểu ngày, nên 09/17/26 và 17/09/26 dễ bị đọc lẫn nhau.
       </Note>
     </div>
   );
@@ -204,36 +214,36 @@ function ImportSummary({
       action={
         <div style={{ display: 'flex', gap: 8 }}>
           <Button variant="ghost" busy={deleting} onClick={onDelete} title="Dùng khi tải nhầm file">
-            Tải nhầm — xóa lô
+            Tải nhầm — xóa file
           </Button>
           <Button variant="primary" onClick={onOpen}>
-            Mở màn hình soát →
+            Kiểm tra và gửi thông báo →
           </Button>
         </div>
       }
     >
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-        <StatusPill descriptor={{ ...TIER.confirmed, label: `Khớp chắc ${summary.confirmed}` }} />
-        <StatusPill descriptor={{ ...TIER.review, label: `Cần soát ${summary.review}` }} />
-        <StatusPill descriptor={{ ...TIER.choose, label: `Phải chọn ${summary.choose}` }} />
+        <StatusPill descriptor={{ ...TIER.confirmed, label: `${TIER.confirmed.label} ${summary.confirmed}` }} />
+        <StatusPill descriptor={{ ...TIER.review, label: `${TIER.review.label} ${summary.review}` }} />
+        <StatusPill descriptor={{ ...TIER.choose, label: `${TIER.choose.label} ${summary.choose}` }} />
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {summary.ambiguous_date && (
           <Banner tone="warn">
             Ngày trong file đọc được theo hai cách khác nhau. Hệ thống <strong>không đoán</strong> —
-            hãy mở màn hình soát và xác nhận ngày trước khi gửi.
+            hãy mở màn hình kiểm tra và xác nhận ngày trước khi gửi.
           </Banner>
         )}
         {summary.duplicate_suspect > 0 && (
           <Banner tone="warn">
             {summary.duplicate_suspect} dòng nghi trùng với lô đã gửi. Mặc định không gửi lại, nhưng
-            xem kỹ ở màn hình soát — có thể là kiện thật.
+            xem kỹ ở màn hình kiểm tra — có thể là kiện thật.
           </Banner>
         )}
         {result.same_date_batches.length > 0 && (
           <Banner tone="warn">
-            Đã có {result.same_date_batches.length} lô khác cho cùng ngày nhận này:{' '}
+            Đã có {result.same_date_batches.length} lô khác cho cùng ngày về này:{' '}
             {result.same_date_batches
               .map((b) => `${b.source_filename} (${formatDateTime(b.uploaded_at)}, ${b.row_count} dòng)`)
               .join('; ')}
@@ -242,8 +252,8 @@ function ImportSummary({
         )}
         {summary.missing_email > 0 && (
           <Banner tone="danger">
-            {summary.missing_email} dòng khớp được người nhận nhưng người đó{' '}
-            <strong>không có email</strong>. Thông báo sẽ không tới nơi, mà đồng hồ SLA vẫn chạy.
+            {summary.missing_email} dòng đã rõ người nhận nhưng người đó{' '}
+            <strong>không có email</strong>. Thông báo sẽ không tới nơi, trong khi hạn lấy hàng vẫn tính.
           </Banner>
         )}
         {result.warnings.map((warning) => (
