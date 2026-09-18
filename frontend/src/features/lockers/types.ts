@@ -9,16 +9,20 @@ export interface LockerCompartment {
   employeeName: string | null
   department: string | null
   assignedDate: string | null
+  employeeCode?: string | null
+  employeeEmail?: string | null
+  jobTitle?: string | null
   recallDueDate?: string | null
   aiSuggestion?: string | null
   notes?: string | null
+  lockType?: string | null
 }
 
 export interface LockerItem {
   id: string
   code: string
   name: string
-  zoneGroup: 'L1' | 'L2' | 'L3' | 'L4'
+  zoneGroup: string
   zoneGroupName: string
   physicalLocation: string
   center: [number, number]
@@ -28,12 +32,19 @@ export interface LockerItem {
   employeeName: string | null
   department: string | null
   assignedDate: string | null
+  employeeCode?: string | null
+  employeeEmail?: string | null
+  jobTitle?: string | null
   recallDueDate?: string | null
   aiSuggestion?: string | null
   notes?: string | null
   isCombined?: boolean
   orientation?: 'horizontal' | 'vertical'
+  rotation?: number
   compartments?: LockerCompartment[]
+  lockType?: string | null
+  cabinetId?: string
+  cabinetCode?: string
 }
 
 export interface LockerStats {

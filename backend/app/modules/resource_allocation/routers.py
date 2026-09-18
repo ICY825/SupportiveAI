@@ -8,10 +8,15 @@ from app.core.database import get_db_session
 from app.core.exceptions import EntityNotFoundError
 from app.core.security import CurrentUser, get_current_user
 from app.modules.resource_allocation.services import ResourceAllocationService
+from app.modules.resource_allocation.schemas import (
+    LockerCreate,
+    LockerDeleteResponse,
+    LockerLocationRead,
+    LockerRead,
+)
 from app.shared.contracts.enums import ResourceStatusEnum, ResourceTypeEnum
 from app.shared.contracts.resource import (
     FloorLayoutResponse,
-    LockerCreate,
     ResourceAssignRequest,
     ResourceAssignmentRead,
     ResourceRead,
@@ -234,3 +239,82 @@ async def get_resource_stats(
     """Get vacancy and allocation statistics."""
     svc = ResourceAllocationService(db)
     return await svc.get_allocation_stats(location_id=location_id)
+
+
+# ---------------- Locker Management Endpoints (Đề số 2) ----------------
+
+
+@router.get("/locker-locations", response_model=List[LockerLocationRead])
+async def list_locker_locations(
+    db: AsyncSession = Depends(get_db_session),
+    _: CurrentUser = Depends(get_current_user),
+) -> List[LockerLocationRead]:
+    """Retrieve all locker locations ordered deterministically by building, floor, zone, id."""
+    stmt = (
+        select(Location)
+        .join(Resource, Resource.location_id == Location.id)
+        .where(Resource.resource_type == ResourceTypeEnum.LOCKER.value)
+        .distinct()
+        .order_by(
+            Location.building,
+            Location.floor,
+            Location.zone,
+            Location.id,
+        )
+    )
+    result = await db.execute(stmt)
+    locations = result.scalars().all()
+    if locations:
+        return [LockerLocationRead.model_validate(loc) for loc in locations]
+
+    fallback_stmt = select(Location).where(
+        Location.building == "Technopark",
+        Location.floor == "16",
+        Location.name == "Locker Technopark - Tầng 16",
+    )
+    fallback_loc = (await db.execute(fallback_stmt)).scalars().first()
+    if not fallback_loc:
+        fallback_loc = Location(
+            building="Technopark",
+            floor="16",
+            name="Locker Technopark - Tầng 16",
+            zone=None,
+            description="Vị trí mặc định của Quản lý tủ locker.",
+        )
+        db.add(fallback_loc)
+        await db.flush()
+
+    return [LockerLocationRead.model_validate(fallback_loc)]
+
+
+@router.get("/lockers", response_model=List[LockerRead])
+async def list_lockers(
+    location_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db_session),
+    _: CurrentUser = Depends(get_current_user),
+) -> List[LockerRead]:
+    """Retrieve all lockers from database via ResourceAllocationService with optional location filter."""
+    svc = ResourceAllocationService(db)
+    return await svc.list_lockers(location_id=location_id)
+
+
+@router.post("/lockers", response_model=LockerRead, status_code=status.HTTP_201_CREATED)
+async def create_locker(
+    data: LockerCreate,
+    db: AsyncSession = Depends(get_db_session),
+    _: CurrentUser = Depends(get_current_user),
+) -> LockerRead:
+    """Create a new locker resource with detail and compartments directly in database."""
+    svc = ResourceAllocationService(db)
+    return await svc.create_locker(data)
+
+
+@router.delete("/lockers/{locker_id}", response_model=LockerDeleteResponse)
+async def delete_locker(
+    locker_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    _: CurrentUser = Depends(get_current_user),
+) -> LockerDeleteResponse:
+    """Delete a locker and its associated compartments directly from database."""
+    svc = ResourceAllocationService(db)
+    return await svc.delete_locker(locker_id)

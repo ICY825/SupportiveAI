@@ -31,11 +31,13 @@ class SeatPositionUpdate(BaseModel):
     zone: Optional[str] = None
 
 
-class LockerCreate(BaseModel):
-    code: str
-    location_id: int
-    row: str
-    pin_code: Optional[str] = None
+from app.modules.resource_allocation.schemas import (
+    LockerCompartmentCreate,
+    LockerCompartmentRead,
+    LockerCreate,
+    LockerDeleteResponse,
+    LockerRead,
+)
 
 
 class ResourceAssignRequest(BaseModel):

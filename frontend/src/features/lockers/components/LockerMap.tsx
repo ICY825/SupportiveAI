@@ -5,11 +5,20 @@ import floor16Layout from '../../floor-planning/data/floors/floor-16/floor16.lay
 import type { BaseLayer } from '../../floor-planning/domain/spatial'
 import { ViewControls } from '../../floor-planning/components/FloorMapControls'
 import { STATUS_META } from '../lockersData'
+import lockerSvgUrl from '../../../../../locker.svg'
 
 interface LockerMapProps {
   lockers: LockerItem[]
   selectedLocker: LockerItem | null
   onSelectLocker: (locker: LockerItem | null) => void
+  onSelectPosition?: (pos: { x: number; y: number }) => void
+  draftPosition?: { x: number; y: number } | null
+  draftRotation?: number
+  draftSize?: { width: number; height: number }
+  draftWidth?: number
+  draftHeight?: number
+  draftOrientation?: 'horizontal' | 'vertical'
+  onDraftPositionChange?: (pos: { x: number; y: number }) => void
 }
 
 interface Viewport {
@@ -41,18 +50,50 @@ const PLATE_WIDTH = PLATE_BBOX[2] - PLATE_BBOX[0]
 const PLATE_HEIGHT = PLATE_BBOX[3] - PLATE_BBOX[1]
 const FIT_PADDING = 28
 
-export function LockerMap({ lockers, selectedLocker, onSelectLocker }: LockerMapProps) {
+export function LockerMap({
+  lockers,
+  selectedLocker,
+  onSelectLocker,
+  onSelectPosition,
+  draftPosition = null,
+  draftRotation = 0,
+  draftSize,
+  draftWidth,
+  draftHeight,
+  draftOrientation = 'horizontal',
+  onDraftPositionChange,
+}: LockerMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
   const [hoveredLocker, setHoveredLocker] = useState<LockerItem | null>(null)
   const [panning, setPanning] = useState(false)
   const dragRef = useRef<{ id: number; startX: number; startY: number; moved: boolean } | null>(null)
 
+  const [isDraggingDraft, setIsDraggingDraft] = useState(false)
+  const [isHoveredDraft, setIsHoveredDraft] = useState(false)
+  const draftDragCleanupRef = useRef<(() => void) | null>(null)
+  const onDraftPositionChangeRef = useRef(onDraftPositionChange)
+
+  useEffect(() => {
+    onDraftPositionChangeRef.current = onDraftPositionChange
+  }, [onDraftPositionChange])
+
+  useEffect(() => {
+    return () => {
+      draftDragCleanupRef.current?.()
+    }
+  }, [])
+
   const [viewport, setViewport] = useState<Viewport>(() => ({
     scale: 1,
     x: 0,
     y: 0,
   }))
+
+  const viewportRef = useRef<Viewport>(viewport)
+  useEffect(() => {
+    viewportRef.current = viewport
+  }, [viewport])
 
   // Fit viewport to building plate (matching FloorPlanningPage default size)
   const fitToSize = useCallback((width: number, height: number) => {
@@ -187,7 +228,7 @@ export function LockerMap({ lockers, selectedLocker, onSelectLocker }: LockerMap
       setPanning(true)
       try {
         svgRef.current?.setPointerCapture(e.pointerId)
-      } catch {}
+      } catch { }
     }
 
     if (d.moved) {
@@ -211,23 +252,79 @@ export function LockerMap({ lockers, selectedLocker, onSelectLocker }: LockerMap
       if (svgRef.current?.hasPointerCapture?.(e.pointerId)) {
         svgRef.current.releasePointerCapture(e.pointerId)
       }
-    } catch {}
+    } catch { }
 
-    // Click on canvas clears selection
+    // Click on canvas
     if (!d.moved) {
       const target = e.target as Element
       if (!target.closest('[data-locker-id]')) {
-        onSelectLocker(null)
+        if (onSelectPosition) {
+          const rect = (svgRef.current ?? e.currentTarget).getBoundingClientRect()
+          const x = (e.clientX - rect.left - viewport.x) / viewport.scale
+          const y = (e.clientY - rect.top - viewport.y) / viewport.scale
+          onSelectPosition({ x, y })
+        } else {
+          onSelectLocker(null)
+        }
       }
     }
   }
 
+  // Drag handlers for draft locker marker
+  const handleDraftPointerDown = (e: ReactPointerEvent<SVGGElement>) => {
+    if (e.button !== 0) return
+    e.stopPropagation()
+    e.preventDefault()
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch { }
+    setIsDraggingDraft(true)
+    draftDragCleanupRef.current = () => setIsDraggingDraft(false)
+  }
+
+  const handleDraftPointerMove = (e: ReactPointerEvent<SVGGElement>) => {
+    if (!isDraggingDraft) return
+    e.stopPropagation()
+    const svg = svgRef.current ?? e.currentTarget.ownerSVGElement
+    if (!svg) return
+    const rect = svg.getBoundingClientRect()
+    const vp = viewportRef.current
+    const x = (e.clientX - rect.left - vp.x) / vp.scale
+    const y = (e.clientY - rect.top - vp.y) / vp.scale
+    onDraftPositionChangeRef.current?.({ x, y })
+  }
+
+  const handleDraftPointerUp = (e: ReactPointerEvent<SVGGElement>) => {
+    e.stopPropagation()
+    try {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      }
+    } catch { }
+    setIsDraggingDraft(false)
+    draftDragCleanupRef.current = null
+  }
+
+  const width = typeof draftSize?.width === 'number' && draftSize.width > 0
+    ? draftSize.width
+    : typeof draftWidth === 'number' && draftWidth > 0
+      ? draftWidth
+      : (draftOrientation === 'vertical' ? 28 : 56)
+  const height = typeof draftSize?.height === 'number' && draftSize.height > 0
+    ? draftSize.height
+    : typeof draftHeight === 'number' && draftHeight > 0
+      ? draftHeight
+      : (draftOrientation === 'vertical' ? 56 : 28)
+  const rotation = typeof draftRotation === 'number' && !Number.isNaN(draftRotation) ? draftRotation : 0
+
   const layers = layout.layers
 
   // Hover hint label
-  const hoverLabel = hoveredLocker
-    ? `${hoveredLocker.code} · ${STATUS_META[hoveredLocker.status].label}${hoveredLocker.employeeName ? ` · ${hoveredLocker.employeeName}` : ''}`
-    : null
+  const hoverLabel = isHoveredDraft && draftPosition
+    ? `Tủ mới · Vị trí nháp (X: ${Math.round(draftPosition.x)}, Y: ${Math.round(draftPosition.y)}) · Kéo để thay đổi vị trí`
+    : hoveredLocker
+      ? `${hoveredLocker.code} · ${STATUS_META[hoveredLocker.status].label}${hoveredLocker.employeeName ? ` · ${hoveredLocker.employeeName}` : ''}${hoveredLocker.lockType ? ` · Khóa: ${hoveredLocker.lockType}` : ''}`
+      : null
 
   return (
     <div ref={containerRef} className="fp-map">
@@ -299,18 +396,60 @@ export function LockerMap({ lockers, selectedLocker, onSelectLocker }: LockerMap
                 onHover={setHoveredLocker}
               />
             ))}
+
+            {/* Draggable Draft Locker Marker */}
+            {draftPosition != null && (
+              <g
+                className={`locker-draft-marker${isDraggingDraft ? ' is-dragging' : ''}${isHoveredDraft ? ' is-hovered' : ''}`}
+                data-locker-id="draft-locker"
+                data-draft-locker="true"
+                transform={`translate(${draftPosition.x}, ${draftPosition.y}) rotate(${rotation})`}
+                role="button"
+                tabIndex={0}
+                aria-label="Tủ mới (nháp)"
+                style={{
+                  cursor: isDraggingDraft ? 'grabbing' : isHoveredDraft ? 'grab' : 'grab',
+                  pointerEvents: 'all',
+                }}
+                onPointerDown={handleDraftPointerDown}
+                onPointerMove={handleDraftPointerMove}
+                onPointerUp={handleDraftPointerUp}
+                onPointerCancel={handleDraftPointerUp}
+                onPointerEnter={() => setIsHoveredDraft(true)}
+                onPointerLeave={() => setIsHoveredDraft(false)}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <image
+                  href={lockerSvgUrl}
+                  xlinkHref={lockerSvgUrl}
+                  x={-width / 2}
+                  y={-height / 2}
+                  width={width}
+                  height={height}
+                  preserveAspectRatio="none"
+                  style={{
+                    pointerEvents: 'all',
+                    cursor: isDraggingDraft ? 'grabbing' : 'grab',
+                    filter: isDraggingDraft
+                      ? 'drop-shadow(0 4px 10px rgba(37, 99, 235, 0.45))'
+                      : isHoveredDraft
+                        ? 'drop-shadow(0 2px 6px rgba(37, 99, 235, 0.35))'
+                        : 'drop-shadow(0 1px 3px rgba(0, 0, 0, 0.2))',
+                    transition: 'filter 0.15s ease',
+                  }}
+                />
+              </g>
+            )}
           </g>
         </g>
       </svg>
 
       {/* Hover information bar (same as FloorPlanningPage) */}
-      <div className="fp-hover" aria-live="polite">
-        {hoverLabel ?? (
-          <span className="fp-hover-hint">
-            Kéo để di chuyển · Cuộn để thu phóng · Nhấp vào tủ để chọn · Nhấn ? để xem phím tắt
-          </span>
-        )}
-      </div>
+      {hoverLabel && (
+        <div className="fp-hover-bar" role="status" aria-live="polite">
+          <span>{hoverLabel}</span>
+        </div>
+      )}
 
       {/* Map Footer Controls (matching FloorPlanningPage) */}
       <div className="fp-map-foot">

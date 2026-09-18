@@ -1,10 +1,24 @@
+from __future__ import annotations
+
+import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
+
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+logger = logging.getLogger("supportive_ai.resource_allocation")
+
+
+
 from app.core.exceptions import EntityNotFoundError, ResourceConflictError
+from app.modules.resource_allocation.schemas import (
+    LockerCompartmentRead,
+    LockerCreate,
+    LockerDeleteResponse,
+    LockerRead,
+)
 from app.shared.contracts.enums import (
     DomainEventEnum,
     ResourceStatusEnum,
@@ -12,20 +26,10 @@ from app.shared.contracts.enums import (
     WorkflowStateEnum,
 )
 from app.shared.contracts.event import DomainEvent
-from app.shared.contracts.resource import (
-    FloorLayoutResponse,
-    LockerCreate,
-    ResourceAssignRequest,
-    ResourceReturnRequest,
-    SeatCreate,
-    SeatEmployeeInfo,
-    SeatLayoutItem,
-    SeatPositionUpdate,
-    SeatRecommendationResponse,
-)
 from app.shared.events.dispatcher import event_dispatcher
 from app.shared.models.employee import Department, Employee
 from app.shared.models.location import Location
+from app.shared.models.locker_compartment import LockerCompartment
 from app.shared.models.resource import (
     LockerDetail,
     Resource,
@@ -33,6 +37,248 @@ from app.shared.models.resource import (
     SeatDetail,
 )
 from app.workflow.engine import WorkflowEngine
+
+if TYPE_CHECKING:
+    from app.shared.contracts.resource import (
+        FloorLayoutResponse,
+        ResourceAssignRequest,
+        ResourceReturnRequest,
+        SeatCreate,
+        SeatPositionUpdate,
+        SeatRecommendationResponse,
+    )
+
+
+def _safe_rel(entity: Any, attr: str, default: Any = None) -> Any:
+    """Safely get an ORM relationship attribute without triggering lazy-load IO in async mode."""
+    if entity is None:
+        return default
+    d = getattr(entity, "__dict__", None)
+    if d is not None and attr in d:
+        val = d[attr]
+        return val if val is not None else default
+    return default
+
+
+def _compute_building_tag(current_building: str, other_buildings: list[str]) -> str:
+    """Compute minimal unique prefix tag for building code.
+
+    If no other building shares initial characters, returns single uppercase initial.
+    If common prefix exists, extends to first differing character (lowercase) to avoid ambiguity.
+    Example: Technopark vs Technotree -> 'technop' vs 'technot'.
+    """
+    current_clean = "".join(c for c in (current_building or "") if c.isalnum())
+    if not current_clean:
+        return "B"
+
+    curr_lower = current_clean.lower()
+    max_lcp = 0
+    for other in other_buildings:
+        other_clean = "".join(c for c in (other or "") if c.isalnum()).lower()
+        if not other_clean or other_clean == curr_lower:
+            continue
+        lcp = 0
+        for c1, c2 in zip(curr_lower, other_clean):
+            if c1 == c2:
+                lcp += 1
+            else:
+                break
+        max_lcp = max(max_lcp, lcp)
+
+    if max_lcp == 0:
+        return current_clean[0].upper()
+
+    needed_len = min(len(current_clean), max_lcp + 1)
+    return current_clean[:needed_len].lower()
+
+
+def _serialize_locker(resource: Resource) -> LockerRead:
+    """Helper serializer converting Resource locker entity and relationships to LockerRead."""
+    attrs: dict[str, Any] = dict(resource.attributes or {})
+    loc: Location | None = _safe_rel(resource, "location")
+    detail: LockerDetail | None = _safe_rel(resource, "locker_detail")
+
+    # Sort and serialize compartments
+    serialized_comps: list[LockerCompartmentRead] = []
+    comps = _safe_rel(detail, "compartments") or []
+
+    def comp_sort_key(c: Any) -> tuple[int, str]:
+        num_str = str(getattr(c, "compartment_number", "") or "")
+        if num_str.isdigit():
+            return (0, f"{int(num_str):06d}")
+        return (1, num_str)
+
+    sorted_comps = sorted(comps, key=comp_sort_key)
+    for c in sorted_comps:
+        raw_status = str(getattr(c, "status", "") or "available").strip().lower()
+        if raw_status in ("broken", "damaged", "maintenance", "error", "hong"):
+            norm_status = "broken"
+        elif raw_status in ("recall", "overdue", "thu_hoi"):
+            norm_status = "recall"
+        elif raw_status in ("in_use", "occupied", "assigned", "dang_dung"):
+            norm_status = "in_use"
+        else:
+            norm_status = "available"
+
+        comp_emp = _safe_rel(c, "employee")
+        comp_emp_name = getattr(c, "employee_name", None)
+        if not comp_emp_name and comp_emp:
+            comp_emp_name = getattr(comp_emp, "full_name", None)
+
+        comp_emp_id = getattr(c, "employee_id", None)
+        if comp_emp_id is None and comp_emp:
+            comp_emp_id = getattr(comp_emp, "id", None)
+
+        comp_dept = getattr(c, "department", None)
+        if not comp_dept and comp_emp:
+            emp_dept = _safe_rel(comp_emp, "department")
+            if emp_dept:
+                comp_dept = getattr(emp_dept, "name", None)
+
+        c_assigned = getattr(c, "assigned_date", None)
+        c_assigned_str = str(c_assigned) if c_assigned else None
+
+        c_recall = getattr(c, "recall_due_date", None)
+        c_recall_str = str(c_recall) if c_recall else None
+
+        comp_num = str(getattr(c, "compartment_number", "") or "")
+        comp_code = getattr(c, "code", None)
+        if not comp_code:
+            comp_code = f"{resource.code}-{comp_num}" if comp_num else resource.code
+
+        serialized_comps.append(
+            LockerCompartmentRead(
+                id=str(getattr(c, "id", "")),
+                code=comp_code,
+                status=norm_status,
+                employeeName=comp_emp_name,
+                employee_id=comp_emp_id,
+                department=comp_dept,
+                assignedDate=c_assigned_str,
+                recallDueDate=c_recall_str,
+                aiSuggestion=getattr(c, "ai_suggestion", None),
+                notes=getattr(c, "notes", None),
+            )
+        )
+
+    # Derive locker status: broken -> recall -> in_use -> available
+    if any(c.status == "broken" for c in serialized_comps):
+        locker_status = "broken"
+    elif any(c.status == "recall" for c in serialized_comps):
+        locker_status = "recall"
+    elif any(c.status == "in_use" for c in serialized_comps):
+        locker_status = "in_use"
+    elif serialized_comps:
+        locker_status = "available"
+    else:
+        raw_res_status = str(resource.status or "available").strip().lower()
+        if raw_res_status in ("broken", "damaged", "maintenance"):
+            locker_status = "broken"
+        elif raw_res_status in ("recall", "overdue"):
+            locker_status = "recall"
+        elif raw_res_status in ("in_use", "occupied", "assigned"):
+            locker_status = "in_use"
+        else:
+            locker_status = "available"
+
+    # Locker assignment info from resource active assignments
+    emp_name: str | None = None
+    emp_id: int | None = None
+    dept_name: str | None = None
+    assigned_date_str: str | None = None
+
+    assigns = _safe_rel(resource, "assignments") or []
+    active_assigns = [a for a in assigns if getattr(a, "returned_at", None) is None]
+    if active_assigns:
+        latest = active_assigns[0]
+        emp = _safe_rel(latest, "employee")
+        if emp:
+            emp_name = getattr(emp, "full_name", None)
+            emp_id = getattr(emp, "id", None)
+            emp_dept = _safe_rel(emp, "department")
+            if emp_dept:
+                dept_name = getattr(emp_dept, "name", None)
+        if getattr(latest, "assigned_at", None):
+            assigned_date_str = str(latest.assigned_at)
+
+    if emp_name is None:
+        emp_name = attrs.get("employeeName") or attrs.get("employee_name")
+    if emp_id is None:
+        emp_id = attrs.get("employee_id")
+    if dept_name is None:
+        dept_name = attrs.get("department")
+    if assigned_date_str is None:
+        assigned_date_str = attrs.get("assignedDate") or attrs.get("assigned_date")
+
+    # Safe fallbacks for attributes
+    zone = str(attrs.get("zone") or attrs.get("zoneGroup") or attrs.get("zone_group") or "Zone A")
+    zone_group = str(attrs.get("zoneGroup") or attrs.get("zone_group") or zone)
+    zone_group_name = str(attrs.get("zoneGroupName") or attrs.get("zone_group_name") or zone)
+
+    phys_loc = attrs.get("physicalLocation") or attrs.get("physical_location")
+    if not phys_loc:
+        floor_str = str(loc.floor) if loc and loc.floor else ""
+        phys_loc = f"Tầng {floor_str} - {zone}" if floor_str else zone
+
+    center = attrs.get("center") if attrs.get("center") is not None else [0.0, 0.0]
+    bbox = attrs.get("bbox") if attrs.get("bbox") is not None else [0.0, 0.0, 0.0, 0.0]
+    size = attrs.get("size") if attrs.get("size") is not None else [1.0, 1.0]
+
+    if len(serialized_comps) > 1:
+        is_combined = True
+    else:
+        raw_combined = attrs.get("isCombined")
+        if raw_combined is None:
+            raw_combined = attrs.get("is_combined")
+        is_combined = bool(raw_combined) if raw_combined is not None else False
+
+    compartment_start = attrs.get("compartment_start", attrs.get("compartmentStart", 0))
+    try:
+        compartment_start_int = int(compartment_start)
+    except (ValueError, TypeError):
+        compartment_start_int = 0
+
+    lock_type = (
+        (detail.lock_type if detail and detail.lock_type else None)
+        or attrs.get("lock_type")
+        or "mechanical_key"
+    )
+
+    rotation = attrs.get("rotation")
+    if rotation is not None:
+        try:
+            rotation = float(rotation)
+        except (ValueError, TypeError):
+            rotation = None
+
+    return LockerRead(
+        id=str(resource.id),
+        resource_id=resource.id,
+        code=resource.code,
+        name=str(attrs.get("name") or f"Tủ {resource.code}"),
+        zone=zone,
+        compartment_start=compartment_start_int,
+        zoneGroup=zone_group,
+        zoneGroupName=zone_group_name,
+        physicalLocation=str(phys_loc),
+        center=center,
+        bbox=bbox,
+        size=size,
+        status=locker_status,
+        employeeName=emp_name,
+        employee_id=emp_id,
+        department=dept_name,
+        assignedDate=assigned_date_str,
+        recallDueDate=attrs.get("recallDueDate") or attrs.get("recall_due_date"),
+        aiSuggestion=attrs.get("aiSuggestion") or attrs.get("ai_suggestion"),
+        notes=attrs.get("notes"),
+        isCombined=is_combined,
+        orientation=attrs.get("orientation"),
+        rotation=rotation,
+        compartments=serialized_comps,
+        location_id=resource.location_id,
+        lock_type=str(lock_type),
+    )
 
 
 class ResourceAllocationService:
@@ -42,12 +288,306 @@ class ResourceAllocationService:
         self.session = session
         self.workflow_engine = WorkflowEngine(session)
 
+    # -------------------------------------------------------------------------
+    # Locker Management APIs (Đề 2)
+    # -------------------------------------------------------------------------
+
+    def _serialize_locker(self, resource: Resource) -> LockerRead:
+        return _serialize_locker(resource)
+
+    async def list_lockers(self, location_id: int | None = None) -> list[LockerRead]:
+        """Query locker Resources, eager-loading related location, details and compartments."""
+        options = [
+            selectinload(Resource.location),
+            selectinload(Resource.locker_detail).selectinload(LockerDetail.compartments),
+            selectinload(Resource.assignments).selectinload(ResourceAssignment.employee).selectinload(Employee.department),
+        ]
+        if hasattr(LockerCompartment, "employee"):
+            comp_emp_opt = (
+                selectinload(Resource.locker_detail)
+                .selectinload(LockerDetail.compartments)
+                .selectinload(LockerCompartment.employee)
+            )
+            if hasattr(Employee, "department"):
+                comp_emp_opt = comp_emp_opt.selectinload(Employee.department)
+            options.append(comp_emp_opt)
+
+        if hasattr(LockerCompartment, "department"):
+            options.append(
+                selectinload(Resource.locker_detail)
+                .selectinload(LockerDetail.compartments)
+                .selectinload(LockerCompartment.department)
+            )
+
+        stmt = select(Resource).where(
+            Resource.resource_type.in_([ResourceTypeEnum.LOCKER.value, "locker", "LOCKER"])
+        ).options(*options)
+
+        if location_id is not None:
+            stmt = stmt.where(Resource.location_id == location_id)
+
+        stmt = stmt.order_by(Resource.code.asc())
+        res = await self.session.execute(stmt)
+        resources = res.scalars().all()
+        return [self._serialize_locker(r) for r in resources]
+
+    async def create_locker(self, data: LockerCreate) -> LockerRead:
+        """Create new locker resource with LockerDetail and requested compartments."""
+        location = await self.session.get(Location, data.location_id)
+        if not location:
+            raise EntityNotFoundError("Location", data.location_id)
+
+        # Generate unique code: site first alnum + building first alnum + floor digits + next ordinal
+        site_alnum = ""
+        for ch in (data.site or ""):
+            if ch.isalnum():
+                site_alnum = ch.upper()
+                break
+        if not site_alnum:
+            site_alnum = "S"
+
+        # Query distinct building names from locations to detect common prefixes
+        bldg_stmt = select(Location.building).distinct()
+        other_bldg_res = await self.session.execute(bldg_stmt)
+        other_buildings = [
+            b
+            for b in other_bldg_res.scalars().all()
+            if b and b.strip().lower() != (location.building or "").strip().lower()
+        ]
+
+        bldg_tag = _compute_building_tag(location.building, other_buildings)
+
+        floor_digits = "".join(ch for ch in str(location.floor or "") if ch.isdigit())
+        if not floor_digits:
+            floor_digits = "1"
+
+        prefix = f"{site_alnum}{bldg_tag}{floor_digits}"
+
+        # Fetch existing codes to find next ordinal
+        code_stmt = select(Resource.code).where(
+            Resource.location_id == location.id,
+            Resource.resource_type.in_([ResourceTypeEnum.LOCKER.value, "locker", "LOCKER"]),
+        )
+        existing_codes = set((await self.session.execute(code_stmt)).scalars().all())
+
+        max_ordinal = 0
+        for c in existing_codes:
+            if c.startswith(f"{prefix}-"):
+                suffix = c[len(prefix) + 1 :]
+                if suffix.isdigit():
+                    max_ordinal = max(max_ordinal, int(suffix))
+            elif c.startswith(prefix):
+                suffix = c[len(prefix) :]
+                if suffix.isdigit():
+                    max_ordinal = max(max_ordinal, int(suffix))
+
+        ordinal = max_ordinal + 1
+        code = f"{prefix}-{ordinal:02d}"
+        while code in existing_codes:
+            ordinal += 1
+            code = f"{prefix}-{ordinal:02d}"
+
+        bank_code = prefix
+        locker_number = f"{ordinal:02d}"
+
+        zone_group = data.zone_group or data.zone
+        zone_group_name = data.zone_group_name or data.zone
+        floor_str = str(location.floor or "")
+        physical_location = (
+            data.physical_location
+            or (f"Tầng {floor_str} - {data.zone}" if floor_str else data.zone)
+        )
+        center = data.center if data.center is not None else [0.0, 0.0]
+        bbox = data.bbox if data.bbox is not None else [0.0, 0.0, 0.0, 0.0]
+        size = data.size if data.size is not None else [1.0, 1.0]
+        is_combined = (
+            bool(data.is_combined)
+            if data.is_combined is not None
+            else (data.compartment_count > 1)
+        )
+        orientation = data.orientation or "horizontal"
+        rotation = data.rotation
+
+        attributes: dict[str, Any] = {
+            "zone": data.zone,
+            "zoneGroup": zone_group,
+            "zoneGroupName": zone_group_name,
+            "physicalLocation": physical_location,
+            "center": center,
+            "bbox": bbox,
+            "size": size,
+            "isCombined": is_combined,
+            "is_combined": is_combined,
+            "orientation": orientation,
+            "rotation": rotation,
+            "lock_type": data.lock_type or "mechanical_key",
+            "notes": data.notes,
+            "compartment_start": data.compartment_start,
+        }
+        if data.recall_due_date is not None:
+            attributes["recallDueDate"] = data.recall_due_date
+            attributes["recall_due_date"] = data.recall_due_date
+        if data.ai_suggestion is not None:
+            attributes["aiSuggestion"] = data.ai_suggestion
+            attributes["ai_suggestion"] = data.ai_suggestion
+
+        comp_cols = LockerCompartment.__table__.columns.keys()
+        compartment_items: list[LockerCompartment] = []
+        custom_compartments = getattr(data, "compartments", None)
+        if custom_compartments and len(custom_compartments) > 0:
+            for item in custom_compartments:
+                if isinstance(item, dict):
+                    c_num = str(item.get("compartment_number") or item.get("code") or "")
+                    c_status = item.get("status") or "available"
+                    c_emp_id = item.get("employee_id")
+                    c_notes = item.get("notes")
+                    c_assigned = item.get("assigned_date")
+                    c_recall = item.get("recall_due_date")
+                    c_ai = item.get("ai_suggestion")
+                else:
+                    c_num = str(getattr(item, "compartment_number", getattr(item, "code", "")))
+                    c_status = getattr(item, "status", "available") or "available"
+                    c_emp_id = getattr(item, "employee_id", None)
+                    c_notes = getattr(item, "notes", None)
+                    c_assigned = getattr(item, "assigned_date", None)
+                    c_recall = getattr(item, "recall_due_date", None)
+                    c_ai = getattr(item, "ai_suggestion", None)
+
+                c_code = (
+                    f"{code}-{c_num}"
+                    if not str(c_num).startswith(code)
+                    else str(c_num)
+                )
+                comp_kw: dict[str, Any] = {}
+                if "compartment_number" in comp_cols:
+                    comp_kw["compartment_number"] = c_num
+                if "code" in comp_cols:
+                    comp_kw["code"] = c_code
+                if "status" in comp_cols:
+                    comp_kw["status"] = c_status
+                if "employee_id" in comp_cols:
+                    comp_kw["employee_id"] = c_emp_id
+                if "notes" in comp_cols:
+                    comp_kw["notes"] = c_notes
+                if "assigned_date" in comp_cols:
+                    comp_kw["assigned_date"] = c_assigned
+                if "recall_due_date" in comp_cols:
+                    comp_kw["recall_due_date"] = c_recall
+                if "ai_suggestion" in comp_cols:
+                    comp_kw["ai_suggestion"] = c_ai
+
+                compartment_items.append(LockerCompartment(**comp_kw))
+        else:
+            for idx in data.compartment_range:
+                c_num = f"{idx:02d}"
+                c_code = f"{code}-{c_num}"
+                comp_kw = {}
+                if "compartment_number" in comp_cols:
+                    comp_kw["compartment_number"] = c_num
+                if "code" in comp_cols:
+                    comp_kw["code"] = c_code
+                if "status" in comp_cols:
+                    comp_kw["status"] = "available"
+
+                compartment_items.append(LockerCompartment(**comp_kw))
+
+        detail_cols = LockerDetail.__table__.columns.keys()
+        detail_kwargs: dict[str, Any] = {
+            "location_id": location.id,
+            "bank_code": bank_code,
+            "locker_number": locker_number,
+        }
+        if "lock_type" in detail_cols:
+            detail_kwargs["lock_type"] = data.lock_type or "mechanical_key"
+        if "row" in detail_cols:
+            detail_kwargs["row"] = data.row
+
+        locker_detail = LockerDetail(**detail_kwargs)
+        locker_detail.compartments = compartment_items
+
+        resource = Resource(
+            code=code,
+            resource_type=ResourceTypeEnum.LOCKER.value,
+            location_id=location.id,
+            status=ResourceStatusEnum.AVAILABLE.value,
+            attributes=attributes,
+        )
+        resource.location = location
+        resource.locker_detail = locker_detail
+
+        self.session.add(resource)
+        await self.session.flush()
+
+        try:
+            await self.workflow_engine.create_instance(
+                entity_type="locker",
+                entity_id=resource.id,
+                initial_state=WorkflowStateEnum.CREATED,
+                metadata={"code": resource.code, "zone": data.zone},
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Failed to initialize workflow instance for locker %s: %s",
+                resource.id,
+                exc,
+            )
+
+        return self._serialize_locker(resource)
+
+    async def delete_locker(self, locker_id: int | str) -> LockerDeleteResponse:
+        """Delete locker resource and cascade to details and compartments."""
+        res_id: int | None = None
+        if isinstance(locker_id, int):
+            res_id = locker_id
+        elif isinstance(locker_id, str) and locker_id.isdigit():
+            res_id = int(locker_id)
+
+        stmt = (
+            select(Resource)
+            .where(
+                Resource.resource_type.in_([ResourceTypeEnum.LOCKER.value, "locker", "LOCKER"])
+            )
+            .options(
+                selectinload(Resource.locker_detail).selectinload(LockerDetail.compartments)
+            )
+        )
+        if res_id is not None:
+            stmt = stmt.where(Resource.id == res_id)
+        else:
+            stmt = stmt.where(Resource.code == str(locker_id))
+
+        res = await self.session.execute(stmt)
+        resource = res.scalar_one_or_none()
+        if not resource:
+            raise EntityNotFoundError("Locker", locker_id)
+
+        deleted_code = resource.code
+        deleted_resource_id = resource.id
+        compartments_count = 0
+        if resource.locker_detail and resource.locker_detail.compartments:
+            compartments_count = len(resource.locker_detail.compartments)
+
+        await self.session.delete(resource)
+        await self.session.flush()
+
+        return LockerDeleteResponse(
+            success=True,
+            deleted_code=deleted_code,
+            deleted_resource_id=deleted_resource_id,
+            compartments_deleted_count=compartments_count,
+            message=f"Locker {deleted_code} and {compartments_count} compartment(s) successfully deleted.",
+        )
+
+    # -------------------------------------------------------------------------
+    # Seat Planning / Resource Allocation APIs (Flow 1)
+    # -------------------------------------------------------------------------
+
     async def list_resources(
         self,
-        resource_type: Optional[ResourceTypeEnum] = None,
-        location_id: Optional[int] = None,
-        status: Optional[ResourceStatusEnum] = None,
-    ) -> List[Resource]:
+        resource_type: ResourceTypeEnum | None = None,
+        location_id: int | None = None,
+        status: ResourceStatusEnum | None = None,
+    ) -> list[Resource]:
         stmt = select(Resource).options(
             selectinload(Resource.seat_detail),
             selectinload(Resource.locker_detail),
@@ -64,7 +604,7 @@ class ResourceAllocationService:
         res = await self.session.execute(stmt)
         return list(res.scalars().all())
 
-    async def get_resource_by_id(self, resource_id: int) -> Optional[Resource]:
+    async def get_resource_by_id(self, resource_id: int) -> Resource | None:
         stmt = (
             select(Resource)
             .where(Resource.id == resource_id)
@@ -137,6 +677,12 @@ class ResourceAllocationService:
         return resource
 
     async def get_floor_layout(self, location_id: int) -> FloorLayoutResponse:
+        from app.shared.contracts.resource import (
+            FloorLayoutResponse,
+            SeatEmployeeInfo,
+            SeatLayoutItem,
+        )
+
         location = await self.session.get(Location, location_id)
         if not location:
             raise EntityNotFoundError("Location", location_id)
@@ -155,9 +701,9 @@ class ResourceAllocationService:
             )
         )
         res = await self.session.execute(stmt)
-        seats: List[Resource] = list(res.scalars().all())
+        seats: list[Resource] = list(res.scalars().all())
 
-        layout_items: List[SeatLayoutItem] = []
+        layout_items: list[SeatLayoutItem] = []
         occupied_count = 0
         zones_set = set()
 
@@ -170,8 +716,8 @@ class ResourceAllocationService:
                 zones_set.add(zone)
 
             # Active assignment
-            assigned_emp: Optional[SeatEmployeeInfo] = None
-            assignment_id: Optional[int] = None
+            assigned_emp: SeatEmployeeInfo | None = None
+            assignment_id: int | None = None
             if s.assignments:
                 active_assigns = [a for a in s.assignments if a.returned_at is None]
                 if active_assigns:
@@ -220,12 +766,14 @@ class ResourceAllocationService:
             occupied_seats=occupied_count,
             available_seats=available_seats,
             occupancy_rate=rate,
-            zones=sorted(list(zones_set)),
+            zones=sorted(zones_set),
             seats=layout_items,
         )
 
-    async def recommend_seat(self, employee_id: int, preferred_zone: Optional[str] = None) -> SeatRecommendationResponse:
+    async def recommend_seat(self, employee_id: int, preferred_zone: str | None = None) -> SeatRecommendationResponse:
         """AI seat recommendation based on department cluster and nearest vacancy (ADD v2 Section 9)."""
+        from app.shared.contracts.resource import SeatRecommendationResponse
+
         employee = await self.session.get(Employee, employee_id)
         if not employee:
             raise EntityNotFoundError("Employee", employee_id)
@@ -368,7 +916,7 @@ class ResourceAllocationService:
         assignment = res.scalars().first()
 
         if assignment:
-            assignment.returned_at = datetime.utcnow()
+            assignment.returned_at = datetime.now(timezone.utc)
             assignment.status = ResourceStatusEnum.AVAILABLE.value
 
         resource.status = ResourceStatusEnum.AVAILABLE.value
@@ -385,7 +933,7 @@ class ResourceAllocationService:
 
         return resource
 
-    async def get_allocation_stats(self, location_id: Optional[int] = None) -> Dict[str, Any]:
+    async def get_allocation_stats(self, location_id: int | None = None) -> dict[str, Any]:
         """Compute statistics for dashboards: total, available, assigned, vacancy rate."""
         stmt = select(
             Resource.resource_type,
@@ -399,7 +947,7 @@ class ResourceAllocationService:
         res = await self.session.execute(stmt)
         rows = res.all()
 
-        stats: Dict[str, Dict[str, int]] = {
+        stats: dict[str, dict[str, int]] = {
             ResourceTypeEnum.SEAT.value: {"total": 0, "available": 0, "assigned": 0},
             ResourceTypeEnum.LOCKER.value: {"total": 0, "available": 0, "assigned": 0},
         }
@@ -541,11 +1089,71 @@ class ResourceAllocationService:
                     resource_id=r.id,
                     employee_id=assigned_emp_id,
                     status=ResourceStatusEnum.ASSIGNED.value,
-                    assigned_at=datetime.utcnow(),
-                    activated_at=datetime.utcnow(),
+                    assigned_at=datetime.now(timezone.utc),
+                    activated_at=datetime.now(timezone.utc),
                     notes="Initial Floor 19 layout seeding",
                 )
                 self.session.add(assign)
 
         await self.session.flush()
         return location
+
+
+# -----------------------------------------------------------------------------
+# Module-level convenience wrappers
+# -----------------------------------------------------------------------------
+
+async def list_lockers(
+    location_id: int | AsyncSession | None = None,
+    session: AsyncSession | None = None,
+    db: AsyncSession | None = None,
+    **kwargs: Any,
+) -> list[LockerRead]:
+    """Module-level wrapper for ResourceAllocationService.list_lockers."""
+    if isinstance(location_id, AsyncSession):
+        session = location_id
+        location_id = kwargs.get("location_id")
+    actual_session = session or db or kwargs.get("session") or kwargs.get("db")
+    if actual_session is None:
+        raise ValueError("AsyncSession is required for list_lockers")
+    loc_id = int(location_id) if location_id is not None and not isinstance(location_id, AsyncSession) else None
+    service = ResourceAllocationService(actual_session)
+    return await service.list_lockers(location_id=loc_id)
+
+
+async def create_locker(
+    data: LockerCreate | AsyncSession | None = None,
+    session: AsyncSession | None = None,
+    db: AsyncSession | None = None,
+    **kwargs: Any,
+) -> LockerRead:
+    """Module-level wrapper for ResourceAllocationService.create_locker."""
+    if isinstance(data, AsyncSession):
+        session = data
+        data = kwargs.get("data")
+    actual_session = session or db or kwargs.get("session") or kwargs.get("db")
+    if actual_session is None:
+        raise ValueError("AsyncSession is required for create_locker")
+    if data is None:
+        raise ValueError("data (LockerCreate) is required for create_locker")
+    service = ResourceAllocationService(actual_session)
+    return await service.create_locker(data=data)
+
+
+async def delete_locker(
+    locker_id: int | str | AsyncSession | None = None,
+    session: AsyncSession | None = None,
+    db: AsyncSession | None = None,
+    **kwargs: Any,
+) -> LockerDeleteResponse:
+    """Module-level wrapper for ResourceAllocationService.delete_locker."""
+    if isinstance(locker_id, AsyncSession):
+        session = locker_id
+        locker_id = kwargs.get("locker_id")
+    actual_session = session or db or kwargs.get("session") or kwargs.get("db")
+    if actual_session is None:
+        raise ValueError("AsyncSession is required for delete_locker")
+    if locker_id is None:
+        raise ValueError("locker_id is required for delete_locker")
+    service = ResourceAllocationService(actual_session)
+    return await service.delete_locker(locker_id=locker_id)

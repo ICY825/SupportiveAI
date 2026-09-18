@@ -49,7 +49,12 @@ export function LockerList({ lockers, selectedLocker, onSelectLocker }: LockerLi
                 >
                   <td style={{ fontWeight: 600 }}>{locker.code}</td>
                   <td style={{ color: locker.employeeName ? 'var(--ink)' : 'var(--muted)' }}>
-                    {locker.employeeName || '—'}
+                    <div>{locker.employeeName || '—'}</div>
+                    {(locker.employeeCode || locker.jobTitle) && (
+                      <div style={{ fontSize: '11px', color: 'var(--fp-text-2, #64748b)', marginTop: '2px' }}>
+                        {[locker.employeeCode, locker.jobTitle].filter(Boolean).join(' · ')}
+                      </div>
+                    )}
                   </td>
                   <td style={{ color: locker.department ? 'var(--ink)' : 'var(--muted)' }}>
                     {locker.department || '—'}

@@ -6,14 +6,15 @@ __pycache__/
 venv/
 .env
 .env.*
+!.env.example
 
 # FastAPI / Backend
 *.log
 *.sqlite
 *.db
 
-# AI / Models
-models/
+# AI / Models (root artifacts only, do not ignore backend source code)
+/models/
 *.bin
 *.onnx
 *.pt
@@ -33,7 +34,11 @@ minio_data/
 node_modules/
 dist/
 build/
-
+.agents
+.codex
+AGENTS.md
+alembic
+alembic.ini
 # PDF related files
 *.pdf
 
