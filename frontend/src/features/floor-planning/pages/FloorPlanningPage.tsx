@@ -151,7 +151,9 @@ export function FloorPlanningPage({
 
   // Zone customizations (rename, assign, reposition labels)
   const [customizationsByFloor, setCustomizationsByFloor] = useState<Record<string, FloorZoneCustomizations>>({})
+  const [zonePreviewsByFloor, setZonePreviewsByFloor] = useState<Record<string, FloorZoneCustomizations>>({})
   const floorCustomizations = customizationsByFloor[floorId] ?? loadZoneCustomizations(floorId)
+  const floorZonePreviews = zonePreviewsByFloor[floorId]
 
   const handleZoneUpdate = useCallback(
     (update: {
@@ -159,6 +161,7 @@ export function FloorPlanningPage({
       name?: string | null
       labelAnchor?: Point
       sourceColor?: string | null
+      sourceOpacity?: number | null
       verification?: VerificationState
       type?: 'WORKSPACE_ZONE' | 'UNKNOWN'
     }) => {
@@ -171,12 +174,49 @@ export function FloorPlanningPage({
             ...(update.name !== undefined ? { name: update.name } : {}),
             ...(update.labelAnchor !== undefined ? { labelAnchor: update.labelAnchor } : {}),
             ...(update.sourceColor !== undefined ? { sourceColor: update.sourceColor } : {}),
+            ...(update.sourceOpacity !== undefined ? { sourceOpacity: update.sourceOpacity } : {}),
             ...(update.verification !== undefined ? { verification: update.verification } : {}),
             ...(update.type !== undefined ? { type: update.type } : {}),
           },
         }
         saveZoneCustomizations(floorId, nextFloor)
         return { ...prev, [floorId]: nextFloor }
+      })
+    },
+    [floorId],
+  )
+
+  const handleZonePreview = useCallback(
+    (update: { zoneId: string; sourceColor?: string | null; sourceOpacity?: number | null }) => {
+      setZonePreviewsByFloor((prev) => {
+        const floorPrev = prev[floorId] ?? {}
+        return {
+          ...prev,
+          [floorId]: {
+            ...floorPrev,
+            [update.zoneId]: {
+              ...(floorPrev[update.zoneId] ?? {}),
+              ...(update.sourceColor !== undefined ? { sourceColor: update.sourceColor } : {}),
+              ...(update.sourceOpacity !== undefined ? { sourceOpacity: update.sourceOpacity } : {}),
+            },
+          },
+        }
+      })
+    },
+    [floorId],
+  )
+
+  const handleZonePreviewClear = useCallback(
+    (zoneId: string) => {
+      setZonePreviewsByFloor((prev) => {
+        const floorPrev = prev[floorId]
+        if (!floorPrev?.[zoneId]) return prev
+        const nextFloor = { ...floorPrev }
+        delete nextFloor[zoneId]
+        const next = { ...prev }
+        if (Object.keys(nextFloor).length === 0) delete next[floorId]
+        else next[floorId] = nextFloor
+        return next
       })
     },
     [floorId],
@@ -216,10 +256,17 @@ export function FloorPlanningPage({
   const currentDataset = current?.dataset
   const effectiveDataset = useMemo(() => {
     if (!currentDataset) return undefined
-    const customized = applyDatasetZoneCustomizations(currentDataset, floorCustomizations)
+    const displayCustomizations = Object.keys(floorZonePreviews ?? {}).reduce<FloorZoneCustomizations>(
+      (merged, zoneId) => ({
+        ...merged,
+        [zoneId]: { ...(merged[zoneId] ?? {}), ...floorZonePreviews![zoneId] },
+      }),
+      floorCustomizations,
+    )
+    const customized = applyDatasetZoneCustomizations(currentDataset, displayCustomizations)
     if (!customized) return undefined
     return applyAuthoredEntities(customized, authoredEntities)
-  }, [currentDataset, floorCustomizations, authoredEntities])
+  }, [currentDataset, floorCustomizations, floorZonePreviews, authoredEntities])
 
   // Seats and people: real when there is a session, demo fixtures otherwise.
   // The map itself never waits on this — its geometry ships with the build.
@@ -321,6 +368,8 @@ export function FloorPlanningPage({
           settingsOpen={settingsOpen}
           onCloseSettings={() => onSettingsOpenChange?.(false)}
           onZoneUpdate={handleZoneUpdate}
+          onZonePreview={handleZonePreview}
+          onZonePreviewClear={handleZonePreviewClear}
           onResetZone={handleResetZone}
           onResetAllZones={handleResetAllZones}
           onAuthoredEntityChange={handleAuthoredEntityChange}
@@ -352,6 +401,8 @@ function FloorWorkspace({
   settingsOpen,
   onCloseSettings,
   onZoneUpdate,
+  onZonePreview,
+  onZonePreviewClear,
   onResetZone,
   onResetAllZones,
   onAuthoredEntityChange,
@@ -371,9 +422,12 @@ function FloorWorkspace({
     name?: string | null
     labelAnchor?: Point
     sourceColor?: string | null
+    sourceOpacity?: number | null
     verification?: VerificationState
     type?: 'WORKSPACE_ZONE' | 'UNKNOWN'
   }) => void
+  onZonePreview?: (update: { zoneId: string; sourceColor?: string | null; sourceOpacity?: number | null }) => void
+  onZonePreviewClear?: (zoneId: string) => void
   onResetZone?: (zoneId: string) => void
   onResetAllZones?: () => void
   onAuthoredEntityChange?: (changes: AuthoredEntityChanges) => void
@@ -389,6 +443,7 @@ function FloorWorkspace({
   const issues = useMemo(() => validateFloorDataset(dataset), [dataset])
   const mainRef = useRef<HTMLElement>(null)
   const [roomDrawMode, setRoomDrawMode] = useState(false)
+  const [editingZoneId, setEditingZoneId] = useState<string | null>(null)
   // Pieces drawn so far for the room being authored; a lounge split by a corridor has two.
   const [roomDraft, setRoomDraft] = useState<Point[][] | null>(null)
   const [roomError, setRoomError] = useState<string | null>(null)
@@ -608,6 +663,7 @@ function FloorWorkspace({
           deskStatuses={deskStatuses}
           onKeyDown={onMapKeyDown}
           onZoneUpdate={onZoneUpdate}
+          editingZoneId={editingZoneId}
           roomDrawMode={roomDrawMode}
           roomDraft={roomDraft}
           onRoomDraw={handleRoomDraw}
@@ -667,6 +723,9 @@ function FloorWorkspace({
           desks={workspace ? desks : undefined}
           allocationSource={allocation?.source}
           onZoneUpdate={onZoneUpdate}
+          onZonePreview={onZonePreview}
+          onZonePreviewClear={onZonePreviewClear}
+          onZoneEditingChange={setEditingZoneId}
           onResetZone={onResetZone}
           onResetAllZones={onResetAllZones}
           onBeginRoomDraw={beginRoomDraw}

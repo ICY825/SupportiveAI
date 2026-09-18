@@ -5,6 +5,7 @@ export interface ZoneCustomization {
   name?: string | null
   labelAnchor?: Point
   sourceColor?: string | null
+  sourceOpacity?: number | null
   verification?: VerificationState
   type?: 'WORKSPACE_ZONE' | 'UNKNOWN'
 }
@@ -12,6 +13,15 @@ export interface ZoneCustomization {
 export type FloorZoneCustomizations = Record<string, ZoneCustomization>
 
 const STORAGE_PREFIX = 'vsf.zones.'
+
+export const DEFAULT_ZONE_FILL_OPACITY = 0.22
+export const MIN_ZONE_FILL_OPACITY = 0.05
+export const MAX_ZONE_FILL_OPACITY = 0.8
+
+export function normalizeZoneFillOpacity(value: number | null | undefined): number | undefined {
+  if (value == null || !Number.isFinite(value)) return undefined
+  return Math.min(MAX_ZONE_FILL_OPACITY, Math.max(MIN_ZONE_FILL_OPACITY, value))
+}
 
 export function getZoneStorageKey(floorId: string): string {
   return `${STORAGE_PREFIX}${floorId}`
@@ -67,6 +77,8 @@ export function applyZoneCustomizations(zones: Zone[], customizations: FloorZone
       name: custom.name !== undefined ? custom.name : z.name,
       labelAnchor: custom.labelAnchor ? [...custom.labelAnchor] : z.labelAnchor,
       sourceColor: custom.sourceColor !== undefined ? custom.sourceColor : z.sourceColor,
+      sourceOpacity:
+        custom.sourceOpacity !== undefined ? normalizeZoneFillOpacity(custom.sourceOpacity) : z.sourceOpacity,
       verification: custom.verification ?? z.verification,
       type: custom.type ?? z.type,
     }

@@ -50,6 +50,7 @@ describe('Department Management and PDF-style Label Repositioning', () => {
           onHover={vi.fn()}
           assetBase=""
           onZoneUpdate={onZoneUpdate}
+          editingZoneId="zone-16-vinfast-kdo2o"
         />
       )
 
@@ -70,6 +71,7 @@ describe('Department Management and PDF-style Label Repositioning', () => {
       // Find the label group for VINFAST-KDO2O
       const labelGroup = container.querySelector<SVGGElement>('[data-entity-id="zone-16-vinfast-kdo2o"][data-zone-label="true"]')
       expect(labelGroup).toBeTruthy()
+      expect(container.querySelector('.fp-selection-zone')?.classList.contains('is-editing')).toBe(true)
 
       // When selected, selection handle dot is rendered
       const handle = labelGroup?.querySelector('.fp-zone-label-handle')
@@ -164,6 +166,54 @@ describe('Department Management and PDF-style Label Repositioning', () => {
       )
     })
 
+    it('allows adjusting the department color opacity with a horizontal slider', () => {
+      const onZoneUpdate = vi.fn()
+      const onZonePreview = vi.fn()
+      const onZonePreviewClear = vi.fn()
+      const zoneId = 'zone-16-vinfast-kdo2o'
+
+      render(
+        <FloorDetailsPanel
+          dataset={dataset}
+          baseDataset={dataset}
+          selected={{ kind: 'zone', id: zoneId }}
+          onSelect={vi.fn()}
+          debug={false}
+          issues={[]}
+          onZoneUpdate={onZoneUpdate}
+          onZonePreview={onZonePreview}
+          onZonePreviewClear={onZonePreviewClear}
+        />
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: /Đổi tên phòng ban/i }))
+      const slider = screen.getByRole('slider', { name: /Độ đậm màu khu vực/i }) as HTMLInputElement
+      expect(slider.value).toBe('0.22')
+
+      fireEvent.change(slider, { target: { value: '0.57' } })
+      expect(screen.getByText('57%')).toBeTruthy()
+      expect(onZonePreview).toHaveBeenLastCalledWith({
+        zoneId,
+        sourceColor: '#fbcecc',
+        sourceOpacity: 0.57,
+      })
+
+      fireEvent.click(screen.getByRole('button', { name: /^Hủy$/i }))
+      expect(onZonePreviewClear).toHaveBeenCalledWith(zoneId)
+      expect(onZoneUpdate).not.toHaveBeenCalled()
+
+      fireEvent.click(screen.getByRole('button', { name: /Đổi tên phòng ban/i }))
+      fireEvent.change(screen.getByRole('slider', { name: /Độ đậm màu khu vực/i }), { target: { value: '0.57' } })
+      fireEvent.click(screen.getByRole('button', { name: /Lưu thay đổi/i }))
+
+      expect(onZoneUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          zoneId,
+          sourceOpacity: 0.57,
+        })
+      )
+    })
+
     it('allows assigning a department name to an unlabeled zone', () => {
       const onZoneUpdate = vi.fn()
       const zoneId = 'zone-16-unlabeled-01'
@@ -226,6 +276,7 @@ describe('Department Management and PDF-style Label Repositioning', () => {
         verification: 'UNKNOWN',
         type: 'UNKNOWN',
         sourceColor: null,
+        sourceOpacity: null,
       })
     })
 

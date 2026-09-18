@@ -7,6 +7,7 @@ import { closesOutline, roomLabelPoint, roomParts, simplifyOutline, snapOutlineC
 import { gridRefAt } from '../map/grid'
 import { isSheetAnnotation } from '../map/sheetLabels'
 import { UNLABELED_ZONE, objectName } from '../labels'
+import { DEFAULT_ZONE_FILL_OPACITY } from '../domain/zoneCustomization'
 import type { MapSettings } from '../map/mapSettings'
 import { normalizeWheelZoom, panBy, screenToFloor, zoomAt, type Viewport } from '../map/viewport'
 
@@ -27,6 +28,8 @@ interface FloorMapProps {
   onKeyDown?: (e: ReactKeyboardEvent<SVGSVGElement>) => void
   /** callback when a zone label is dragged/repositioned or updated */
   onZoneUpdate?: (update: { zoneId: string; labelAnchor?: Point; name?: string | null }) => void
+  /** selected zone being edited in the details panel; suppresses its fill overlay */
+  editingZoneId?: string | null
   /** outline authoring mode for user-created rooms: drag a rectangle or click corners */
   roomDrawMode?: boolean
   /** pieces of the room being authored that are already drawn */
@@ -64,6 +67,7 @@ export function FloorMap({
   deskStatuses,
   onKeyDown,
   onZoneUpdate,
+  editingZoneId = null,
   roomDrawMode = false,
   roomDraft = null,
   onRoomDraw,
@@ -612,7 +616,7 @@ export function FloorMap({
             />
           )}
 
-          <Selection dataset={dataset} selected={selected} />
+          <Selection dataset={dataset} selected={selected} editingZoneId={editingZoneId} />
 
           {debug && <DebugLayer dataset={dataset} settings={settings} />}
         </g>
@@ -681,6 +685,7 @@ const ZoneFills = memo(function ZoneFills({ dataset }: { dataset: FloorDataset }
           points={points(zoneDisplayPolygon(z))}
           fill={z.verification === 'UNKNOWN' ? 'url(#fp-hatch-unknown)' : (z.sourceColor ?? 'transparent')}
           className="fp-zone-fill"
+          style={{ fillOpacity: z.sourceOpacity ?? DEFAULT_ZONE_FILL_OPACITY }}
         />
       ))}
     </g>
@@ -885,7 +890,15 @@ const Labels = memo(function Labels({
   )
 })
 
-const Selection = memo(function Selection({ dataset, selected }: { dataset: FloorDataset; selected: EntityRef | null }) {
+const Selection = memo(function Selection({
+  dataset,
+  selected,
+  editingZoneId,
+}: {
+  dataset: FloorDataset
+  selected: EntityRef | null
+  editingZoneId: string | null
+}) {
   const shapes = useMemo(() => {
     if (!selected) return []
     switch (selected.kind) {
@@ -905,7 +918,10 @@ const Selection = memo(function Selection({ dataset, selected }: { dataset: Floo
   }, [dataset, selected])
   if (!shapes.length) return null
   return (
-    <g className={`fp-selection fp-selection-${selected!.kind}`} aria-hidden="true">
+    <g
+      className={`fp-selection fp-selection-${selected!.kind}${selected!.kind === 'zone' && selected!.id === editingZoneId ? ' is-editing' : ''}`}
+      aria-hidden="true"
+    >
       {shapes.map((p, i) => (
         <polygon key={i} points={points(p)} />
       ))}

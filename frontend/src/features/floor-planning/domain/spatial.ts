@@ -159,6 +159,8 @@ export interface Zone extends SpatialEntity {
   labelAnchorSource: string
   areaM2: number
   sourceColor: string | null
+  /** Optional per-zone fill opacity used by the verification map. */
+  sourceOpacity?: number
   sourceLabel: string | null
   /** number in parentheses on the source label; meaning is not stated on the drawing */
   sourceLabelFigure: number | null

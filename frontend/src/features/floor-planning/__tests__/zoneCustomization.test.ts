@@ -107,6 +107,18 @@ describe('zoneCustomization domain logic', () => {
     expect(updated[0].name).toBe('Khu vực thử nghiệm')
   })
 
+  it('applies and clamps per-zone fill opacity', () => {
+    const updated = applyZoneCustomizations([mockZone], {
+      'zone-1': { sourceOpacity: 0.95 },
+    })
+    expect(updated[0].sourceOpacity).toBe(0.8)
+
+    const cleared = applyZoneCustomizations([mockZone], {
+      'zone-1': { sourceOpacity: null },
+    })
+    expect(cleared[0].sourceOpacity).toBeUndefined()
+  })
+
   it('persists and loads customizations from localStorage', () => {
     const floorId = 'floor-16'
     saveZoneCustomizations(floorId, {

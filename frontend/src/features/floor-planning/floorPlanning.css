@@ -1158,6 +1158,10 @@
   stroke-width: 1.6;
 }
 
+.fp-selection-zone.is-editing polygon {
+  fill: none;
+}
+
 .fp-cad-label {
   fill: #3a3734;
   font-family: Arial, var(--font);
@@ -1448,6 +1452,29 @@
 .fp-color-dot.is-active {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
+}
+
+.fp-zone-opacity-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.fp-zone-opacity-label output {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.fp-zone-opacity {
+  width: 100%;
+  margin: 2px 0 0;
+  accent-color: var(--ink);
+}
+
+.fp-zone-opacity-hint {
+  margin: 0;
 }
 
 .fp-zone-form-actions {

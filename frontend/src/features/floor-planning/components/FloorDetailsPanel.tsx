@@ -1,9 +1,14 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { AllocationSource } from '../domain/allocation'
 import type { DeskRecord } from '../domain/desk'
 import type { EntityRef, FloorDataset, Point, Room, VerificationState, Zone } from '../domain/spatial'
 import { ROOM_TYPES, ROOM_TYPE_LABEL, type RoomType } from '../domain/roomTypes'
-import { polygonCentroid } from '../domain/zoneCustomization'
+import {
+  DEFAULT_ZONE_FILL_OPACITY,
+  MAX_ZONE_FILL_OPACITY,
+  MIN_ZONE_FILL_OPACITY,
+  polygonCentroid,
+} from '../domain/zoneCustomization'
 import type { ValidationIssue } from '../data/validateFloorDataset'
 import {
   CLASSIFICATION,
@@ -29,9 +34,13 @@ interface FloorDetailsPanelProps {
     name?: string | null
     labelAnchor?: Point
     sourceColor?: string | null
+    sourceOpacity?: number | null
     verification?: VerificationState
     type?: 'WORKSPACE_ZONE' | 'UNKNOWN'
   }) => void
+  onZonePreview?: (update: { zoneId: string; sourceColor?: string | null; sourceOpacity?: number | null }) => void
+  onZonePreviewClear?: (zoneId: string) => void
+  onZoneEditingChange?: (zoneId: string | null) => void
   onResetZone?: (zoneId: string) => void
   onResetAllZones?: () => void
   onBeginRoomDraw?: () => void
@@ -124,6 +133,9 @@ function ZoneDepartmentEditor({
   zone,
   baseDataset,
   onZoneUpdate,
+  onZonePreview,
+  onZonePreviewClear,
+  onZoneEditingChange,
   onResetZone,
 }: {
   zone: Zone
@@ -133,20 +145,33 @@ function ZoneDepartmentEditor({
     name?: string | null
     labelAnchor?: Point
     sourceColor?: string | null
+    sourceOpacity?: number | null
     verification?: VerificationState
     type?: 'WORKSPACE_ZONE' | 'UNKNOWN'
   }) => void
+  onZonePreview?: (update: { zoneId: string; sourceColor?: string | null; sourceOpacity?: number | null }) => void
+  onZonePreviewClear?: (zoneId: string) => void
+  onZoneEditingChange?: (zoneId: string | null) => void
   onResetZone?: (zoneId: string) => void
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const [nameInput, setNameInput] = useState(zone.name ?? '')
   const [selectedColor, setSelectedColor] = useState(zone.sourceColor ?? '#c3d6f8')
+  const [selectedOpacity, setSelectedOpacity] = useState(zone.sourceOpacity ?? DEFAULT_ZONE_FILL_OPACITY)
+
+  useEffect(() => {
+    return () => {
+      onZonePreviewClear?.(zone.id)
+      onZoneEditingChange?.(null)
+    }
+  }, [onZoneEditingChange, onZonePreviewClear, zone.id])
 
   const baseZone = baseDataset?.zones.find((z) => z.id === zone.id)
   const isModified =
     baseZone &&
     (baseZone.name !== zone.name ||
       baseZone.sourceColor !== zone.sourceColor ||
+      baseZone.sourceOpacity !== zone.sourceOpacity ||
       baseZone.labelAnchor[0] !== zone.labelAnchor[0] ||
       baseZone.labelAnchor[1] !== zone.labelAnchor[1] ||
       baseZone.verification !== zone.verification)
@@ -169,6 +194,7 @@ function ZoneDepartmentEditor({
         verification: 'SOURCE_VERIFIED',
         type: 'WORKSPACE_ZONE',
         sourceColor: selectedColor,
+        sourceOpacity: selectedOpacity,
       })
     } else {
       onZoneUpdate?.({
@@ -177,8 +203,11 @@ function ZoneDepartmentEditor({
         verification: 'UNKNOWN',
         type: 'UNKNOWN',
         sourceColor: null,
+        sourceOpacity: null,
       })
     }
+    onZonePreviewClear?.(zone.id)
+    onZoneEditingChange?.(null)
     setIsEditing(false)
   }
 
@@ -189,9 +218,20 @@ function ZoneDepartmentEditor({
       verification: 'UNKNOWN',
       type: 'UNKNOWN',
       sourceColor: null,
+      sourceOpacity: null,
     })
+    onZonePreviewClear?.(zone.id)
+    onZoneEditingChange?.(null)
     setNameInput('')
     setIsEditing(false)
+  }
+
+  const previewAppearance = (sourceColor: string, sourceOpacity: number) => {
+    onZonePreview?.({
+      zoneId: zone.id,
+      sourceColor,
+      sourceOpacity,
+    })
   }
 
   if (isEditing) {
@@ -211,7 +251,11 @@ function ZoneDepartmentEditor({
             autoFocus
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleSave()
-              if (e.key === 'Escape') setIsEditing(false)
+              if (e.key === 'Escape') {
+                onZonePreviewClear?.(zone.id)
+                onZoneEditingChange?.(null)
+                setIsEditing(false)
+              }
             }}
           />
         </div>
@@ -226,10 +270,38 @@ function ZoneDepartmentEditor({
                 className={`fp-color-dot${selectedColor === c.value ? ' is-active' : ''}`}
                 style={{ backgroundColor: c.value }}
                 title={c.label}
-                onClick={() => setSelectedColor(c.value)}
+                onClick={() => {
+                  setSelectedColor(c.value)
+                  previewAppearance(c.value, selectedOpacity)
+                }}
               />
             ))}
           </div>
+        </div>
+
+        <div className="fp-form-group">
+          <label className="fp-zone-opacity-label" htmlFor="zone-opacity-input">
+            <span>Độ đậm màu khu vực:</span>
+            <output htmlFor="zone-opacity-input">{Math.round(selectedOpacity * 100)}%</output>
+          </label>
+          <input
+            id="zone-opacity-input"
+            className="fp-zone-opacity"
+            type="range"
+            min={MIN_ZONE_FILL_OPACITY}
+            max={MAX_ZONE_FILL_OPACITY}
+            step="0.01"
+            value={selectedOpacity}
+            onChange={(e) => {
+              const nextOpacity = Number(e.target.value)
+              setSelectedOpacity(nextOpacity)
+              previewAppearance(selectedColor, nextOpacity)
+            }}
+            aria-describedby="zone-opacity-hint"
+          />
+          <p id="zone-opacity-hint" className="fp-panel-hint fp-zone-opacity-hint">
+            Kéo trái/phải để làm khu vực trong hơn hoặc đậm hơn trên bản đồ.
+          </p>
         </div>
 
         <div className="fp-zone-form-actions">
@@ -243,6 +315,8 @@ function ZoneDepartmentEditor({
               onClick={() => {
                 setNameInput(zone.name ?? '')
                 setIsEditing(false)
+                onZonePreviewClear?.(zone.id)
+                onZoneEditingChange?.(null)
               }}
             >
               Hủy
@@ -273,11 +347,14 @@ function ZoneDepartmentEditor({
         <button
           type="button"
           className={`fp-action-btn${!zone.name ? ' is-primary' : ''}`}
-          onClick={() => {
-            setNameInput(zone.name ?? '')
-            setSelectedColor(zone.sourceColor ?? '#c3d6f8')
-            setIsEditing(true)
-          }}
+              onClick={() => {
+                setNameInput(zone.name ?? '')
+                setSelectedColor(zone.sourceColor ?? '#c3d6f8')
+                setSelectedOpacity(zone.sourceOpacity ?? DEFAULT_ZONE_FILL_OPACITY)
+                onZonePreviewClear?.(zone.id)
+                onZoneEditingChange?.(zone.id)
+                setIsEditing(true)
+              }}
         >
           {zone.name ? 'Đổi tên phòng ban' : '+ Gán tên phòng ban'}
         </button>
@@ -537,6 +614,9 @@ export function FloorDetailsPanel({
   debug,
   issues,
   onZoneUpdate,
+  onZonePreview,
+  onZonePreviewClear,
+  onZoneEditingChange,
   onResetZone,
   onResetAllZones,
   onBeginRoomDraw,
@@ -674,7 +754,10 @@ export function FloorDetailsPanel({
             zone={z}
             baseDataset={baseDataset}
             onZoneUpdate={onZoneUpdate}
-          onResetZone={onResetZone}
+            onZonePreview={onZonePreview}
+            onZonePreviewClear={onZonePreviewClear}
+            onZoneEditingChange={onZoneEditingChange}
+            onResetZone={onResetZone}
           />
           <dl>
             <Row label="Vị trí làm việc vật lý" hint="Bàn có ký hiệu ghế, tâm nằm trong đường viền khu vực">
