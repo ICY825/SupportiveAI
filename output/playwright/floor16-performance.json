@@ -1,0 +1,67 @@
+{
+  "generatedAt": "2026-09-18T15:08:49.354Z",
+  "build": {
+    "command": "cd frontend && npm run build",
+    "layoutBytes": 2907237,
+    "workstationsBytes": 258649,
+    "obstaclesBytes": 63929,
+    "displayAreasBytes": 1061,
+    "floorDataBytes": 3246667,
+    "mainJsBytes": 3463500,
+    "mainJsGzipBytes": 847901,
+    "floorSpecificTransferBytes": 38881,
+    "floorSpecificAssets": [
+      "floor-16-xFr7hC04.js",
+      "floor16.zones-CYBbpIqk.js",
+      "floor16.workstations-DhOtkFWG.js",
+      "floor16.objects-QC0sKXc9.js",
+      "floor16.obstacles-DPO5lSfa.js",
+      "floor16.extraction-CjKMA5C2.js",
+      "floor16.display-areas-Bbhk4CAu.js"
+    ]
+  },
+  "browser": {
+    "viewport": [1440, 900],
+    "network": {
+      "latencyMs": 150,
+      "downloadBytesPerSecond": 204800
+    },
+    "domContentLoadedMs": 6835,
+    "workstationInteractiveMs": 6234,
+    "firstPaintMs": 676,
+    "firstContentfulPaintMs": 4804,
+    "longTasks": {
+      "count": 4,
+      "totalMs": 701,
+      "maxMs": 240
+    },
+    "overview": {
+      "targetFurnitureGroups": 308,
+      "svgNodes": 4043,
+      "paths": 7,
+      "polygons": 2024,
+      "semanticZoom": [
+        { "zoom": "100%", "tier": "far", "svgNodes": 4043, "paths": 7, "polygons": 2024 },
+        { "zoom": "120%", "tier": "far", "svgNodes": 4043, "paths": 7, "polygons": 2024 },
+        { "zoom": "144%", "tier": "medium", "svgNodes": 4937, "paths": 132, "polygons": 2024 }
+      ]
+    },
+    "focusedAreaD": {
+      "transitionMs": 210,
+      "targetFurnitureGroups": 28,
+      "contextFurnitureGroups": 20,
+      "svgNodes": 721,
+      "paths": 9,
+      "polygons": 321,
+      "semanticTierAtFit": "close"
+    },
+    "placementFlow": {
+      "previewDeskAndChairGeometry": true,
+      "invalidCaption": "Chồng lấn bàn 206 · di chuyển chuột để chọn vị trí khác · Esc để hủy",
+      "invalidAccessibleLabel": "Chồng lấn bàn 206 · Mã bàn: ws-16-206",
+      "invalidPreviewStayedAtTarget": true,
+      "cancelLeftTargetFurnitureGroups": 28,
+      "cancelRemovedPendingPreview": true
+    }
+  }
+}
