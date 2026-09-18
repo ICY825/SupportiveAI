@@ -104,8 +104,11 @@ out/
 .tox/
 .nox/
 
-# Tài liệu tham khảo tải về, không thuộc repo (main thêm 17/09)
-docs/references/
+# Tài liệu tham khảo tải về, không thuộc repo (main thêm 17/09).
+# `docs/references/*` chứ không phải `docs/references/`: git không mở lại được
+# file nằm trong thư mục đã bị loại, nên dạng có dấu `/` ở cuối sẽ vô hiệu hóa
+# dòng `!` bên dưới.
+docs/references/*
 
 # Dữ liệu thật (danh sách nhân sự, file mẫu chấm KPI) - chỉ giữ .gitkeep
 # Dùng `/data/*` chứ không phải `/data/`: git không mở lại được file nằm trong
@@ -125,3 +128,11 @@ docs/kpi/ground-truth/*
 
 # Multi-agent teamwork scratch & handoffs
 .agents/
+
+# Bản vẽ đã sửa thì PHẢI theo repo: dataset sinh ra từ nó, và hash của nó là
+# `layout_version` trong bảng gán chỗ ngồi. Xem docs/references/pdf-fix/README.md.
+#
+# Phải đặt ở CUỐI file: luật khớp sau cùng là luật thắng, nên nằm trên `*.pdf`
+# thì không có tác dụng gì.
+!docs/references/pdf-fix/
+!docs/references/pdf-fix/**
