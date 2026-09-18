@@ -1,5 +1,3 @@
-'use client';
-
 /**
  * Màn hình soát trước khi gửi (mail-tracking.md §5).
  *
@@ -17,7 +15,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { Link, useParams } from 'react-router';
 import { ApiError } from '@/api/client';
 import {
   assignRecipient,
@@ -32,8 +30,10 @@ import { Banner, Button, Card, ErrorBox, Loading, Note, StatusPill } from '@/com
 import { formatDate, formatDateTime, rowsAndParcels } from '@/shared/format';
 import { DUPLICATE, MATCH_METHOD, STATUS, TIER } from '@/shared/mail-labels';
 
-export default function ReviewPage({ params }: { params: { id: string } }) {
-  const batchId = params.id;
+export default function ReviewPage() {
+  // Next truyền `params` vào trang; react-router lấy qua hook, khớp với
+  // `path="batches/:id"` trong bảng route.
+  const batchId = useParams().id ?? '';
   const [batch, setBatch] = useState<MailBatchDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyItem, setBusyItem] = useState<string | null>(null);
@@ -96,7 +96,7 @@ export default function ReviewPage({ params }: { params: { id: string } }) {
         <span className="small muted">
           Ngày nhận {formatDate(batch.receipt_date)} · tải lên {formatDateTime(batch.uploaded_at)}
         </span>
-        <Link href="/mail/batches" className="small" style={{ marginLeft: 'auto' }}>
+        <Link to="/mail/batches" className="small" style={{ marginLeft: 'auto' }}>
           ← Danh sách lô
         </Link>
       </div>
@@ -210,7 +210,7 @@ function Warnings({ batch }: { batch: MailBatchDetail }) {
           {sameDate.map((b, index) => (
             <span key={b.batch_id}>
               {index > 0 && '; '}
-              <Link href={`/mail/batches/${b.batch_id}`}>{b.source_filename}</Link> —{' '}
+              <Link to={`/mail/batches/${b.batch_id}`}>{b.source_filename}</Link> —{' '}
               {formatDateTime(b.uploaded_at)}, {b.row_count} dòng
             </span>
           ))}
@@ -278,7 +278,7 @@ function Row({
         {item.duplicate_of && (
           <div className="small" style={{ color: 'var(--vsf-red-dark)', marginTop: 4 }}>
             Trùng dòng đã gửi ở{' '}
-            <Link href={`/mail/batches/${item.duplicate_of.batch_id}`}>lô trước</Link> — ngày{' '}
+            <Link to={`/mail/batches/${item.duplicate_of.batch_id}`}>lô trước</Link> — ngày{' '}
             {formatDate(item.duplicate_of.receipt_date)}, số lượng {item.duplicate_of.quantity}
             {item.duplicate_of.quantity !== item.quantity && (
               <> · lần này ghi {item.quantity}</>

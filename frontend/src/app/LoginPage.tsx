@@ -1,22 +1,21 @@
-'use client';
-
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router';
 import { ApiError } from '@/api/client';
 import { Button } from '@/components/ui';
 import { useSession } from '@/shared/auth';
+import '@/features/mail/mail.css';
 
 export default function LoginPage() {
   const { employee, ready, signIn } = useSession();
-  const router = useRouter();
+  const navigate = useNavigate();
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (ready && employee) router.replace('/mail/batches');
-  }, [ready, employee, router]);
+    if (ready && employee) navigate('/mail/batches', { replace: true });
+  }, [ready, employee, navigate]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -24,7 +23,7 @@ export default function LoginPage() {
     setError(null);
     try {
       await signIn(code.trim(), password);
-      router.replace('/mail/batches');
+      navigate('/mail/batches', { replace: true });
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : 'Không kết nối được tới máy chủ. Thử lại sau.',
@@ -36,6 +35,7 @@ export default function LoginPage() {
 
   return (
     <div
+      className="mail-scope"
       style={{
         minHeight: '100vh',
         display: 'flex',
@@ -55,7 +55,6 @@ export default function LoginPage() {
         }}
       >
         {/* Huy hiệu thương hiệu của wireframe mới, thay ô chữ "V" tự chế. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/vsf-mark.png" alt="VinSmart Future" style={{ height: 38, width: 'auto' }} />
         <h1 style={{ margin: '14px 0 4px' }}>Trung tâm Hành chính</h1>
         <p className="small muted" style={{ margin: '0 0 18px' }}>

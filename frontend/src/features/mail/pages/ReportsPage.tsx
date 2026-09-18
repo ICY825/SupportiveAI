@@ -1,5 +1,3 @@
-'use client';
-
 /**
  * Báo cáo (mail-tracking.md §9.2, §9.3).
  *

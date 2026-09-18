@@ -1,5 +1,3 @@
-'use client';
-
 /**
  * Màn hình kiện hàng (mail-tracking.md §9.1).
  *

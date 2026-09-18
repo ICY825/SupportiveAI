@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     debug: bool = False
     api_prefix: str = "/api"
 
+    # Thư mục build của frontend. Khi tồn tại, `main.py` phục vụ luôn nó, nên
+    # trình duyệt chỉ thấy một origin và không cần CORS — đúng quy tắc mà bản
+    # Next trước đây giữ bằng `rewrites()`. Để trống thì bỏ qua: lúc phát triển
+    # thì Vite tự phục vụ và proxy `/api` sang đây.
+    frontend_dist: str = ""
+
     # --- Database ---
     # Cổng 5433 khớp docker-compose.yml — xem ghi chú ở đó.
     database_url: str = "postgresql+psycopg://supportive:supportive@localhost:5433/supportive_ai"

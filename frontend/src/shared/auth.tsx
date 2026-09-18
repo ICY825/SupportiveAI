@@ -1,5 +1,3 @@
-'use client';
-
 /**
  * Phiên đăng nhập.
  *
@@ -10,7 +8,7 @@
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router';
 import { EMPLOYEE_KEY, TOKEN_KEY } from '@/api/client';
 import * as authApi from '@/api/auth';
 import type { EmployeeRead } from '@/api/types';
@@ -27,7 +25,7 @@ const SessionContext = createContext<Session | null>(null);
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [employee, setEmployee] = useState<EmployeeRead | null>(null);
   const [ready, setReady] = useState(false);
-  const router = useRouter();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const token = window.localStorage.getItem(TOKEN_KEY);
@@ -67,8 +65,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     window.localStorage.removeItem(TOKEN_KEY);
     window.localStorage.removeItem(EMPLOYEE_KEY);
     setEmployee(null);
-    router.replace('/login');
-  }, [router]);
+    navigate('/login', { replace: true });
+  }, [navigate]);
 
   const value = useMemo<Session>(
     () => ({ employee, ready, signIn, signOut }),

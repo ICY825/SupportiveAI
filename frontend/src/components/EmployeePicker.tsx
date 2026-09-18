@@ -1,5 +1,3 @@
-'use client';
-
 /**
  * Ô tìm nhân sự ở màn hình soát (mail-tracking.md §5.2).
  *

@@ -20,7 +20,7 @@ const chevron = (d: string) => (
   </svg>
 )
 
-/** The four pilot modules (README §4). Only floor planning is built; the rest are shown as not yet available. */
+/** The four pilot modules (README §4). Those with an `href` have a screen; the rest are shown as not yet available. */
 const MODULES: Module[] = [
   {
     id: 'floor-planning',
@@ -37,6 +37,7 @@ const MODULES: Module[] = [
   {
     id: 'parcels',
     label: 'Chuyển phát nhanh',
+    href: '#/mail/batches',
     icon: icon('M3 6.5 10 3l7 3.5v7L10 17l-7-3.5z M3 6.5 10 10l7-3.5 M10 10v7 M6.5 4.75l7 3.5'),
   },
   {

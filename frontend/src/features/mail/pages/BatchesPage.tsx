@@ -1,5 +1,3 @@
-'use client';
-
 /**
  * Danh sách lô + tải file lễ tân (mail-tracking.md §3.1).
  *
@@ -9,8 +7,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { Link } from 'react-router';
+import { useNavigate } from 'react-router';
 import { ApiError } from '@/api/client';
 import { listBatches, uploadBatch } from '@/api/mail';
 import type { ImportResult, MailBatch } from '@/api/types';
@@ -19,7 +17,7 @@ import { formatDate, formatDateTime, rowsAndParcels } from '@/shared/format';
 import { TIER } from '@/shared/mail-labels';
 
 export default function BatchesPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
   const [batches, setBatches] = useState<MailBatch[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +75,7 @@ export default function BatchesPage() {
 
       {uploadError && <ErrorBox error={uploadError} />}
 
-      {result && <ImportSummary result={result} onOpen={() => router.push(`/mail/batches/${result.batch_id}`)} />}
+      {result && <ImportSummary result={result} onOpen={() => navigate(`/mail/batches/${result.batch_id}`)} />}
 
       <Card title="Các lô đã tải" padded={false}>
         {error ? (
@@ -105,7 +103,7 @@ export default function BatchesPage() {
               {batches.map((batch) => (
                 <tr key={batch.id}>
                   <td>
-                    <Link href={`/mail/batches/${batch.id}`}>{batch.source_filename}</Link>
+                    <Link to={`/mail/batches/${batch.id}`}>{batch.source_filename}</Link>
                     {batch.ambiguous_date && (
                       <div className="small" style={{ color: 'var(--bronze)' }}>
                         ⚠ Ngày trong file mơ hồ — cần xác nhận

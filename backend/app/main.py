@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.database import SessionLocal
@@ -113,7 +115,42 @@ def create_app() -> FastAPI:
             "enabled_modules": enabled_module_names(),
         }
 
+    # Sau cùng: nó đăng ký một route bắt-tất-cả, nên mọi route thật phải có
+    # trước, nếu không `/health` và `/api/*` sẽ bị nuốt.
+    _mount_frontend(application)
+
     return application
+
+
+def _mount_frontend(application: FastAPI) -> None:
+    """Phục vụ bản build của frontend, nếu có.
+
+    Bỏ qua trong im lặng khi thư mục chưa tồn tại: lúc phát triển và khi chạy
+    test thì không có `dist/`, và backend vẫn phải dựng được.
+
+    Frontend định tuyến bằng hash (`/#/mail/batches`), nên máy chủ chỉ bao giờ
+    thấy đúng một đường dẫn `/` — không cần fallback SPA cho từng route con.
+    Đường dẫn không khớp vẫn trả `index.html` để người dùng gõ tay không gặp
+    trang trắng, trừ `/api` và `/health` đã đăng ký trước đó.
+    """
+    if not settings.frontend_dist:
+        return
+    dist = Path(settings.frontend_dist)
+    index = dist / "index.html"
+    if not index.is_file():
+        logger.warning("FRONTEND_DIST trỏ tới %s nhưng không có index.html — bỏ qua", dist)
+        return
+
+    application.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")
+
+    @application.get("/{path:path}", include_in_schema=False)
+    def spa(path: str) -> FileResponse:
+        candidate = dist / path
+        if path and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(index)
+
+    logger.info("Phục vụ frontend từ %s", dist)
 
 
 app = create_app()

@@ -1,5 +1,3 @@
-'use client';
-
 /**
  * Màn hình "Chờ khớp" xuyên lô (mail-tracking.md §6.4).
  *
@@ -13,7 +11,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { Link } from 'react-router';
 import { ApiError } from '@/api/client';
 import { assignRecipient, listPendingMatch, sendItem } from '@/api/mail';
 import type { PendingMatchItem } from '@/api/types';
@@ -120,7 +118,7 @@ export default function PendingMatchPage() {
                   </td>
                   <td className="tabular muted">{formatDate(item.received_at)}</td>
                   <td className="small">
-                    <Link href={`/mail/batches/${item.batch_id}`}>{item.batch_filename}</Link>
+                    <Link to={`/mail/batches/${item.batch_id}`}>{item.batch_filename}</Link>
                   </td>
                   <td>
                     {item.employee_id ? (

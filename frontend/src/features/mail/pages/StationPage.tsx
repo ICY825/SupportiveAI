@@ -1,5 +1,3 @@
-'use client';
-
 /**
  * Trang quét QR tại khu để đơn (mail-tracking.md §7.2) — đường xác nhận chính.
  *
@@ -18,11 +16,12 @@
  */
 
 import { Suspense, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'react-router';
 import { ApiError } from '@/api/client';
 import { stationCollect, stationLookup } from '@/api/mail';
 import type { StationItem } from '@/api/types';
 import { formatDate } from '@/shared/format';
+import '../mail.css';
 
 export default function StationPage() {
   return (
@@ -33,7 +32,8 @@ export default function StationPage() {
 }
 
 function Station() {
-  const stationToken = useSearchParams().get('t');
+  const [searchParams] = useSearchParams();
+  const stationToken = searchParams.get('t');
   const [digits, setDigits] = useState('');
   const [items, setItems] = useState<StationItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +77,6 @@ function Station() {
 
   return (
     <Frame>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/vsf-mark.png"
         alt="VinSmart Future"
@@ -224,6 +223,7 @@ function Station() {
 function Frame({ children }: { children: React.ReactNode }) {
   return (
     <main
+      className="mail-scope"
       style={{
         maxWidth: 460,
         margin: '0 auto',

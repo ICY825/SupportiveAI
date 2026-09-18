@@ -1,5 +1,3 @@
-'use client';
-
 /**
  * Component thị giác dùng chung cho cả bốn phân hệ.
  *
