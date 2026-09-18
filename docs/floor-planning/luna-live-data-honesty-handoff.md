@@ -187,8 +187,34 @@ from it), anything under `features/mail` or `features/lockers`.
 undo in live mode — re-plan from server state, or drop the control?
 two admins on one floor — last write wins, or lock the floor while editing?
 does a seat have a status at all, or only an assignment? (ADR 0002 §4)
-who decides a desk is out of service, and where is that recorded?
 ```
 
 The second one is worth asking the facilities owner before building anything:
 the answer decides whether §3 is a message or a whole conflict-resolution flow.
+
+### A note on `SeatStatus`, since it keeps coming up
+
+`domain/allocation.ts:16` has `'ACTIVE' | 'INACTIVE' | 'RESERVED' |
+'OUT_OF_SERVICE'`, and `validateAssignment` refuses to seat anyone on the last
+two. No requirement asked for it. It exists because ADR 0001 §4 created `Seat`
+speculatively and because the shared wireframe palette has an `unavailable`
+colour; the only code that ever sets it is `demoAllocation.ts:211,227`, which
+breaks one desk so the grey chip is visible.
+
+Do not build a maintenance record for it. The single consequence worth caring
+about is the capacity answer — *"Khu vực F đã kín. Không còn chỗ trống"* is
+wrong if some of those desks cannot be used at all — and that only bites if
+unusable desks actually exist.
+
+So ask Hương one question, in these words:
+
+```text
+Trong thực tế có chỗ ngồi nào không dùng được không — hỏng ghế, mất điện,
+đang sửa? Nếu có thì hiện giờ ai biết và ghi ở đâu?
+```
+
+"Hiếm, không ai ghi" → delete the concept: drop `status` from the live seat,
+remove the `unavailable` branch, and the count is honest because every desk in
+the drawing is a desk someone can sit at. "Có, HC giữ một danh sách" → it is a
+column on a future `seat` table and a separate decision, not something to invent
+here.
