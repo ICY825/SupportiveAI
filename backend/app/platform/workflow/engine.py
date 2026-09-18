@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.database import utcnow
@@ -154,6 +154,34 @@ class WorkflowEngine:
             )
         )
         return instance
+
+    def discard(self, entity_type: str, entity_ids: list[str]) -> int:
+        """Xóa hẳn instance (kèm lịch sử và mốc SLA) của các thực thể bị xóa.
+
+        Chỉ dùng khi thực thể **chưa từng tồn tại về mặt nghiệp vụ** — ví dụ
+        lô thư tải nhầm file. Thực thể đã đi qua luồng thì giữ lịch sử, không
+        gọi hàm này.
+        """
+        if not entity_ids:
+            return 0
+        instances = (
+            self.db.execute(
+                select(WorkflowInstance).where(
+                    WorkflowInstance.entity_type == entity_type,
+                    WorkflowInstance.entity_id.in_(entity_ids),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        ids = [i.id for i in instances]
+        if ids:
+            # SLAEvent không có relationship ngược nên ORM không tự cascade.
+            self.db.execute(delete(SLAEvent).where(SLAEvent.instance_id.in_(ids)))
+        for instance in instances:
+            self.db.delete(instance)
+        self.db.flush()
+        return len(instances)
 
     # --- Truy vấn ---
 

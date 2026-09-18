@@ -27,6 +27,11 @@ export function getBatch(batchId: string) {
   return api.get<MailBatchDetail>(`/mail/batches/${batchId}`);
 }
 
+/** Xóa lô tải nhầm. Backend trả 409 nếu lô đã gửi thông báo cho dòng nào. */
+export function deleteBatch(batchId: string) {
+  return api.delete<void>(`/mail/batches/${batchId}`);
+}
+
 /**
  * HC chọn hoặc sửa người nhận.
  *

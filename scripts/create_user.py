@@ -43,7 +43,7 @@ BACKEND = Path(__file__).resolve().parents[1] / "backend"
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
-MIN_PASSWORD = 12
+MIN_PASSWORD = 6
 
 
 def main() -> int:

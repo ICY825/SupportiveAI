@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { useNavigate } from 'react-router';
 import { ApiError } from '@/api/client';
-import { listBatches, uploadBatch } from '@/api/mail';
+import { deleteBatch, listBatches, uploadBatch } from '@/api/mail';
 import type { ImportResult, MailBatch } from '@/api/types';
 import { Banner, Button, Card, Empty, ErrorBox, Loading, Note, StatusPill } from '@/components/ui';
 import { formatDate, formatDateTime, rowsAndParcels } from '@/shared/format';
@@ -24,6 +24,7 @@ export default function BatchesPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(() => {
     setError(null);
@@ -53,6 +54,25 @@ export default function BatchesPage() {
     }
   }
 
+  /** Tải nhầm file thì bỏ ngay tại đây, khỏi phải mở màn hình soát. */
+  async function onDeleteImported() {
+    if (!result) return;
+    if (!window.confirm('Xóa lô vừa tải lên? Dùng khi tải nhầm file. Thao tác không hoàn tác được.')) {
+      return;
+    }
+    setDeleting(true);
+    setUploadError(null);
+    try {
+      await deleteBatch(result.batch_id);
+      setResult(null);
+      load();
+    } catch (err) {
+      setUploadError(err instanceof ApiError ? err.message : 'Không xóa được lô');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 1100 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
@@ -75,7 +95,14 @@ export default function BatchesPage() {
 
       {uploadError && <ErrorBox error={uploadError} />}
 
-      {result && <ImportSummary result={result} onOpen={() => navigate(`/mail/batches/${result.batch_id}`)} />}
+      {result && (
+        <ImportSummary
+          result={result}
+          onOpen={() => navigate(`/mail/batches/${result.batch_id}`)}
+          onDelete={onDeleteImported}
+          deleting={deleting}
+        />
+      )}
 
       <Card title="Các lô đã tải" padded={false}>
         {error ? (
@@ -159,15 +186,30 @@ export default function BatchesPage() {
 }
 
 /** Kết quả đọc file — hiện tại chỗ để HC đọc cảnh báo trước khi sang soát. */
-function ImportSummary({ result, onOpen }: { result: ImportResult; onOpen: () => void }) {
+function ImportSummary({
+  result,
+  onOpen,
+  onDelete,
+  deleting,
+}: {
+  result: ImportResult;
+  onOpen: () => void;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
   const { summary } = result;
   return (
     <Card
       title={`Đã đọc ${rowsAndParcels(summary.total_rows, summary.total_parcels)}`}
       action={
-        <Button variant="primary" onClick={onOpen}>
-          Mở màn hình soát →
-        </Button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Button variant="ghost" busy={deleting} onClick={onDelete} title="Dùng khi tải nhầm file">
+            Tải nhầm — xóa lô
+          </Button>
+          <Button variant="primary" onClick={onOpen}>
+            Mở màn hình soát →
+          </Button>
+        </div>
       }
     >
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>

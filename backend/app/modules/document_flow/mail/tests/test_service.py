@@ -663,3 +663,71 @@ class TestJobDinhKy:
 
         item = service.confirm_collect(batch.items[0].id)
         assert item.status == MailStatus.COLLECTED
+
+
+# ----------------------------------------------------------------------
+# Xóa lô tải nhầm
+# ----------------------------------------------------------------------
+
+class TestXoaLo:
+    def test_xoa_lo_chua_gui(self, service, db, nhan_su):
+        from app.modules.document_flow.mail.models import MailBatch, MailItem
+        from app.platform.workflow.models import WorkflowInstance
+
+        batch = nap(service, [row(), row(name="Trần Thị Bình")], uploaded_by=nhan_su["an"].id)
+        item_ids = [i.id for i in batch.items]
+
+        service.delete_batch(batch.id, actor_id=nhan_su["an"].id)
+
+        assert db.get(MailBatch, batch.id) is None
+        assert db.query(MailItem).filter(MailItem.id.in_(item_ids)).count() == 0
+        assert db.query(WorkflowInstance).filter(
+            WorkflowInstance.entity_id.in_(item_ids)).count() == 0
+
+    def test_ghi_audit_khi_xoa(self, service, db, nhan_su):
+        from app.platform.audit.models import AuditLog
+
+        batch = nap(service, [row()], uploaded_by=nhan_su["an"].id, filename="nham.xlsx")
+        service.delete_batch(batch.id, actor_id=nhan_su["an"].id)
+
+        log = db.query(AuditLog).filter_by(entity_id=batch.id, action="delete").one()
+        assert log.actor_id == nhan_su["an"].id
+        assert log.data["source_filename"] == "nham.xlsx"
+
+    def test_giu_alias_va_feedback_da_hoc(self, service, db, nhan_su):
+        """Lựa chọn của HC vẫn đúng dù file tải nhầm."""
+        from app.modules.document_flow.mail.models import MatchFeedback
+
+        batch = nap(service, [row(name="anh an")], uploaded_by=nhan_su["an"].id)
+        service.assign_recipient(batch.items[0].id, nhan_su["an"].id)
+
+        service.delete_batch(batch.id)
+
+        assert db.query(MatchingAlias).filter_by(raw_name_normalized="anh an").count() == 1
+        feedback = db.query(MatchFeedback).one()
+        assert feedback.mail_item_id is None and feedback.batch_id is None
+
+    def test_da_gui_thi_khong_xoa_duoc(self, service, nhan_su):
+        batch = nap(service, [row()], uploaded_by=nhan_su["an"].id)
+        service.send_batch(batch.id)
+
+        with pytest.raises(ConflictError):
+            service.delete_batch(batch.id)
+
+    def test_gui_mot_phan_cung_khong_xoa_duoc(self, service, nhan_su):
+        batch = nap(service, [row(), row(name="người lạ")], uploaded_by=nhan_su["an"].id)
+        service.send_batch(batch.id)
+
+        with pytest.raises(ConflictError):
+            service.delete_batch(batch.id)
+
+    def test_xoa_roi_tai_lai_khong_bi_nghi_trung(self, service, nhan_su):
+        batch = nap(service, [row()], uploaded_by=nhan_su["an"].id)
+        service.delete_batch(batch.id)
+
+        lai = nap(service, [row()], uploaded_by=nhan_su["an"].id)
+        assert lai.duplicate_suspect_count == 0
+
+    def test_lo_khong_ton_tai(self, service):
+        with pytest.raises(NotFoundError):
+            service.delete_batch("khong-co")

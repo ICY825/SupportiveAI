@@ -488,3 +488,23 @@ class TestNhanVienThuong:
 
         response = client.post(f"/api/mail/items/{cua_duyen}/collect-mine", headers=nv_headers)
         assert response.status_code == 404
+
+
+class TestXoaLo:
+    def test_hc_xoa_lo_chua_gui(self, client, hc_headers):
+        batch_id = client.post("/api/mail/batches", json=rows("cty nam hải"),
+                               headers=hc_headers).json()["batch_id"]
+
+        response = client.delete(f"/api/mail/batches/{batch_id}", headers=hc_headers)
+        assert response.status_code == 204
+        assert client.get(f"/api/mail/batches/{batch_id}", headers=hc_headers).status_code == 404
+
+    def test_lo_da_gui_tra_409(self, client, hc_headers, lo_da_gui):
+        response = client.delete(f"/api/mail/batches/{lo_da_gui}", headers=hc_headers)
+        assert response.status_code == 409
+
+    def test_nhan_vien_thuong_khong_xoa_duoc(self, client, hc_headers, nv_headers):
+        batch_id = client.post("/api/mail/batches", json=rows("cty nam hải"),
+                               headers=hc_headers).json()["batch_id"]
+        response = client.delete(f"/api/mail/batches/{batch_id}", headers=nv_headers)
+        assert response.status_code == 403

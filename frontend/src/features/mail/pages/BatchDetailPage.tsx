@@ -15,11 +15,12 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import { ApiError } from '@/api/client';
 import {
   assignRecipient,
   confirmReview,
+  deleteBatch,
   getBatch,
   keepDuplicate,
   sendBatch,
@@ -34,11 +35,13 @@ export default function ReviewPage() {
   // Next truyền `params` vào trang; react-router lấy qua hook, khớp với
   // `path="batches/:id"` trong bảng route.
   const batchId = useParams().id ?? '';
+  const navigate = useNavigate();
   const [batch, setBatch] = useState<MailBatchDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyItem, setBusyItem] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState<SendResult | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(() => {
     setError(null);
@@ -82,6 +85,30 @@ export default function ReviewPage() {
     }
   }
 
+  /**
+   * Xóa lô tải nhầm file. Chỉ hiện khi chưa dòng nào được gửi: email đã đi
+   * thì không thu hồi được, xóa lô chỉ làm mất dấu kiện thật.
+   */
+  async function onDelete() {
+    if (!batch) return;
+    const ok = window.confirm(
+      `Xóa lô “${batch.source_filename}” (${batch.row_count} dòng)?
+
+` +
+        'Dùng khi tải nhầm file. Thao tác không hoàn tác được.',
+    );
+    if (!ok) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteBatch(batchId);
+      navigate('/mail/batches');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Không xóa được lô');
+      setDeleting(false);
+    }
+  }
+
   if (error && !batch) return <ErrorBox error={error} onRetry={load} />;
   if (!batch) return <Loading what="lô thư" />;
 
@@ -96,9 +123,16 @@ export default function ReviewPage() {
         <span className="small muted">
           Ngày nhận {formatDate(batch.receipt_date)} · tải lên {formatDateTime(batch.uploaded_at)}
         </span>
-        <Link to="/mail/batches" className="small" style={{ marginLeft: 'auto' }}>
-          ← Danh sách lô
-        </Link>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+          {summary.sent === 0 && (
+            <Button variant="ghost" busy={deleting} onClick={onDelete} title="Dùng khi tải nhầm file">
+              Xóa lô
+            </Button>
+          )}
+          <Link to="/mail/batches" className="small">
+            ← Danh sách lô
+          </Link>
+        </div>
       </div>
 
       {error && <ErrorBox error={error} />}

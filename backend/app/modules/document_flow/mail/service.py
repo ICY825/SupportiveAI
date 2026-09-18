@@ -7,6 +7,7 @@ import logging
 from collections.abc import Sequence
 from datetime import UTC, datetime, time, timedelta
 
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -37,6 +38,7 @@ from app.modules.document_flow.mail.workflow import (
     TRIGGER_COLLECT,
     TRIGGER_NOTIFY,
 )
+from app.platform.audit.service import AuditService
 from app.platform.events import Dispatcher
 from app.platform.events import dispatcher as default_dispatcher
 from app.platform.notification import NotificationPayload, NotificationService, Recipient
@@ -207,6 +209,64 @@ class MailService:
         batch.pending_match_count = sum(1 for i in items if i.status == MailStatus.PENDING_MATCH)
         batch.duplicate_suspect_count = sum(1 for i in items if i.duplicate_suspect)
         batch.sent_count = sum(1 for i in items if i.status != MailStatus.PENDING_MATCH)
+        self.db.flush()
+
+    def delete_batch(self, batch_id: str, *, actor_id: str | None = None) -> None:
+        """Xóa một lô tải nhầm (nhầm file, nhầm ngày, tải hai lần...).
+
+        Chỉ xóa được khi **chưa dòng nào được gửi thông báo**. Dòng đã gửi
+        thì email đã tới người nhận, SLA đang chạy — xóa đi là mất dấu kiện
+        thật mà người nhận vẫn đang chờ, và không thu hồi được email.
+
+        Giữ lại có chủ đích:
+
+        * `matching_alias` — HC chọn "tên này là người này" vẫn đúng dù
+          file tải nhầm; bỏ đi là bắt HC chọn lại lần sau.
+        * `mail_match_feedback` — vẫn là công HC đã bỏ ra (§8.1), chỉ gỡ
+          liên kết tới dòng/lô không còn tồn tại.
+        * Một dòng audit ghi tên file, số dòng và ai xóa.
+        """
+        batch = self.repo.get_batch(batch_id)
+        if batch is None:
+            raise NotFoundError(f"Không có lô {batch_id}")
+
+        da_gui = [i for i in batch.items if i.status != MailStatus.PENDING_MATCH]
+        if da_gui:
+            raise ConflictError(
+                f"Lô đã gửi thông báo cho {len(da_gui)} dòng — không xóa được. "
+                "Email đã tới người nhận, xóa lô sẽ làm mất dấu các kiện đó.",
+                details={"sent_items": len(da_gui)},
+            )
+
+        item_ids = [i.id for i in batch.items]
+        if item_ids:
+            self.db.execute(
+                update(MatchFeedback)
+                .where(MatchFeedback.mail_item_id.in_(item_ids))
+                .values(mail_item_id=None)
+            )
+        self.db.execute(
+            update(MatchFeedback)
+            .where(MatchFeedback.batch_id == batch.id)
+            .values(batch_id=None)
+        )
+        self.engine.discard(ENTITY_TYPE, item_ids)
+
+        AuditService(self.db).record(
+            entity_type="mail_batch",
+            entity_id=batch.id,
+            action="delete",
+            actor_id=actor_id,
+            note=f"Xóa lô tải nhầm: {batch.source_filename}",
+            data={
+                "source_filename": batch.source_filename,
+                "receipt_date": batch.receipt_date.isoformat() if batch.receipt_date else None,
+                "row_count": batch.row_count,
+                "uploaded_by": batch.uploaded_by,
+                "uploaded_at": batch.uploaded_at.isoformat(),
+            },
+        )
+        self.db.delete(batch)
         self.db.flush()
 
     # ------------------------------------------------------------------

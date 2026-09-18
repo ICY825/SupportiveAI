@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Header, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Header, Query, Response, UploadFile
 
 from app.core.config import settings
 from app.core.exceptions import NotFoundError, PermissionDeniedError
@@ -220,6 +220,13 @@ def get_batch(batch_id: str, db: DbSession, principal: HcPrincipal) -> MailBatch
             for b in repo.batches_on_date(batch.receipt_date, exclude_batch_id=batch.id)
         ],
     )
+
+
+@router.delete("/batches/{batch_id}", status_code=204)
+def delete_batch(batch_id: str, db: DbSession, principal: HcPrincipal) -> Response:
+    """Xóa lô tải nhầm file. Chỉ được khi chưa dòng nào gửi thông báo (409 nếu đã gửi)."""
+    MailService(db).delete_batch(batch_id, actor_id=principal.employee_id)
+    return Response(status_code=204)
 
 
 @router.patch("/items/{item_id}", response_model=MailItemRead)
