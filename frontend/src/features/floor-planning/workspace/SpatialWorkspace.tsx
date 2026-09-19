@@ -27,7 +27,7 @@ import {
   type AuthoredEntityChanges,
 } from '../domain/authoredEntities'
 import { buildDeskIndex, DESK_STATUSES, type DeskRecord, type DeskStatus } from '../domain/desk'
-import { normalizeRotation, placementsEqual, rotatePlacementBy, snapPlacementToGrid, validatePlacement, type SpatialPlacement } from '../domain/placement'
+import { getChairCorners, normalizeRotation, placementsEqual, rotatePlacementBy, snapPlacementToGrid, validatePlacement, wrapRotation, type SpatialPlacement } from '../domain/placement'
 import type { BBox, EntityRef, FloorDataset, Point } from '../domain/spatial'
 import {
   DESK_STATUS,
@@ -844,10 +844,16 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
       rotation: pending.rotation,
     } satisfies SpatialPlacement
     const withChair = (candidate: SpatialPlacement): SpatialPlacement => {
-      const chairBbox = authoredChairBounds(candidate, area.chairTileSize ?? 600 / dataset.layout.floor.mmPerPt)
+      const tileSize = area.chairTileSize ?? 600 / dataset.layout.floor.mmPerPt
+      const chairBbox = authoredChairBounds(candidate, tileSize)
+      const chairPolygon = candidate.rotation % 90 !== 0 ? getChairCorners(candidate, tileSize) : undefined
       return {
         ...candidate,
-        chair: { bbox: chairBbox, center: [(chairBbox[0] + chairBbox[2]) / 2, (chairBbox[1] + chairBbox[3]) / 2] },
+        chair: {
+          bbox: chairBbox,
+          center: [(chairBbox[0] + chairBbox[2]) / 2, (chairBbox[1] + chairBbox[3]) / 2],
+          ...(chairPolygon ? { polygon: chairPolygon } : {}),
+        },
       }
     }
     if (!pending.autoOrient) return withChair(snapPlacementToGrid(base, area.grid))
@@ -1101,11 +1107,14 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     if (editing && pending && (e.key === 'r' || e.key === 'R')) {
       e.preventDefault()
       const current = pending.placement
-      const rotation = normalizeRotation((current?.rotation ?? pending.rotation) + 90)
+      const currentRotation = current?.rotation ?? pending.rotation
+      const rotation = e.shiftKey
+        ? wrapRotation(Math.round((currentRotation + 15) / 15) * 15)
+        : normalizeRotation(currentRotation + 90)
       const rotated = current
         // Keep the pending desk in the selected grid cell. Re-snapping the
         // rotated footprint here would translate it when width/depth swap.
-        ? { ...rotatePlacementBy(current, 90), rotation }
+        ? { ...rotatePlacementBy(current, rotation - currentRotation), rotation }
         : null
       setPendingDesk({ ...pending, autoOrient: false, rotation, placement: rotated })
       return
@@ -1125,7 +1134,8 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
       }
       if (e.key === 'r' || e.key === 'R') {
         e.preventDefault()
-        editor.rotate(visibleDesk.workstation.id)
+        if (e.shiftKey) editor.rotateBy(visibleDesk.workstation.id, 15)
+        else editor.rotate(visibleDesk.workstation.id)
         return
       }
     }
@@ -1501,6 +1511,7 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
           codeOf={codeOf}
           moved={movedFromOriginal}
           onRotate={() => rotateSelected(visibleDesk.workstation.id)}
+          onAlignToWall={() => { editor.alignToWall(visibleDesk.workstation.id); svgRef.current?.focus() }}
           rotateDisabled={!editor.canRotate(visibleDesk.workstation.id)}
           rotateHint={LAYOUT_EDIT.rotateBlocked}
           boundaryWarning={editor.nearBoundary(visibleDesk.workstation.id) ? LAYOUT_EDIT.boundaryWarning : undefined}

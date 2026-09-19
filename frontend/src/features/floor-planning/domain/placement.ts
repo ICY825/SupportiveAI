@@ -23,12 +23,15 @@ import {
   clipPolygonToBBox,
   GEOMETRY_EPSILON,
   pointInPolygon,
-  polygonArea,
+  polygonContainsPolygon,
   polygonContainsBBox,
+  polygonArea,
+  polygonsOverlap,
   rectangle,
+  rotatePoint,
   rotateQuarter,
 } from './geometry'
-import type { BBox, FloorObstacle, Point, Room, Zone } from './spatial'
+import type { BBox, FloorObstacle, Point, Room, Segment, Zone } from './spatial'
 
 export type QuarterRotation = 0 | 90 | 180 | 270
 
@@ -42,9 +45,18 @@ export interface SpatialPlacement {
   /** footprint size at rotation 0: `width` along X, `depth` along Y */
   width: number
   depth: number
-  rotation: QuarterRotation
+  /** Real clockwise angle in degrees. Quarter turns remain exact integers. */
+  rotation: number
   /** Optional chair seating footprint (nominal 1 tile / 600mm) */
-  chair?: { bbox: BBox; center?: Point } | null
+  chair?: {
+    bbox: BBox
+    center?: Point
+    /** Optional oriented chair polygon carried through edited scenes. */
+    polygon?: Point[]
+    width?: number
+    depth?: number
+    rotation?: number
+  } | null
   /** Optional seated side override ('north' | 'south' | 'east' | 'west' | 'top' | 'bottom' | 'left' | 'right') */
   seatedSide?: 'north' | 'south' | 'east' | 'west' | 'top' | 'bottom' | 'left' | 'right'
 }
@@ -154,17 +166,49 @@ export const wrapRotation = (deg: number): number => ((deg % 360) + 360) % 360
 
 /** Rotation swaps the footprint: a 1200×600 desk turned 90° occupies 600×1200. */
 export function placementFootprint(placement: SpatialPlacement): { width: number; depth: number } {
-  return placement.rotation % 180 === 0
-    ? { width: placement.width, depth: placement.depth }
-    : { width: placement.depth, depth: placement.width }
+  const quarter = ((placement.rotation % 360) + 360) % 360
+  if (quarter === 0 || quarter === 180) return { width: placement.width, depth: placement.depth }
+  if (quarter === 90 || quarter === 270) return { width: placement.depth, depth: placement.width }
+  const radians = (placement.rotation * Math.PI) / 180
+  return {
+    width: Math.abs(placement.width * Math.cos(radians)) + Math.abs(placement.depth * Math.sin(radians)),
+    depth: Math.abs(placement.width * Math.sin(radians)) + Math.abs(placement.depth * Math.cos(radians)),
+  }
+}
+
+/** The four corners of the actual oriented footprint, clockwise on screen. */
+export function placementCorners(placement: SpatialPlacement): Point[] {
+  const normalized = ((placement.rotation % 360) + 360) % 360
+  if (normalized === 0 || normalized === 90 || normalized === 180 || normalized === 270) {
+    const { width, depth } = placementFootprint(placement)
+    return rectangle([placement.x - width / 2, placement.y - depth / 2, placement.x + width / 2, placement.y + depth / 2])
+  }
+  const halfWidth = placement.width / 2
+  const halfDepth = placement.depth / 2
+  const origin: Point = [placement.x, placement.y]
+  const corners: Point[] = [
+    [placement.x - halfWidth, placement.y - halfDepth],
+    [placement.x + halfWidth, placement.y - halfDepth],
+    [placement.x + halfWidth, placement.y + halfDepth],
+    [placement.x - halfWidth, placement.y + halfDepth],
+  ]
+  return corners.map((point) => rotatePoint(point, origin, placement.rotation))
+}
+
+function placementLeadingCorner(placement: SpatialPlacement): Point {
+  const normalized = ((placement.rotation % 360) + 360) % 360
+  if (normalized === 0 || normalized === 90 || normalized === 180 || normalized === 270) {
+    const [x0, y0] = placementBounds(placement)
+    return [x0, y0]
+  }
+  return placementCorners(placement)[0]
 }
 
 export function placementBounds(placement: SpatialPlacement): BBox {
-  const { width, depth } = placementFootprint(placement)
-  return [placement.x - width / 2, placement.y - depth / 2, placement.x + width / 2, placement.y + depth / 2]
+  return bboxOfPoints(placementCorners(placement))
 }
 
-export const placementPolygon = (placement: SpatialPlacement): Point[] => rectangle(placementBounds(placement))
+export const placementPolygon = (placement: SpatialPlacement): Point[] => placementCorners(placement)
 
 export function transformBBox(bbox: BBox, transform: (point: Point) => Point): BBox {
   return bboxOfPoints(rectangle(bbox).map(transform))
@@ -186,6 +230,7 @@ export function translatePlacement(placement: SpatialPlacement, dx: number, dy: 
           placement.chair.bbox[2] + dx,
           placement.chair.bbox[3] + dy,
         ] as BBox,
+        polygon: placement.chair.polygon?.map(([x, y]) => [x + dx, y + dy] as Point),
         center: placement.chair.center
           ? ([placement.chair.center[0] + dx, placement.chair.center[1] + dy] as Point)
           : undefined,
@@ -195,15 +240,16 @@ export function translatePlacement(placement: SpatialPlacement, dx: number, dy: 
 }
 
 export function rotatePlacementBy(placement: SpatialPlacement, deg: number): SpatialPlacement {
-  const rotation = normalizeRotation(placement.rotation + deg)
+  const rotation = wrapRotation(placement.rotation + deg)
   if (rotation === placement.rotation) return placement
-  const turn = normalizeRotation(deg)
   const origin: Point = [placement.x, placement.y]
   const chair = placement.chair
     ? {
         ...placement.chair,
-        bbox: transformBBox(placement.chair.bbox, (p) => rotateQuarter(p, origin, turn)),
-        center: placement.chair.center ? rotateQuarter(placement.chair.center, origin, turn) : undefined,
+        bbox: transformBBox(placement.chair.bbox, (p) => rotatePoint(p, origin, deg)),
+        polygon: placement.chair.polygon?.map((p) => rotatePoint(p, origin, deg)),
+        center: placement.chair.center ? rotatePoint(placement.chair.center, origin, deg) : undefined,
+        rotation: placement.chair.rotation === undefined ? undefined : wrapRotation(placement.chair.rotation + deg),
       }
     : placement.chair
   return { ...placement, rotation, chair }
@@ -230,55 +276,72 @@ export function getChairBounds(
   placement: SpatialPlacement,
   chairTileSize?: number,
 ): BBox | null {
-  if (placement.chair?.bbox) {
-    return placement.chair.bbox
+  const corners = getChairCorners(placement, chairTileSize)
+  return corners ? bboxOfPoints(corners) : null
+}
+
+/** Oriented chair/occupant clearance used by preview, validation and render. */
+export function getChairCorners(
+  placement: SpatialPlacement,
+  chairTileSize?: number,
+): Point[] | null {
+  if (placement.chair?.polygon && placement.chair.polygon.length >= 3) return placement.chair.polygon
+  if (placement.chair?.center && placement.chair.width && placement.chair.depth) {
+    const center = placement.chair.center
+    const halfWidth = placement.chair.width / 2
+    const halfDepth = placement.chair.depth / 2
+    const chairRotation = placement.chair.rotation ?? placement.rotation
+    const corners: Point[] = [
+      [center[0] - halfWidth, center[1] - halfDepth],
+      [center[0] + halfWidth, center[1] - halfDepth],
+      [center[0] + halfWidth, center[1] + halfDepth],
+      [center[0] - halfWidth, center[1] + halfDepth],
+    ]
+    return corners.map((point) => rotatePoint(point, center, chairRotation))
   }
+  if (placement.chair?.bbox) return rectangle(placement.chair.bbox)
   const side = placement.seatedSide
   if (!side && (!chairTileSize || chairTileSize <= 0)) {
     return null
   }
-  const bounds = placementBounds(placement)
-  const [x0, y0, x1, y1] = bounds
+  // Preserve the established world-facing fallback for old quarter-turn
+  // callers that do not carry seatedSide. New placements carry a side and use
+  // the oriented path below; measured diagonal desks use the default local
+  // south side so their chair rotates with the desk.
+  if (!side && [0, 90, 180, 270].includes(((placement.rotation % 360) + 360) % 360)) {
+    const tile = chairTileSize ?? placement.depth
+    const [x0, y0, x1, y1] = placementBounds(placement)
+    switch (((placement.rotation % 360) + 360) % 360) {
+      case 90: return rectangle([x0 - tile, y0, x0, y1])
+      case 180: return rectangle([x0, y0 - tile, x1, y0])
+      case 270: return rectangle([x1, y0, x1 + tile, y1])
+      default: return rectangle([x0, y1, x1, y1 + tile])
+    }
+  }
   const tileSize =
     chairTileSize && chairTileSize > 0
       ? chairTileSize
-      : placement.rotation % 180 === 0
-        ? placement.depth
-        : placement.width
-
-  let dir: 'south' | 'west' | 'north' | 'east' = 'south'
-  if (side) {
-    if (side === 'south' || side === 'bottom') dir = 'south'
-    else if (side === 'north' || side === 'top') dir = 'north'
-    else if (side === 'west' || side === 'left') dir = 'west'
-    else if (side === 'east' || side === 'right') dir = 'east'
-  } else {
-    switch (placement.rotation) {
-      case 90:
-        dir = 'west'
-        break
-      case 180:
-        dir = 'north'
-        break
-      case 270:
-        dir = 'east'
-        break
-      default:
-        dir = 'south'
-        break
-    }
-  }
-
-  switch (dir) {
-    case 'south':
-      return [x0, y1, x1, y1 + tileSize]
-    case 'north':
-      return [x0, y0 - tileSize, x1, y0]
-    case 'west':
-      return [x0 - tileSize, y0, x0, y1]
-    case 'east':
-      return [x1, y0, x1 + tileSize, y1]
-  }
+      : placement.depth
+  const localSide = side === 'north' || side === 'top' ? 'north'
+    : side === 'west' || side === 'left' ? 'west'
+      : side === 'east' || side === 'right' ? 'east' : 'south'
+  const direction = localSide === 'north' ? [0, -1] : localSide === 'west' ? [-1, 0] : localSide === 'east' ? [1, 0] : [0, 1]
+  // East/west leave through the local X edge; north/south leave through Y.
+  const normalDistance = (localSide === 'north' || localSide === 'south')
+    ? placement.depth / 2 + tileSize / 2
+    : placement.width / 2 + tileSize / 2
+  const center = rotatePoint([
+    placement.x + direction[0] * normalDistance,
+    placement.y + direction[1] * normalDistance,
+  ], [placement.x, placement.y], placement.rotation)
+  const half = tileSize / 2
+  const localCorners: Point[] = [
+    [center[0] - half, center[1] - half],
+    [center[0] + half, center[1] - half],
+    [center[0] + half, center[1] + half],
+    [center[0] - half, center[1] + half],
+  ]
+  return localCorners.map((point) => rotatePoint(point, center, placement.rotation))
 }
 
 /* ------------------------------------------------------------------ grid */
@@ -297,20 +360,130 @@ export function snapPointToGrid([x, y]: Point, grid: SpatialGrid): Point {
  */
 export function snapPlacementToGrid(placement: SpatialPlacement, grid: SpatialGrid): SpatialPlacement {
   if (!(grid.cellSize > 0)) return placement
-  const [x0, y0] = placementBounds(placement)
-  const [sx, sy] = snapPointToGrid([x0, y0], grid)
-  // Derived from the snapped corner rather than nudged by the difference, so
-  // the same cell always yields bit-identical coordinates however it was
-  // reached — otherwise a re-drag leaves float residue and looks like a move.
-  const { width, depth } = placementFootprint(placement)
-  return placementAt(placement, [sx + width / 2, sy + depth / 2])
+  if (placement.rotation % 90 === 0) {
+    const [x0, y0] = placementBounds(placement)
+    const [sx, sy] = snapPointToGrid([x0, y0], grid)
+    const { width, depth } = placementFootprint(placement)
+    return placementAt(placement, [sx + width / 2, sy + depth / 2])
+  }
+  const origin: Point = [placement.x, placement.y]
+  const leadingCorner = placementLeadingCorner(placement)
+  const localOrigin = rotatePoint(grid.origin, origin, -placement.rotation)
+  const localCorner = rotatePoint(leadingCorner, origin, -placement.rotation)
+  const snappedLocal = snapPointToGrid(localCorner, { origin: localOrigin, cellSize: grid.cellSize })
+  const snappedCorner = rotatePoint(snappedLocal, origin, placement.rotation)
+  return placementAt(placement, [
+    placement.x + snappedCorner[0] - leadingCorner[0],
+    placement.y + snappedCorner[1] - leadingCorner[1],
+  ])
 }
 
 /* ------------------------------------------------------------- validation */
 
 /** Share area. Two placements flush against each other do NOT intersect. */
 export function intersects(a: SpatialPlacement, b: SpatialPlacement, tolerance = GEOMETRY_EPSILON): boolean {
-  return bboxesOverlap(placementBounds(a), placementBounds(b), tolerance)
+  if (!bboxesTouch(placementBounds(a), placementBounds(b), tolerance)) return false
+  return orientedPolygonsOverlap(placementPolygon(a), placementPolygon(b), tolerance)
+}
+
+/** Separating-axis collision for convex oriented rectangles (desk or chair). */
+export function orientedPolygonsOverlap(
+  a: readonly Point[],
+  b: readonly Point[],
+  tolerance = GEOMETRY_EPSILON,
+): boolean {
+  const axes: Point[] = []
+  for (const polygon of [a, b]) {
+    for (let index = 0; index < polygon.length; index++) {
+      const point = polygon[index]
+      const next = polygon[(index + 1) % polygon.length]
+      const dx = next[0] - point[0]
+      const dy = next[1] - point[1]
+      const length = Math.hypot(dx, dy)
+      if (length > GEOMETRY_EPSILON) axes.push([-dy / length, dx / length])
+    }
+  }
+  for (const [nx, ny] of axes) {
+    const project = (polygon: readonly Point[]) => polygon.reduce<[number, number]>((range, [x, y]) => {
+      const value = x * nx + y * ny
+      return [Math.min(range[0], value), Math.max(range[1], value)]
+    }, [Infinity, -Infinity])
+    const pa = project(a)
+    const pb = project(b)
+    if (pa[1] <= pb[0] + tolerance || pb[1] <= pa[0] + tolerance) return false
+  }
+  return true
+}
+
+/** A wall run a desk can be aligned against, and how far away it is. */
+export interface NearestWall {
+  /** Direction of the wall run itself, in [0, 180). A line has no facing. */
+  angle: number
+  /** Floor-unit distance from the placement centre to the closest point on it. */
+  distance: number
+  /** That closest point, which is what decides the side the desk backs onto. */
+  foot: Point
+}
+
+/**
+ * The closest alignable wall run to a placement, within `maxDistance`.
+ *
+ * Takes segments rather than obstacles on purpose. `FloorObstacle` only holds
+ * what placement has to avoid — on Floor 16 that is 34 columns, 90 door
+ * clearances and 4 axis-aligned wall rectangles, so an obstacle-derived angle
+ * can never be anything but a quarter turn. The angled runs the diagonal desks
+ * follow are in the `walls` and `facade` base layers; `sceneWallSegments`
+ * reads them, already clipped to the scene's context window.
+ *
+ * `maxDistance` matters as much as the angle. Without it the nearest wall to a
+ * desk in the middle of a floor plate is metres away and behind furniture, and
+ * aligning to it moves the desk for a reason nobody can see on screen.
+ */
+export function nearestWall(
+  placement: SpatialPlacement,
+  segments: readonly Segment[],
+  maxDistance = Infinity,
+): NearestWall | null {
+  let best: NearestWall | null = null
+  for (const [a, b] of segments) {
+    const dx = b[0] - a[0]
+    const dy = b[1] - a[1]
+    const lengthSquared = dx * dx + dy * dy
+    if (lengthSquared === 0) continue
+    const t = Math.max(0, Math.min(1, ((placement.x - a[0]) * dx + (placement.y - a[1]) * dy) / lengthSquared))
+    const foot: Point = [a[0] + t * dx, a[1] + t * dy]
+    const distance = Math.hypot(placement.x - foot[0], placement.y - foot[1])
+    if (distance > maxDistance) continue
+    if (best && distance >= best.distance) continue
+    best = { angle: wrapRotation(Math.atan2(dy, dx) * 180 / Math.PI) % 180, distance, foot }
+  }
+  return best
+}
+
+/**
+ * The rotation that lays a placement along `wall` with its occupant facing out.
+ *
+ * A wall run is a line, so it offers two rotations 180° apart. Picking either
+ * one leaves the desk facing into the wall half the time, which is the same
+ * defect as not aligning at all. The seated side — local +Y, the side
+ * `getChairCorners` puts the chair on — is pointed away from the wall instead.
+ */
+export function rotationAlignedTo(placement: SpatialPlacement, wall: NearestWall): number {
+  const toWall: Point = [wall.foot[0] - placement.x, wall.foot[1] - placement.y]
+  const candidates = [wall.angle, wrapRotation(wall.angle + 180)]
+  let bestRotation = candidates[0]
+  let bestDot = Infinity
+  for (const rotation of candidates) {
+    const radians = (rotation * Math.PI) / 180
+    // Local +Y (the seated side) carried into floor coordinates.
+    const seated: Point = [-Math.sin(radians), Math.cos(radians)]
+    const dot = seated[0] * toWall[0] + seated[1] * toWall[1]
+    if (dot < bestDot) {
+      bestDot = dot
+      bestRotation = rotation
+    }
+  }
+  return bestRotation
 }
 
 /**
@@ -370,6 +543,16 @@ export function obstacleIntersects(
   return pointInPolygon(shrunkCenter, obstacle.polygon)
 }
 
+/** Collision path for an oriented desk or chair; keeps the AABB as broad phase. */
+export function obstacleIntersectsPolygon(
+  candidatePolygon: readonly Point[],
+  obstacle: FloorObstacle,
+  tolerance = GEOMETRY_EPSILON,
+): boolean {
+  if (!bboxesTouch(bboxOfPoints(candidatePolygon), obstacle.bbox, tolerance)) return false
+  return polygonsOverlap(candidatePolygon, obstacle.polygon, tolerance)
+}
+
 /**
  * Geometry only. Issues are returned as data so wording lives in the UI layer
  * and the same rules can be reported in a log, an API response or a tooltip.
@@ -377,18 +560,22 @@ export function obstacleIntersects(
 export function validatePlacement(candidate: SpatialPlacement, context: PlacementContext): PlacementValidation {
   const reasons: PlacementIssue[] = []
   const deskBounds = placementBounds(candidate)
+  const deskPolygon = placementPolygon(candidate)
   const tolerance = context.tolerance ?? GEOMETRY_EPSILON
   const boundaryTolerance = context.boundaryTolerance ?? tolerance
-  const chairBounds = getChairBounds(candidate, context.chairTileSize)
+  const chairPolygon = getChairCorners(candidate, context.chairTileSize)
+  const chairBounds = chairPolygon ? bboxOfPoints(chairPolygon) : null
+  const contains = (polygon: Point[], subject: readonly Point[], bounds: BBox, epsilon: number) =>
+    candidate.rotation % 90 === 0 ? polygonContainsBBox(polygon, bounds, epsilon) : polygonContainsPolygon(polygon, subject, epsilon)
 
   const checkContainment = (
     polygon: Point[],
     onDeskOutside: () => void,
     onChairOutside: () => void,
   ) => {
-    if (!polygonContainsBBox(polygon, deskBounds, boundaryTolerance)) {
+    if (!contains(polygon, deskPolygon, deskBounds, boundaryTolerance)) {
       onDeskOutside()
-    } else if (chairBounds && !polygonContainsBBox(polygon, chairBounds, boundaryTolerance)) {
+    } else if (chairPolygon && chairBounds && !contains(polygon, chairPolygon, chairBounds, boundaryTolerance)) {
       onChairOutside()
     }
   }
@@ -433,7 +620,7 @@ export function validatePlacement(candidate: SpatialPlacement, context: Placemen
           () => reasons.push({ type: 'outside-department-zone', zoneId: b.sourceId ?? undefined, zoneName: b.name ?? undefined, target: 'chair' }),
         )
       } else {
-        if (!polygonContainsBBox(b.polygon, deskBounds, tolerance)) {
+        if (!contains(b.polygon, deskPolygon, deskBounds, tolerance)) {
           reasons.push({ type: 'outside-boundary' })
         }
       }
@@ -455,7 +642,7 @@ export function validatePlacement(candidate: SpatialPlacement, context: Placemen
         () => reasons.push({ type: 'outside-department-zone', zoneId: context.boundary!.sourceId ?? undefined, zoneName: context.boundary!.name ?? undefined, target: 'chair' }),
       )
     } else {
-      if (!polygonContainsBBox(context.boundary.polygon, deskBounds, tolerance)) {
+      if (!contains(context.boundary.polygon, deskPolygon, deskBounds, tolerance)) {
         reasons.push({ type: 'outside-boundary' })
       }
     }
@@ -465,19 +652,21 @@ export function validatePlacement(candidate: SpatialPlacement, context: Placemen
   for (const other of context.others) {
     if (other.entityId === candidate.entityId) continue
     const otherDeskBounds = placementBounds(other)
-    const otherChairBounds = getChairBounds(other, context.chairTileSize)
+    const otherDeskPolygon = placementPolygon(other)
+    const otherChairPolygon = getChairCorners(other, context.chairTileSize)
+    const otherChairBounds = otherChairPolygon ? bboxOfPoints(otherChairPolygon) : null
 
     // Desk-to-Desk
-    if (bboxesTouch(deskBounds, otherDeskBounds, tolerance) && bboxesOverlap(deskBounds, otherDeskBounds, tolerance)) {
+    if (bboxesTouch(deskBounds, otherDeskBounds, tolerance) && orientedPolygonsOverlap(deskPolygon, otherDeskPolygon, tolerance)) {
       reasons.push({ type: 'overlap', entityId: other.entityId })
       continue
     }
 
     // Candidate Chair vs Other Desk
     if (
-      chairBounds &&
+      chairPolygon && chairBounds &&
       bboxesTouch(chairBounds, otherDeskBounds, tolerance) &&
-      bboxesOverlap(chairBounds, otherDeskBounds, tolerance)
+      orientedPolygonsOverlap(chairPolygon, otherDeskPolygon, tolerance)
     ) {
       reasons.push({ type: 'overlap', entityId: other.entityId, target: 'chair' })
       continue
@@ -485,9 +674,9 @@ export function validatePlacement(candidate: SpatialPlacement, context: Placemen
 
     // Candidate Desk vs Other Chair
     if (
-      otherChairBounds &&
+      otherChairPolygon && otherChairBounds &&
       bboxesTouch(deskBounds, otherChairBounds, tolerance) &&
-      bboxesOverlap(deskBounds, otherChairBounds, tolerance)
+      orientedPolygonsOverlap(deskPolygon, otherChairPolygon, tolerance)
     ) {
       reasons.push({ type: 'overlap', entityId: other.entityId, target: 'chair' })
       continue
@@ -495,10 +684,9 @@ export function validatePlacement(candidate: SpatialPlacement, context: Placemen
 
     // Candidate Chair vs Other Chair
     if (
-      chairBounds &&
-      otherChairBounds &&
+      chairPolygon && otherChairPolygon && chairBounds && otherChairBounds &&
       bboxesTouch(chairBounds, otherChairBounds, tolerance) &&
-      bboxesOverlap(chairBounds, otherChairBounds, tolerance)
+      orientedPolygonsOverlap(chairPolygon, otherChairPolygon, tolerance)
     ) {
       reasons.push({ type: 'overlap', entityId: other.entityId, target: 'chair' })
     }
@@ -507,8 +695,8 @@ export function validatePlacement(candidate: SpatialPlacement, context: Placemen
   // 6. Obstacles: Solid (columns, walls) and Clearance (door clearances)
   if (context.obstacles) {
     for (const obs of context.obstacles) {
-      const deskCollided = obstacleIntersects(deskBounds, obs, tolerance)
-      const chairCollided = !deskCollided && chairBounds ? obstacleIntersects(chairBounds, obs, tolerance) : false
+      const deskCollided = obstacleIntersectsPolygon(deskPolygon, obs, tolerance)
+      const chairCollided = !deskCollided && chairPolygon ? obstacleIntersectsPolygon(chairPolygon, obs, tolerance) : false
 
       if (deskCollided) {
         if (obs.kind === 'door-clearance') {
@@ -587,13 +775,16 @@ export function validateAll(
  * as its chair, without re-deriving either from the placement rectangle.
  */
 export function placementTransform(base: SpatialPlacement, current: SpatialPlacement): (point: Point) => Point {
-  const turn = normalizeRotation(current.rotation - base.rotation)
+  const turn = wrapRotation(current.rotation - base.rotation)
   const origin: Point = [base.x, base.y]
   const dx = current.x - base.x
   const dy = current.y - base.y
   if (turn === 0 && dx === 0 && dy === 0) return (point) => point
   return (point) => {
-    const [rx, ry] = rotateQuarter(point, origin, turn)
+    const rotated = turn === 90 || turn === 180 || turn === 270
+      ? rotateQuarter(point, origin, turn)
+      : rotatePoint(point, origin, turn)
+    const [rx, ry] = rotated
     return [rx + dx, ry + dy]
   }
 }

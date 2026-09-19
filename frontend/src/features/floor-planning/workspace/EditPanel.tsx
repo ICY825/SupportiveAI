@@ -162,6 +162,7 @@ export function EditInspector({
   moved,
   codeOf,
   onRotate,
+  onAlignToWall,
   rotateDisabled = false,
   rotateHint,
   boundaryWarning,
@@ -178,6 +179,7 @@ export function EditInspector({
   moved: boolean
   codeOf: (entityId: string) => string
   onRotate: () => void
+  onAlignToWall?: () => void
   rotateDisabled?: boolean
   rotateHint?: string
   boundaryWarning?: string
@@ -213,6 +215,11 @@ export function EditInspector({
         {LAYOUT_EDIT.rotate}
         <kbd>R</kbd>
       </button>
+      {onAlignToWall && (
+        <button type="button" className="fp-btn is-wide sw-edit-align-wall" onClick={onAlignToWall}>
+          {LAYOUT_EDIT.alignToWall}
+        </button>
+      )}
       {/* The snap lattice is anchored on this desk's own original corner, so
           the original position is always one of the cells it can land on. This
           is the direct way back when it is several cells away. */}

@@ -1,6 +1,6 @@
 import { bboxOfPoints, rectangle } from '../domain/geometry'
 import { roomLabelPoint } from '../domain/roomOutline'
-import type { BaseLayer, BBox, FloorDataset, FloorObstacle, Point, Room, Workstation, Zone } from '../domain/spatial'
+import type { BaseLayer, BaseLayerId, BBox, FloorDataset, FloorObstacle, Point, Room, Segment, Workstation, Zone } from '../domain/spatial'
 import { resolveWorkspaceScope, workstationInScope, type ResolvedWorkspaceScope, type WorkspaceScope } from './scope'
 
 export { rectangle }
@@ -45,6 +45,46 @@ export function clipSourcePathToBBox(d: string, bbox: BBox): string {
     const ys = numbers.filter((_, i) => i % 2 === 1)
     return xs.length > 0 && bboxesIntersect([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)], bbox)
   }).join('')
+}
+
+/**
+ * Which base layers count as something a desk can be aligned against.
+ *
+ * `structure` and `doors` are deliberately absent: a column grid and a door
+ * leaf are obstacles to avoid, not surfaces to sit against. The angled runs
+ * the diagonal desks follow live in `walls` and `facade` — Floor 16's `walls`
+ * layer alone carries 185 non-axis-aligned segments, 68 of them at 45°.
+ */
+const ALIGNABLE_LAYERS = new Set<BaseLayerId>(['walls', 'partitions', 'facade'])
+
+/**
+ * Straight segments of an absolute `M`/`L` source path, in floor coordinates.
+ *
+ * Returns nothing for a path carrying curves rather than failing: the caller
+ * is offering an alignment hint, and a hint that cannot be derived is simply
+ * unavailable. Segments shorter than `minLength` are dropped — a 1 pt stub is
+ * drafting residue whose angle means nothing.
+ */
+export function sourcePathSegments(d: string, minLength = 1): Segment[] {
+  const segments: Segment[] = []
+  for (const part of d.match(/M[^M]*/g) ?? []) {
+    // Skip the subpath, never the whole layer. Floor 16's facade holds 378
+    // curve commands among 28,653 subpaths; discarding the layer over them
+    // throws away every straight run the angled desks are drawn against.
+    if (/[A-Za-z]/.test(part.replace(/[MLZ]/g, ''))) continue
+    const numbers = (part.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number)
+    for (let i = 0; i + 3 < numbers.length; i += 2) {
+      const a: Point = [numbers[i], numbers[i + 1]]
+      const b: Point = [numbers[i + 2], numbers[i + 3]]
+      if (Math.hypot(b[0] - a[0], b[1] - a[1]) >= minLength) segments.push([a, b])
+    }
+  }
+  return segments
+}
+
+/** Alignable straight edges of a scene's architecture, already scope-clipped. */
+export function sceneWallSegments(layers: readonly BaseLayer[]): Segment[] {
+  return layers.filter((layer) => ALIGNABLE_LAYERS.has(layer.id)).flatMap((layer) => sourcePathSegments(layer.d))
 }
 
 export interface WorkspaceSceneModel {
@@ -299,7 +339,7 @@ function buildSceneGeometry(scene: WorkspaceSceneModel): MemoizedSceneGeometry {
 
     if (ws.chair) {
       const { center, bbox } = ws.chair
-      const polygon = rectangle(bbox)
+      const polygon = ws.chair.polygon ?? rectangle(bbox)
       const dx = center[0] - ws.center[0]
       const dy = center[1] - ws.center[1]
       const back = Math.abs(dx) > Math.abs(dy)

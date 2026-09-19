@@ -76,7 +76,7 @@ function chairAt(placement: SpatialPlacement, template: WorkstationTemplate): No
   const halfDepth = template.chair.depth / 2
   const bbox: BBox = [center[0] - halfWidth, center[1] - halfDepth, center[0] + halfWidth, center[1] + halfDepth]
   const origin: Point = [placement.x, placement.y]
-  const rotate = (point: Point) => rotateQuarter(point, origin, placement.rotation)
+  const rotate = (point: Point) => rotateQuarter(point, origin, placement.rotation as QuarterRotation)
   const rotated = rectangle(bbox).map(rotate)
   return { center: rotate(center), bbox: bboxOfPoints(rotated) }
 }

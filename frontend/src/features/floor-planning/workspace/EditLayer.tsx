@@ -1,12 +1,12 @@
 import { memo, useId, useMemo } from 'react'
-import { getChairBounds, placementBounds } from '../domain/placement'
+import { getChairCorners, placementBounds } from '../domain/placement'
 import { clipPolygonToBBox } from '../domain/geometry'
 import type { PlacementValidation, SpatialGrid, SpatialPlacement } from '../domain/placement'
 import type { BBox, FloorObstacle } from '../domain/spatial'
 import { LAYOUT_EDIT } from '../labels'
 import { buildEditOverlay, placementOutline, rotateHandleAnchor } from './editGeometry'
 import type { EditableArea } from './layoutDraft'
-import { projectedPoints, rectangle } from './scene'
+import { projectedPoints } from './scene'
 
 /**
  * Editing affordances drawn inside the scene. None of this exists in view
@@ -117,11 +117,11 @@ export function EditAffordances({
         {preview && (
           <g data-pending-workstation-id={preview.placement.entityId}>
             {(() => {
-              const chair = getChairBounds(preview.placement, chairTileSize)
+              const chair = getChairCorners(preview.placement, chairTileSize)
               return chair ? (
                 <polygon
                   className={`sw-edit-placement-chair-preview${preview.valid ? '' : ' is-invalid'}`}
-                  points={projectedPoints(rectangle(chair))}
+                  points={projectedPoints(chair)}
                 />
               ) : null
             })()}

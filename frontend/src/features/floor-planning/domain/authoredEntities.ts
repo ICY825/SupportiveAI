@@ -1,6 +1,6 @@
 import { bboxOfPoints, polygonArea, polygonContainsBBox, polygonIsSimple, polygonsOverlap, polygonsOverlapBeyond, rectangle } from './geometry'
 import type { FloorDataset, Room, Workstation, Point, BBox } from './spatial'
-import { normalizeRotation, placementBounds, placementPolygon, type SpatialPlacement } from './placement'
+import { getChairBounds, getChairCorners, placementBounds, placementPolygon, wrapRotation, type SpatialPlacement } from './placement'
 import { regularizeZonePolygon } from './zoneGeometry'
 import type { RoomType } from './roomTypes'
 import { roomParts } from './roomOutline'
@@ -131,25 +131,18 @@ const pad = (value: number) => String(value).padStart(3, '0')
 
 export function authoredChairBounds(placement: SpatialPlacement, tileSize: number): BBox {
   const [x0, y0, x1, y1] = placementBounds(placement)
-  const centerX = (x0 + x1) / 2
-  const centerY = (y0 + y1) / 2
   const halfTile = tileSize / 2
-
-  switch (placement.rotation) {
-    case 90:
-      return [x0 - tileSize, centerY - halfTile, x0, centerY + halfTile]
-    case 180:
-      return [centerX - halfTile, y0 - tileSize, centerX + halfTile, y0]
-    case 270:
-      return [x1, centerY - halfTile, x1 + tileSize, centerY + halfTile]
-    default:
-      return [centerX - halfTile, y1, centerX + halfTile, y1 + tileSize]
-  }
+  const quarter = ((placement.rotation % 360) + 360) % 360
+  if (quarter === 90) return [x0 - tileSize, (y0 + y1) / 2 - halfTile, x0, (y0 + y1) / 2 + halfTile]
+  if (quarter === 180) return [(x0 + x1) / 2 - halfTile, y0 - tileSize, (x0 + x1) / 2 + halfTile, y0]
+  if (quarter === 270) return [x1, (y0 + y1) / 2 - halfTile, x1 + tileSize, (y0 + y1) / 2 + halfTile]
+  if (quarter === 0) return [(x0 + x1) / 2 - halfTile, y1, (x0 + x1) / 2 + halfTile, y1 + tileSize]
+  return getChairBounds(placement, tileSize) ?? placementBounds(placement)
 }
 
 function authoredPlacementFromWorkstation(workstation: Workstation): SpatialPlacement {
   const [x0, y0, x1, y1] = workstation.bbox
-  const rotation = normalizeRotation(workstation.rotationDeg)
+  const rotation = wrapRotation(workstation.rotationDeg)
   const turned = rotation % 180 !== 0
   return {
     entityId: workstation.id,
@@ -163,12 +156,16 @@ function authoredPlacementFromWorkstation(workstation: Workstation): SpatialPlac
 
 function normalizeAuthoredWorkstation(dataset: FloorDataset, workstation: Workstation): Workstation {
   if (workstation.source?.kind !== 'user-authored') return workstation
-  const chairBbox = authoredChairBounds(authoredPlacementFromWorkstation(workstation), 600 / dataset.layout.floor.mmPerPt)
+  const placement = authoredPlacementFromWorkstation(workstation)
+  const tileSize = 600 / dataset.layout.floor.mmPerPt
+  const chairBbox = authoredChairBounds(placement, tileSize)
+  const chairPolygon = getChairCorners(placement, tileSize)
   return {
     ...workstation,
     chair: {
       bbox: chairBbox,
       center: [(chairBbox[0] + chairBbox[2]) / 2, (chairBbox[1] + chairBbox[3]) / 2],
+      ...(chairPolygon && placement.rotation % 90 !== 0 ? { polygon: chairPolygon } : {}),
     },
   }
 }
@@ -211,7 +208,9 @@ export function authoredWorkstationFromPlacement({
   authoredAt: string
 }): Workstation {
   const polygon = placementPolygon(placement)
-  const chairBbox = authoredChairBounds(placement, 600 / dataset.layout.floor.mmPerPt)
+  const tileSize = 600 / dataset.layout.floor.mmPerPt
+  const chairBbox = authoredChairBounds(placement, tileSize)
+  const chairPolygon = getChairCorners(placement, tileSize)
   const level = dataset.layout.floor.level
   const zoneIndex = zoneId ? dataset.zones.findIndex((zone) => zone.id === zoneId) : -1
   return {
@@ -229,6 +228,7 @@ export function authoredWorkstationFromPlacement({
       ? {
           bbox: chairBbox,
           center: [(chairBbox[0] + chairBbox[2]) / 2, (chairBbox[1] + chairBbox[3]) / 2],
+          ...(chairPolygon && placement.rotation % 90 !== 0 ? { polygon: chairPolygon } : {}),
         }
       : null,
     gridRef: zoneIndex >= 0 ? `authored/${dataset.zones[zoneIndex].gridRef}` : 'authored',

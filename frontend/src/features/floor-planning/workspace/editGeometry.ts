@@ -6,10 +6,10 @@
  * so no coordinate conversion ends up inside JSX.
  */
 import { pointInPolygon } from '../domain/geometry'
-import { placementBounds, type SpatialGrid, type SpatialPlacement } from '../domain/placement'
+import { placementCorners, type SpatialGrid, type SpatialPlacement } from '../domain/placement'
 import type { Point } from '../domain/spatial'
 import { gridPoints, type EditableArea } from './layoutDraft'
-import { project, projectedPoints, rectangle } from './scene'
+import { project, projectedPoints } from './scene'
 
 export interface EditOverlayDoorClearance {
   id: string
@@ -50,13 +50,13 @@ export function buildEditOverlay(area: EditableArea, grid: SpatialGrid): EditOve
 
 /** Footprint outline of a placement, projected at elevation `z`. */
 export const placementOutline = (placement: SpatialPlacement, z = 0): string =>
-  projectedPoints(rectangle(placementBounds(placement)), z)
+  projectedPoints(placementCorners(placement), z)
 
 /**
  * Where the rotate handle sits: the projected corner of the footprint that is
  * furthest right on screen, so the control never covers the desk's own code.
  */
 export function rotateHandleAnchor(placement: SpatialPlacement, z: number): Point {
-  const corners = rectangle(placementBounds(placement)).map((p) => project(p, z))
+  const corners = placementCorners(placement).map((p) => project(p, z))
   return corners.reduce((best, p) => (p[0] > best[0] ? p : best), corners[0])
 }

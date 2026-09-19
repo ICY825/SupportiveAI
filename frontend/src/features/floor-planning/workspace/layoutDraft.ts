@@ -13,10 +13,11 @@
  * The dataset is never written to. Editing produces placements; the renderer
  * derives geometry from them. Nothing in this file touches React or the DOM.
  */
-import { bboxOfPoints, pointInPolygon } from '../domain/geometry'
+import { bboxOfPoints, pointInPolygon, rectangle } from '../domain/geometry'
 import { roomParts } from '../domain/roomOutline'
 import {
   normalizeRotation,
+  placementCorners,
   placementBounds,
   placementsEqual,
   placementTransform,
@@ -25,12 +26,11 @@ import {
   wrapRotation,
   type PlacementBoundary,
   type PlacementValidation,
-  type QuarterRotation,
   type SpatialGrid,
   type SpatialPlacement,
 } from '../domain/placement'
-import type { BBox, FloorDataset, FloorObstacle, Point, Workstation } from '../domain/spatial'
-import type { WorkspaceSceneModel } from './scene'
+import type { BBox, FloorDataset, FloorObstacle, Point, Segment, Workstation } from '../domain/spatial'
+import { sceneWallSegments, type WorkspaceSceneModel } from './scene'
 
 /** Planning module for the edit grid. One desk depth; a desk is two cells wide. */
 export const GRID_CELL_MM = 600
@@ -59,6 +59,16 @@ export const PLACEMENT_TOLERANCE_MM = 40
  */
 export const ANNOTATION_TOLERANCE_MM = 100
 
+/**
+ * How near a wall has to be before "align to the nearest wall" will use it.
+ *
+ * Measured against Floor 16: the desks that follow the angled facade sit
+ * 0.59-3.10 m from the run they follow, so 4 m reaches the wall a desk is
+ * plainly beside and stops short of one across the room. Past this the action
+ * does nothing, which is the honest outcome — there is no wall to align to.
+ */
+export const WALL_ALIGN_MAX_DISTANCE_MM = 4000
+
 export interface LayoutDraft {
   placements: Record<string, SpatialPlacement>
 }
@@ -69,7 +79,8 @@ export interface LayoutDraft {
  * Disambiguates a workstation's canonical 4-way quarter rotation (0°, 90°, 180°, 270°)
  * from its paired chair position relative to desk center.
  */
-export function determineWorkstationRotation(ws: Workstation): QuarterRotation {
+export function determineWorkstationRotation(ws: Workstation): number {
+  if (ws.rotationDeg % 90 !== 0) return wrapRotation(ws.rotationDeg)
   if (ws.chair) {
     const dx = ws.chair.center[0] - ws.center[0]
     const dy = ws.chair.center[1] - ws.center[1]
@@ -101,15 +112,41 @@ export function placementFromWorkstation(ws: Workstation): SpatialPlacement {
   // carries the missing facing direction, so preserve all four orientations in
   // the editor instead of making a new desk guess which side is occupied.
   const rotation = determineWorkstationRotation(ws)
-  const turned = rotation % 180 !== 0
+  const sourceAngle = wrapRotation(ws.rotationDeg)
+  const edges = ws.polygon.length >= 4
+    ? ws.polygon.slice(0, 4).map((point, index) => {
+      const next = ws.polygon[(index + 1) % 4]
+      return { length: Math.hypot(next[0] - point[0], next[1] - point[1]), angle: wrapRotation(Math.atan2(next[1] - point[1], next[0] - point[0]) * 180 / Math.PI) }
+    })
+    : []
+  const angleDistance = (a: number, b: number) => {
+    const delta = Math.abs(((a - b + 90) % 180) - 90)
+    return Math.min(delta, 180 - delta)
+  }
+  const widthEdge = edges.length >= 2 && angleDistance(edges[0].angle, sourceAngle) <= angleDistance(edges[1].angle, sourceAngle) ? edges[0] : edges[1]
+  const depthEdge = edges.length >= 2 && widthEdge === edges[0] ? edges[1] : edges[0]
+  const orthogonal = sourceAngle % 90 === 0
+  const width = orthogonal
+    ? (rotation % 180 === 0 ? x1 - x0 : y1 - y0)
+    : (widthEdge?.length || ws.source?.nominalSizeMm?.[0] || x1 - x0)
+  const depth = orthogonal
+    ? (rotation % 180 === 0 ? y1 - y0 : x1 - x0)
+    : (depthEdge?.length || ws.source?.nominalSizeMm?.[1] || y1 - y0)
+  const chair = ws.chair
+    ? {
+      center: ws.chair.center,
+      bbox: ws.chair.bbox,
+      ...(orthogonal ? {} : { polygon: [...rectangle(ws.chair.bbox)] }),
+    }
+    : null
   return {
     entityId: ws.id,
     x: x0 + (x1 - x0) / 2,
     y: y0 + (y1 - y0) / 2,
-    width: turned ? y1 - y0 : x1 - x0,
-    depth: turned ? x1 - x0 : y1 - y0,
+    width,
+    depth,
     rotation,
-    chair: ws.chair ? { center: ws.chair.center, bbox: ws.chair.bbox } : null,
+    chair,
   }
 }
 
@@ -127,7 +164,8 @@ export function placementFromWorkstation(ws: Workstation): SpatialPlacement {
 export const gridForEntity = (grid: SpatialGrid, base: SpatialPlacement | undefined): SpatialGrid => {
   if (!base) return grid
   const [x0, y0] = placementBounds(base)
-  return { origin: [x0, y0], cellSize: grid.cellSize }
+  const origin = base.rotation % 90 === 0 ? [x0, y0] as Point : placementCorners(base)[0]
+  return { origin, cellSize: grid.cellSize }
 }
 
 export function basePlacements(workstations: readonly Workstation[]): Record<string, SpatialPlacement> {
@@ -218,6 +256,10 @@ export interface EditableArea {
   obstacles: FloorObstacle[]
   /** Obstacles clipped to the visible context window for the edit overlay. */
   displayObstacles?: readonly FloorObstacle[]
+  /** Alignable wall runs from the scene's architecture, for align-to-wall. */
+  wallSegments?: readonly Segment[]
+  /** see WALL_ALIGN_MAX_DISTANCE_MM */
+  wallAlignMaxDistance?: number
   grid: SpatialGrid
   /** see PLACEMENT_TOLERANCE_MM */
   tolerance: number
@@ -319,6 +361,10 @@ export function deriveEditableArea(dataset: FloorDataset, scene: WorkspaceSceneM
     roomBoundary,
     obstacles: dataset.obstacles,
     displayObstacles: scene.obstacles,
+    // Derived from the scene's already-clipped layers, so this is the
+    // architecture around the area being edited, not the whole floor plate.
+    wallSegments: sceneWallSegments(scene.layers),
+    wallAlignMaxDistance: WALL_ALIGN_MAX_DISTANCE_MM / dataset.layout.floor.mmPerPt,
     tolerance,
     boundaryTolerance: ANNOTATION_TOLERANCE_MM / dataset.layout.floor.mmPerPt,
     chairTileSize,
@@ -409,7 +455,11 @@ export function applyPlacements(
       // at 45° and turned once was described as 180° — a facing it has never
       // had. For the orthogonal desks both spellings agree exactly.
       rotationDeg: wrapRotation(ws.rotationDeg + (to.rotation - from.rotation)),
-      chair: ws.chair ? { center: move(ws.chair.center), bbox: transformBBox(ws.chair.bbox, move) } : null,
+      chair: ws.chair ? {
+        center: move(ws.chair.center),
+        bbox: transformBBox(ws.chair.bbox, move),
+        polygon: ws.chair.polygon?.map(move),
+      } : null,
     }
   })
   return touched ? { ...scene, workstations } : scene

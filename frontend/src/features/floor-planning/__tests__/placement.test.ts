@@ -9,7 +9,12 @@ import {
 } from '../domain/geometry'
 import {
   intersects,
+  getChairCorners,
+  nearestWall,
+  rotationAlignedTo,
   normalizeRotation,
+  orientedPolygonsOverlap,
+  placementCorners,
   placementBounds,
   placementFootprint,
   rotatePlacementBy,
@@ -22,7 +27,7 @@ import {
   type SpatialGrid,
   type SpatialPlacement,
 } from '../domain/placement'
-import type { FloorDataset, FloorObstacle, Point, Room, Zone } from '../domain/spatial'
+import type { FloorDataset, FloorObstacle, Point, Room, Segment, Zone } from '../domain/spatial'
 
 import {
   applyPlacements,
@@ -31,8 +36,9 @@ import {
   gridForEntity,
   gridPoints,
   placementFromWorkstation,
+  WALL_ALIGN_MAX_DISTANCE_MM,
 } from '../workspace/layoutDraft'
-import { buildWorkspaceScene, project, unproject, unprojectDelta } from '../workspace/scene'
+import { buildWorkspaceScene, project, sceneWallSegments, sourcePathSegments, unproject, unprojectDelta } from '../workspace/scene'
 import { defaultWorkspaceScope } from '../workspace/scope'
 import { buildWorkspaceDisplayAreasForScope } from '../workspace/displayAreas'
 
@@ -115,6 +121,29 @@ describe('object intersection', () => {
     const b = desk({ entityId: 'b', y: 108 })
     expect(intersects(a, b)).toBe(false)
     expect(intersects(rotatePlacementBy(a, 90), b)).toBe(true)
+  })
+})
+
+describe('oriented placement geometry', () => {
+  it('keeps a diagonal desk as a 1200 × 600 rectangle, not its inflated AABB', () => {
+    const diagonal = desk({ width: 12, depth: 6, rotation: 45 })
+    expect(placementCorners(diagonal)).toHaveLength(4)
+    expect(polygonArea(placementCorners(diagonal))).toBeCloseTo(72, 8)
+    const bounds = placementBounds(diagonal)
+    expect((bounds[2] - bounds[0]) * (bounds[3] - bounds[1])).toBeGreaterThan(100)
+  })
+
+  it('uses separating axes for diagonal rectangles and treats a shared edge as flush', () => {
+    const a = desk({ rotation: 45 })
+    const b = desk({ entityId: 'b', x: 100 + (12 + 6) / Math.sqrt(2), y: 100 })
+    expect(orientedPolygonsOverlap(placementCorners(a), placementCorners(b))).toBe(false)
+    expect(intersects(a, desk({ entityId: 'b', x: 100 + 8.45, y: 100 }))).toBe(true)
+  })
+
+  it('rotates the generated chair footprint with a diagonal desk', () => {
+    const corners = getChairCorners(desk({ rotation: 45, seatedSide: 'south' }), 6)!
+    expect(corners).toHaveLength(4)
+    expect(corners.some(([x, y]) => x !== Math.round(x) || y !== Math.round(y))).toBe(true)
   })
 })
 
@@ -886,6 +915,128 @@ describe('Milestone 2 - Multi-Layer Validation Engine', () => {
       expect(wrapRotation(45 + 360)).toBe(45)
       expect(wrapRotation(45 - 90)).toBe(315)
       expect(wrapRotation(0)).toBe(0)
+    })
+  })
+})
+
+describe('aligning a desk to the wall it stands beside', () => {
+  const wall = (ax: number, ay: number, bx: number, by: number) =>
+    [[ax, ay], [bx, by]] as [Point, Point]
+
+  it('reads a real angle from a wall run, which obstacles cannot supply', () => {
+    const diagonal = nearestWall(desk(), [wall(120, 80, 160, 120)])
+    expect(diagonal!.angle).toBeCloseTo(45, 6)
+    expect(diagonal!.angle % 90).not.toBe(0)
+  })
+
+  it('ignores a wall further away than the cap', () => {
+    const far = [wall(500, 500, 540, 540)]
+    expect(nearestWall(desk(), far, 50)).toBeNull()
+    expect(nearestWall(desk(), far)).not.toBeNull()
+  })
+
+  it('prefers the nearer of two walls', () => {
+    const found = nearestWall(desk(), [wall(0, 200, 400, 200), wall(0, 130, 400, 130)])
+    expect(found!.foot[1]).toBe(130)
+  })
+
+  it('seats the occupant away from the wall, not into it', () => {
+    // Same wall run, once north of the desk and once south of it. The desk
+    // must end up 180 degrees apart in the two cases, never facing the wall.
+    const northWall = nearestWall(desk(), [wall(0, 80, 400, 80)])!
+    const southWall = nearestWall(desk(), [wall(0, 120, 400, 120)])!
+    const facingFromNorth = rotationAlignedTo(desk(), northWall)
+    const facingFromSouth = rotationAlignedTo(desk(), southWall)
+    expect(facingFromNorth).toBe(0)
+    expect(facingFromSouth).toBe(180)
+
+    for (const [wallFound, rotation] of [[northWall, facingFromNorth], [southWall, facingFromSouth]] as const) {
+      const radians = (rotation * Math.PI) / 180
+      const seated: Point = [-Math.sin(radians), Math.cos(radians)]
+      const toWall: Point = [wallFound.foot[0] - 100, wallFound.foot[1] - 100]
+      expect(seated[0] * toWall[0] + seated[1] * toWall[1]).toBeLessThan(0)
+    }
+  })
+
+  it('keeps the angle of the run and does not snap it to a quarter', () => {
+    const found = nearestWall(desk(), [wall(120, 80, 160, 121)])!
+    const aligned = rotationAlignedTo(desk(), found)
+    expect(aligned % 90).not.toBe(0)
+    expect(aligned % 180).toBeCloseTo(found.angle, 6)
+  })
+
+  describe('against Floor 16 architecture', () => {
+    let dataset: FloorDataset
+    let segments: Segment[]
+
+    beforeAll(async () => {
+      dataset = await FLOORS[0].load()
+      segments = sceneWallSegments(dataset.layout.layers)
+    })
+
+    it('offers a diagonal angle to every desk drawn on the angled facade', () => {
+      const diagonal = dataset.workstations.filter((w) => w.rotationDeg % 90 !== 0)
+      expect(diagonal).toHaveLength(18)
+
+      const cap = WALL_ALIGN_MAX_DISTANCE_MM / dataset.layout.floor.mmPerPt
+      for (const workstation of diagonal) {
+        const found = nearestWall(placementFromWorkstation(workstation), segments, cap)
+        expect(found).not.toBeNull()
+        // The defect this replaces could only ever return a quarter turn,
+        // because obstacles hold four axis-aligned rectangles and nothing else.
+        expect(found!.angle % 90).not.toBe(0)
+      }
+    })
+
+    it('finds nothing for a desk with no wall inside the cap', () => {
+      const workstation = dataset.workstations.find((w) => w.id === 'ws-16-100')!
+      const placement = placementFromWorkstation(workstation)
+      const tiny = 10 / dataset.layout.floor.mmPerPt
+      expect(nearestWall(placement, segments, tiny)).toBeNull()
+    })
+
+    it('keeps the straight runs of a layer that also contains curves', () => {
+      // The facade is the layer the angled desks are drawn against and it
+      // carries a few hundred curve commands. Dropping a layer because of them
+      // silently removes the architecture this whole action depends on.
+      const facade = dataset.layout.layers.find((layer) => layer.id === 'facade')!
+      expect(facade.d).toContain('C')
+      expect(sourcePathSegments(facade.d).length).toBeGreaterThan(1000)
+      expect(sourcePathSegments('M0 0L10 0M20 20C21 21 22 22 23 23M0 10L10 10')).toEqual([
+        [[0, 0], [10, 0]],
+        [[0, 10], [10, 10]],
+      ])
+    })
+
+    it('carries the wall runs and the cap through to the editable area', () => {
+      // The angle is only as good as the wiring: an area handed an empty
+      // segment list silently turns the action into a no-op.
+      const scene = buildWorkspaceScene(dataset, defaultWorkspaceScope(dataset))
+      const area = deriveEditableArea(dataset, scene)
+      expect(area.wallSegments?.length).toBeGreaterThan(0)
+      expect(area.wallAlignMaxDistance).toBeCloseTo(WALL_ALIGN_MAX_DISTANCE_MM / dataset.layout.floor.mmPerPt, 6)
+
+      // A desk the scene actually frames. The area's segments are clipped to
+      // that window, so a desk outside it correctly finds no wall — which is
+      // the cap doing its job, not a wiring failure.
+      const placement = placementFromWorkstation(scene.workstations[0])
+      const found = nearestWall(placement, area.wallSegments ?? [], area.wallAlignMaxDistance)
+      expect(found).not.toBeNull()
+      expect(found!.distance).toBeLessThanOrEqual(area.wallAlignMaxDistance!)
+    })
+
+    it('leaves a desk outside the framed window unaligned rather than reaching across the floor', () => {
+      const scene = buildWorkspaceScene(dataset, defaultWorkspaceScope(dataset))
+      const area = deriveEditableArea(dataset, scene)
+      // ws-16-195 is on the angled run at x≈599; this scene frames x≈701-1009.
+      const outside = placementFromWorkstation(dataset.workstations.find((w) => w.id === 'ws-16-195')!)
+      expect(nearestWall(outside, area.wallSegments ?? [], area.wallAlignMaxDistance)).toBeNull()
+    })
+
+    it('reads no alignable run from the column grid', () => {
+      const structure = dataset.layout.layers.filter((layer) => layer.id === 'structure')
+      expect(structure).not.toHaveLength(0)
+      expect(sceneWallSegments(structure)).toHaveLength(0)
     })
   })
 })

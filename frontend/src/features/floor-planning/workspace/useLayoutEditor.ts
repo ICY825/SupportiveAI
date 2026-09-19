@@ -12,8 +12,9 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   placementAt,
-  placementBounds,
   rotatePlacementBy,
+  nearestWall,
+  rotationAlignedTo,
   snapPlacementToGrid,
   translatePlacement,
   validatePlacement,
@@ -81,6 +82,9 @@ export interface LayoutEditor {
   cancelDrag: () => void
   nudge: (entityId: string, cells: Point) => void
   rotate: (entityId: string) => void
+  /** Free rotation, snapped to the requested degree increment. */
+  rotateBy: (entityId: string, degrees: number) => void
+  alignToWall: (entityId: string) => void
   undo: () => void
   redo: () => void
   /** put one entity back exactly where the authoritative layout has it */
@@ -357,12 +361,45 @@ export function useLayoutEditor({
       applyStep((current) => {
         const placement = current.placements[entityId]
         if (!placement) return current
-        const [x0, y0, x1, y1] = placementBounds(placement)
-        const centred = placementAt(rotatePlacementBy(placement, 90), [(x0 + x1) / 2, (y0 + y1) / 2])
-        return setDraftPlacement(current, snapPlacementToGrid(centred, gridFor(entityId)))
+        const centred = placementAt(rotatePlacementBy(placement, 90), [placement.x, placement.y])
+        return setDraftPlacement(current, placement.rotation % 90 === 0
+          ? snapPlacementToGrid(centred, gridFor(entityId))
+          : centred)
       })
     },
     [gridFor, isEditable, applyStep],
+  )
+
+  const rotateBy = useCallback(
+    (entityId: string, degrees: number) => {
+      if (!isEditable(entityId) || !Number.isFinite(degrees) || degrees === 0) return
+      applyStep((current) => {
+        const placement = current.placements[entityId]
+        if (!placement) return current
+        const target = Math.round((placement.rotation + degrees) / 15) * 15
+        const delta = target - placement.rotation
+        return setDraftPlacement(current, placementAt(rotatePlacementBy(placement, delta), [placement.x, placement.y]))
+      })
+    },
+    [applyStep, isEditable],
+  )
+
+  const alignToWall = useCallback(
+    (entityId: string) => {
+      if (!isEditable(entityId)) return
+      applyStep((current) => {
+        const placement = current.placements[entityId]
+        if (!placement) return current
+        const wall = nearestWall(placement, area.wallSegments ?? [], area.wallAlignMaxDistance ?? Infinity)
+        // No wall within reach is a real answer, not a failure: leaving the
+        // desk where it is beats turning it to match something off screen.
+        if (!wall) return current
+        const target = rotationAlignedTo(placement, wall)
+        if (target === placement.rotation) return current
+        return setDraftPlacement(current, placementAt(rotatePlacementBy(placement, target - placement.rotation), [placement.x, placement.y]))
+      })
+    },
+    [area.wallAlignMaxDistance, area.wallSegments, applyStep, isEditable],
   )
 
   const resetPlacement = useCallback(
@@ -456,6 +493,8 @@ export function useLayoutEditor({
     cancelDrag,
     nudge,
     rotate,
+    rotateBy,
+    alignToWall,
     undo,
     redo,
     resetPlacement,

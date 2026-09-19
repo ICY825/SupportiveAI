@@ -166,6 +166,49 @@ export function rotateQuarter([x, y]: Point, [cx, cy]: Point, deg: 0 | 90 | 180 
   }
 }
 
+/**
+ * General clockwise rotation in floor coordinates. Keep `rotateQuarter` for
+ * the common exact quarter-turn path; this helper is for measured CAD angles
+ * and deliberately does not snap them.
+ */
+export function rotatePoint([x, y]: Point, [cx, cy]: Point, deg: number): Point {
+  if (deg % 360 === 0) return [x, y]
+  const radians = (deg * Math.PI) / 180
+  const cos = Math.cos(radians)
+  const sin = Math.sin(radians)
+  const dx = x - cx
+  const dy = y - cy
+  return [cx + dx * cos - dy * sin, cy + dx * sin + dy * cos]
+}
+
+/** Polygon containment for an oriented rectangle or another simple subject. */
+export function polygonContainsPolygon(
+  container: readonly Point[],
+  subject: readonly Point[],
+  epsilon = GEOMETRY_EPSILON,
+): boolean {
+  if (container.length < 3 || subject.length < 3) return false
+  const center = subject.reduce<Point>((sum, point) => [sum[0] + point[0], sum[1] + point[1]], [0, 0])
+  center[0] /= subject.length
+  center[1] /= subject.length
+  const inset = Math.max(0, epsilon)
+  const inside = subject.map(([x, y]) => {
+    const dx = center[0] - x
+    const dy = center[1] - y
+    const length = Math.hypot(dx, dy)
+    return length > GEOMETRY_EPSILON ? [x + (dx / length) * inset, y + (dy / length) * inset] as Point : [x, y] as Point
+  })
+  if (!inside.every((point) => pointInPolygon(point, container))) return false
+  for (let i = 0; i < container.length; i++) {
+    const a = container[i]
+    const b = container[(i + 1) % container.length]
+    for (let k = 0; k < inside.length; k++) {
+      if (segmentsCross(a, b, inside[k], inside[(k + 1) % inside.length], epsilon)) return false
+    }
+  }
+  return true
+}
+
 /** Twice the signed area. Positive is clockwise on screen, where y points down. */
 function signedDoubleArea(points: readonly Point[]): number {
   let area = 0

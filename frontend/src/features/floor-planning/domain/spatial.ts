@@ -29,6 +29,8 @@ export type VerificationState = 'SOURCE_VERIFIED' | 'EXTRACTED' | 'UNVERIFIED' |
 export type Point = [number, number]
 /** [x0, y0, x1, y1] */
 export type BBox = [number, number, number, number]
+/** A straight edge between two floor points, e.g. one run of a wall. */
+export type Segment = [Point, Point]
 
 export interface Building {
   id: string
@@ -212,6 +214,28 @@ export interface FloorDisplayAreaDefinition {
   contextPaddingMm?: number
 }
 
+export interface FloorOverviewWorkstation {
+  id: string
+  floorId: string
+  clusterId: string
+  zoneId: string | null
+  center: Point
+  bbox: BBox
+  rotationDeg: number
+}
+
+/** Derived first-paint data; canonical geometry remains in FloorDataset files. */
+export interface FloorOverview {
+  generator: string
+  sourcePdf: string
+  sourcePdfSha256: string
+  floor: Pick<Floor, 'id' | 'level' | 'buildingId' | 'name' | 'sourceTitle' | 'sourceScale' | 'sourcePdf' | 'coordinateSpace' | 'width' | 'height' | 'mmPerPt'>
+  floorBounds: BBox
+  displayAreas: FloorDisplayAreaDefinition[]
+  zones: Array<Pick<Zone, 'id' | 'name' | 'departmentCode' | 'polygon' | 'bbox'>>
+  workstations: FloorOverviewWorkstation[]
+}
+
 export interface Workstation extends SpatialEntity {
   clusterId: string
   zoneId: string | null
@@ -219,7 +243,7 @@ export interface Workstation extends SpatialEntity {
   polygon: Point[]
   center: Point
   rotationDeg: number
-  chair: { center: Point; bbox: BBox } | null
+  chair: { center: Point; bbox: BBox; polygon?: Point[] } | null
   source: EntitySource
 }
 
@@ -271,6 +295,8 @@ export interface FloorDataset {
   extraction: ExtractionReport
   /** Optional floor-authored UI grouping metadata, separate from source zones. */
   displayAreas?: FloorDisplayAreaDefinition[]
+  /** Optional lightweight artifact loaded alongside the full floor data. */
+  overview?: FloorOverview
   /** human-readable source name shown in the UI */
   sourceName: string
 }
