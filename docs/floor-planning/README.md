@@ -33,6 +33,7 @@ check the reference documents or the code.
 | [`floor16-performance.md`](floor16-performance.md) | 18 Sep 2026 | Measured loading evidence for Floor 16. |
 | [`non-orthogonal-desks-and-render-budget.md`](non-orthogonal-desks-and-render-budget.md) | 18 Sep 2026 | Why diagonal desks were mishandled, and where the lag actually is. |
 | [`non-orthogonal-placement-handoff.md`](non-orthogonal-placement-handoff.md) | 18 Sep 2026 | Instructions for oriented placement and the payload split. |
+| [`luna-derived-areas-and-override-handoff.md`](luna-derived-areas-and-override-handoff.md) | 19 Sep 2026 | Derived sections, and letting a person overrule the drawing. **Open.** |
 
 ## Where the code is
 
