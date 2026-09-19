@@ -7,6 +7,7 @@ import type {
   FloorObject,
   FloorObstacle,
   FloorDisplayAreaDefinition,
+  FloorOverview,
   Room,
   Workstation,
   Zone,
@@ -22,6 +23,7 @@ export interface FloorFiles {
   obstacles?: unknown
   extraction: unknown
   displayAreas?: unknown
+  overview?: unknown
 }
 
 export interface FloorMeta {
@@ -54,6 +56,7 @@ export function buildDataset(files: FloorFiles, meta: FloorMeta): FloorDataset {
   const objects = obj(files.objects, 'objects')
   const obstacles = files.obstacles ? obj(files.obstacles, 'obstacles') : null
   const displayAreas = files.displayAreas ? obj(files.displayAreas, 'displayAreas') : null
+  const overview = files.overview ? obj(files.overview, 'overview') : null
 
   return {
     building: meta.building,
@@ -70,5 +73,6 @@ export function buildDataset(files: FloorFiles, meta: FloorMeta): FloorDataset {
     objects: arr<FloorObject>(objects.objects, 'objects.objects'),
     extraction: obj(files.extraction, 'extraction') as unknown as ExtractionReport,
     displayAreas: displayAreas ? arr<FloorDisplayAreaDefinition>(displayAreas.displayAreas, 'displayAreas.displayAreas') : undefined,
+    overview: overview as unknown as FloorOverview | undefined,
   }
 }

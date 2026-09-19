@@ -34,4 +34,28 @@ export default defineConfig({
     testTimeout: 30000,
     hookTimeout: 30000,
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('/data/floors/floor-16/floor16.layout.json')) return 'floor-16-layout'
+          if (id.includes('/data/floors/floor-16/floor16.overview.json')) return 'floor-16-overview'
+          if (id.includes('/data/floors/floor-16/')) return 'floor-16-data'
+          return undefined
+        },
+      },
+      plugins: [
+        {
+          name: 'assert-floor-layout-is-not-entry',
+          generateBundle(_options, bundle) {
+            for (const output of Object.values(bundle)) {
+              if (output.type === 'chunk' && output.isEntry && Object.keys(output.modules).some((id) => id.includes('/data/floors/floor-16/floor16.layout.json'))) {
+                this.error('Floor 16 layout geometry must remain outside the entry chunk')
+              }
+            }
+          },
+        },
+      ],
+    },
+  },
 })

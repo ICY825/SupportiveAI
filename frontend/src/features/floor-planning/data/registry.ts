@@ -1,10 +1,11 @@
-import type { FloorDataset } from '../domain/spatial'
+import type { FloorDataset, FloorOverview } from '../domain/spatial'
 
 export interface FloorEntry {
   id: string
   level: number
   label: string
   load: () => Promise<FloorDataset>
+  loadOverview?: () => Promise<FloorOverview>
 }
 
 /**
@@ -18,6 +19,7 @@ export const FLOORS: FloorEntry[] = [
     level: 16,
     label: 'Tầng 16',
     load: () => import('./floors/floor-16').then((m) => m.default()),
+    loadOverview: () => import('./floors/floor-16').then((m) => m.loadFloor16Overview()),
   },
 ]
 

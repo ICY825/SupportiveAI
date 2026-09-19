@@ -1017,6 +1017,39 @@ def extract(cfg, pdf_path: Path, out_dir: Path, public_dir: Path):
     })
     write(f"{stem}.zones.json", {**generated, "zones": zones, "rooms": rooms})
     write(f"{stem}.display-areas.json", {**generated, "displayAreas": getattr(cfg, "DISPLAY_AREAS", [])})
+    # The overview is deliberately derived data: it carries enough stable
+    # geometry for a floor picker/overview to paint before the heavy SVG layer
+    # paths, obstacle detail and extraction report are requested.
+    overview_zones = [
+        {
+            "id": zone["id"],
+            "name": zone.get("name"),
+            "departmentCode": zone.get("departmentCode"),
+            "polygon": zone["polygon"],
+            "bbox": zone["bbox"],
+        }
+        for zone in zones
+    ]
+    write(f"{stem}.overview.json", {
+        **generated,
+        "floor": {**floor, "coordinateSpace": "pdf-points-top-left", "width": r2(W), "height": r2(H),
+                  "mmPerPt": round(mm_per_pt, 4)},
+        "floorBounds": [0, 0, r2(W), r2(H)],
+        "displayAreas": getattr(cfg, "DISPLAY_AREAS", []),
+        "zones": overview_zones,
+        "workstations": [
+            {
+                "id": workstation["id"],
+                "floorId": workstation["floorId"],
+                "clusterId": workstation["clusterId"],
+                "zoneId": workstation["zoneId"],
+                "center": workstation["center"],
+                "bbox": workstation["bbox"],
+                "rotationDeg": workstation["rotationDeg"],
+            }
+            for workstation in ws_out
+        ],
+    })
     write(f"{stem}.workstations.json", {**generated, "rule": rule, "clusters": clusters_out, "workstations": ws_out})
     write(f"{stem}.objects.json", {**generated, "objects": objects_out})
     write(f"{stem}.obstacles.json", {**generated, "obstacles": obstacles_out})

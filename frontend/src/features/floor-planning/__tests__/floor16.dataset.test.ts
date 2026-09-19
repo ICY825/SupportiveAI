@@ -100,4 +100,22 @@ describe('floor-16 dataset', () => {
     expect(ds.layout.floor.mmPerPt).toBeLessThan(112)
     expect(ds.extraction.pdf.rasterImages).toBe(0)
   })
+
+  it('loads a lightweight overview that agrees with every canonical workstation', () => {
+    expect(ds.overview).toBeDefined()
+    expect(ds.overview!.displayAreas.map((area) => area.id)).toEqual([
+      'ai-area-a', 'ai-area-b', 'ai-area-c', 'ai-area-d', 'ai-area-e', 'ai-area-f',
+    ])
+    expect(ds.overview!.workstations).toHaveLength(ds.workstations.length)
+    const full = new Map(ds.workstations.map((workstation) => [workstation.id, workstation]))
+    for (const workstation of ds.overview!.workstations) {
+      const source = full.get(workstation.id)!
+      expect(workstation.center).toEqual(source.center)
+      expect(workstation.bbox).toEqual(source.bbox)
+      expect(workstation.rotationDeg).toBe(source.rotationDeg)
+    }
+    expect(ds.overview!.workstations.filter((workstation) =>
+      ['zone-16-ai-platform', 'zone-16-ai-platform-02'].includes(workstation.zoneId ?? ''),
+    )).toHaveLength(154)
+  })
 })

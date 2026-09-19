@@ -19,6 +19,7 @@ Writes to `data/floors/<floor-id>/` at the repository root (see `data/README.md`
 | Scale & grid | `A-GRID` lines + grid bubble text + dimension chain totals | `mmPerPt`, `grid` |
 | Zones, rooms | Acrobat markup annotations (Polygon / Highlight + FreeText label) | `zones.json` |
 | Workstations | desk outline of the `1200x600` size that contains a `1200x600` label, plus exactly one chair symbol on a long edge | `workstations.json` |
+| Overview | lightweight floor bounds, display areas, department polygons and workstation centres/bounds/angles | `overview.json` |
 | Clusters | connected components of touching desks | `workstations.json` → `clusters[]` |
 | Facilities | CAD text labels (`MÁY IN`, `Tủ rack`, …) + smallest enclosing shape | `objects.json` |
 | Report | counts, rules, hidden annotations, skipped layers | `extraction.json` |
