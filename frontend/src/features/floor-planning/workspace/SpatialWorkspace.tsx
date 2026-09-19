@@ -4,6 +4,7 @@ import { ApiError } from '@/api/client'
 import type { ReconcileReport } from '@/api/seats'
 import type { Department, Employee, FloorAllocationData, Seat } from '../domain/allocation'
 import { createDemoAllocation } from '../allocation/demoAllocation'
+import { departmentsOf } from '../allocation/liveAllocation'
 import {
   applyAllocationMutations,
   type AllocationStore,
@@ -180,7 +181,11 @@ function DepartmentDashboard({ dataset, departments, seats, onChoose }: {
         {departments.length > 0 ? (
           <div className="sw-department-grid" aria-label="Danh sách bộ phận">
             {departments.map((department, index) => {
-              const seatCount = seats.filter((seat) => seat.departmentId === department.id).length
+              const departmentZones = new Set(department.zonePreferences)
+              const seatCount = seats.filter((seat) => {
+                const workstation = dataset.workstations.find((item) => item.id === seat.workstationId)
+                return workstation?.zoneId ? departmentZones.has(workstation.zoneId) : false
+              }).length
               const zones = department.zonePreferences.map(zoneLabel)
               return (
                 <button
@@ -402,7 +407,7 @@ function authoredTemplatePlacement(workstation: NonNullable<FloorDataset['workst
   }
 }
 
-export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, searchSlot, onDirtyChange, authoredEntities, onAuthoredEntityChange, layoutStore = sessionLayoutStore, allocationSource, allocationStore = sessionAllocationStore, onAllocationCommitted, onSearchEmployees, reconcile, startWithDepartmentPicker = false, departmentId: departmentIdProp, onDepartmentChange }: {
+interface SpatialWorkspaceProps {
   dataset: FloorDataset
   selected: EntityRef | null
   onSelect: (ref: EntityRef | null) => void
@@ -443,12 +448,53 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
    */
   departmentId?: string | null
   onDepartmentChange?: (departmentId: string | null) => void
-}) {
-  const [now] = useState(() => new Date())
+}
+
+interface SpatialWorkspaceRuntime {
+  now: Date
+  allocation: FloorAllocationData
+  pickerDepartments: readonly Department[]
+  canUndo: boolean
+  registerEmployee: (employee: Employee) => void
+  applyAllocationChange: (mutations: readonly AllocationMutation[]) => Promise<void>
+  undoAllocationChange: () => Promise<void>
+}
+
+/** Keep the chooser stable while covering every department named by the drawing. */
+function departmentPickerCatalog(dataset: FloorDataset, demoDepartments: readonly Department[]): Department[] {
+  const sourceDepartments = departmentsOf(dataset)
+  const catalog = sourceDepartments.map((sourceDepartment) => {
+    const friendly = demoDepartments.find((department) =>
+      department.zonePreferences.some((zoneId) => sourceDepartment.zonePreferences.includes(zoneId)),
+    )
+    return friendly
+      ? { ...friendly, zonePreferences: sourceDepartment.zonePreferences }
+      : sourceDepartment
+  })
+  const coveredZones = new Set(sourceDepartments.flatMap((department) => department.zonePreferences))
+  for (const department of demoDepartments) {
+    if (!department.zonePreferences.some((zoneId) => coveredZones.has(zoneId))) catalog.push(department)
+  }
+  return catalog
+}
+
+function useSpatialWorkspaceRuntime({
+  dataset,
+  now,
+  allocationSource,
+  allocationStore,
+  onAllocationCommitted,
+}: {
+  dataset: FloorDataset
+  now: Date
+  allocationSource?: FloorAllocationData
+  allocationStore: AllocationStore
+  onAllocationCommitted?: () => void
+}): Omit<SpatialWorkspaceRuntime, 'now'> {
+  const demo = useMemo(() => createDemoAllocation(dataset, now), [dataset, now])
   const [allocation, setAllocation] = useState<FloorAllocationData>(() => {
     if (allocationSource) return allocationSource
-    const baseAllocation = createDemoAllocation(dataset, now)
-    return applyAllocationMutations(baseAllocation, sessionAllocationStore.read(dataset.layout.floor.id) ?? [])
+    return applyAllocationMutations(demo, sessionAllocationStore.read(dataset.layout.floor.id) ?? [])
   })
   const allocationRef = useRef(allocation)
   const undoMutationsRef = useRef<readonly AllocationMutation[] | null>(null)
@@ -556,10 +602,52 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     }
   }, [allocationStore, dataset.layout.floor.id, onAllocationCommitted])
 
-  const overviewScope = useMemo(() => defaultWorkspaceScope(dataset), [dataset])
+  return {
+    allocation,
+    pickerDepartments: departmentPickerCatalog(dataset, demo.departments),
+    canUndo,
+    registerEmployee,
+    applyAllocationChange,
+    undoAllocationChange,
+  }
+}
+
+export function SpatialWorkspace(props: SpatialWorkspaceProps) {
+  const [now] = useState(() => new Date())
+  const { dataset, allocationSource, allocationStore = sessionAllocationStore, onAllocationCommitted } = props
+  const runtime = useSpatialWorkspaceRuntime({ dataset, now, allocationSource, allocationStore, onAllocationCommitted })
   const [ownDepartmentId, setOwnDepartmentId] = useState<string | null>(null)
-  const departmentId = departmentIdProp !== undefined ? departmentIdProp : ownDepartmentId
-  const setDepartmentId = onDepartmentChange ?? setOwnDepartmentId
+  const departmentId = props.departmentId !== undefined ? props.departmentId : ownDepartmentId
+  const setDepartmentId = props.onDepartmentChange ?? setOwnDepartmentId
+  const chooseDepartment = useCallback((nextDepartmentId: string) => {
+    if (!runtime.pickerDepartments.some((department) => department.id === nextDepartmentId)) return
+    setDepartmentId(nextDepartmentId)
+  }, [runtime.pickerDepartments, setDepartmentId])
+
+  if (props.startWithDepartmentPicker && !departmentId) {
+    return (
+      <DepartmentDashboard
+        dataset={dataset}
+        departments={runtime.pickerDepartments}
+        seats={runtime.allocation.seats}
+        onChoose={chooseDepartment}
+      />
+    )
+  }
+
+  return (
+    <SpatialWorkspaceContent
+      {...props}
+      {...runtime}
+      now={now}
+      departmentId={departmentId}
+      onDepartmentChange={setDepartmentId}
+    />
+  )
+}
+
+function SpatialWorkspaceContent({ dataset, selected, onSelect, onVerify, searchSlot, onDirtyChange, authoredEntities, onAuthoredEntityChange, layoutStore = sessionLayoutStore, onSearchEmployees, reconcile, startWithDepartmentPicker = false, departmentId, onDepartmentChange, now, allocation, canUndo, registerEmployee, applyAllocationChange, undoAllocationChange }: SpatialWorkspaceProps & SpatialWorkspaceRuntime & { departmentId: string | null; onDepartmentChange: (departmentId: string | null) => void }) {
+  const overviewScope = useMemo(() => defaultWorkspaceScope(dataset), [dataset])
   const selectedDepartmentScope = useMemo(
     () => (departmentId ? { kind: 'department' as const, departmentId } : null),
     [departmentId],
@@ -956,24 +1044,13 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
     reset()
   }, [reset])
 
-  const chooseDepartment = useCallback((nextDepartmentId: string) => {
-    if (!allocation.departments.some((department) => department.id === nextDepartmentId)) return
-    setDepartmentId(nextDepartmentId)
-    setAreaId(null)
-    setAreaPrompt(false)
-    reset()
-    onSelect(null)
-    // `setDepartmentId` is the page's callback when the page owns the choice,
-    // so it belongs in the deps — it is not a stable state setter any more.
-  }, [allocation.departments, onSelect, reset, setDepartmentId])
-
   const returnToDepartmentDashboard = useCallback(() => {
-    setDepartmentId(null)
+    onDepartmentChange(null)
     setAreaId(null)
     setAreaPrompt(false)
     reset()
     onSelect(null)
-  }, [onSelect, reset, setDepartmentId])
+  }, [onDepartmentChange, onSelect, reset])
 
   const zoomBy = useCallback((factor: number) => {
     if (!Number.isFinite(factor) || factor <= 0) return
@@ -1327,17 +1404,6 @@ export function SpatialWorkspace({ dataset, selected, onSelect, onVerify, search
       </div>
     )
   }, [activeArea, departmentDesks, displayAreas])
-
-  if (startWithDepartmentPicker && !departmentId) {
-    return (
-      <DepartmentDashboard
-        dataset={dataset}
-        departments={allocation.departments}
-        seats={allocation.seats}
-        onChoose={chooseDepartment}
-      />
-    )
-  }
 
   if (!scene.workstations.length) return <div className="fp-state">{SPATIAL_UNAVAILABLE}</div>
 

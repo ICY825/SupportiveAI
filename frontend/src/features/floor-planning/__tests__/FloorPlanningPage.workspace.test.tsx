@@ -66,6 +66,14 @@ async function chooseDepartment(name: RegExp = /AI & Data/) {
   await screen.findByRole('application', {}, { timeout: 15000 })
 }
 
+it('shows every department before opening the seating map', async () => {
+  window.location.hash = '#/floor-planning?floor=floor-16&view=workspace'
+  render(<FloorPlanningPage />)
+
+  await screen.findByRole('button', { name: /AI & Data/ }, { timeout: 15000 })
+  expect(screen.getAllByRole('button', { name: /Mở bố trí/ })).toHaveLength(4)
+})
+
 describe('desk selection → workspace inspector', () => {
   it('opens, updates in place, and closes with Escape', async () => {
     await openWorkspace()
