@@ -35,22 +35,35 @@ export default defineConfig({
     hookTimeout: 30000,
   },
   build: {
+    // Floor artifacts are fetched as static `.json` (see data/floorAssets.ts).
+    // Inlining one as a base64 data URI would put it back in a JS chunk, a
+    // third larger than the file it replaces.
+    assetsInlineLimit: (filePath) => (filePath.endsWith('.json') ? false : undefined),
     rollupOptions: {
       output: {
+        // Floor data reaching the JS graph is a bug, not a layout the bundle
+        // should optimise — but a consumer outside floor-planning still
+        // imports a floor JSON as a module. Give any such file its own chunk
+        // per floor so it is never folded into someone else's, whatever the
+        // floor id.
         manualChunks(id) {
-          if (id.includes('/data/floors/floor-16/floor16.layout.json')) return 'floor-16-layout'
-          if (id.includes('/data/floors/floor-16/floor16.overview.json')) return 'floor-16-overview'
-          if (id.includes('/data/floors/floor-16/')) return 'floor-16-data'
-          return undefined
+          const floor = /[/\\]data[/\\]floors[/\\]([^/\\]+)[/\\][^/\\]+\.json$/.exec(id)
+          return floor ? `${floor[1]}-data` : undefined
         },
       },
       plugins: [
         {
-          name: 'assert-floor-layout-is-not-entry',
+          // The layout artifact is 2.9 MB for Floor 16 alone. Entering the
+          // entry chunk means every page waits on every floor's geometry, and
+          // a single new import edge is enough to cause it silently.
+          name: 'assert-floor-data-is-not-entry',
           generateBundle(_options, bundle) {
+            const isFloorData = (id: string) => /[/\\]data[/\\]floors[/\\][^/\\]+[/\\][^/\\]+\.json$/.test(id)
             for (const output of Object.values(bundle)) {
-              if (output.type === 'chunk' && output.isEntry && Object.keys(output.modules).some((id) => id.includes('/data/floors/floor-16/floor16.layout.json'))) {
-                this.error('Floor 16 layout geometry must remain outside the entry chunk')
+              if (output.type !== 'chunk' || !output.isEntry) continue
+              const offenders = Object.keys(output.modules).filter(isFloorData)
+              if (offenders.length > 0) {
+                this.error(`Floor geometry must remain outside the entry chunk: ${offenders.join(', ')}`)
               }
             }
           },
