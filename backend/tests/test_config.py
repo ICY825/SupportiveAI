@@ -69,7 +69,7 @@ def test_doc_gio_lam_viec(monkeypatch):
 def test_file_env_example_doc_duoc():
     """`.env.example` phải luôn nạp được — nó là thứ người mới copy ra dùng."""
     settings = Settings(_env_file=".env.example")
-    assert settings.enabled_modules == ["seat", "locker", "mail", "document"]
+    assert settings.enabled_modules == ["seat", "layout", "locker", "mail", "document"]
     assert settings.business_days == [0, 1, 2, 3, 4]
     # HS256 cần khóa từ 32 byte trở lên.
     assert len(settings.secret_key) >= 32

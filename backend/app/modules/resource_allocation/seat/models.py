@@ -11,7 +11,7 @@ có hai thứ:
 
 1. `layout_version` — hash của PDF nguồn lúc gán. Bản vẽ mới đổi hash, nên
    một lệnh đối chiếu so được ngay bản ghi nào đang trỏ vào hư không.
-2. Kiểm tra ở tầng service (`catalog.py`) trước mọi lần ghi.
+2. Kiểm tra ở tầng service (`common/floor_catalog.py`) trước mọi lần ghi.
 """
 
 from __future__ import annotations

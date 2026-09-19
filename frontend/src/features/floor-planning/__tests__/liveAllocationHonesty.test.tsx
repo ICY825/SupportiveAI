@@ -14,7 +14,19 @@ const apiMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/shared/auth', () => ({
-  useOptionalSession: () => ({ employee: { id: 'admin-1' } }),
+  // `ready` matters: the layout store waits for the session to be verified
+  // before deciding whether edits go to the server or stay in the page.
+  useOptionalSession: () => ({ employee: { id: 'admin-1' }, ready: true }),
+}))
+
+vi.mock('@/api/layout', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/api/layout')>()),
+  readFloorLayout: vi.fn().mockResolvedValue({
+    floor_id: 'floor-16',
+    current_layout_version: 'layout-2',
+    placements: [],
+    stale: 0,
+  }),
 }))
 
 vi.mock('@/api/seats', async (importOriginal) => ({

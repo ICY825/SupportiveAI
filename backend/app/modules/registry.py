@@ -23,8 +23,11 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 # Bốn đề bài và nơi chúng nằm. Tên ở vế trái là thứ điền vào ENABLED_MODULES.
+# Đề 1 chiếm hai dòng: `seat` (ai ngồi đâu) và `layout` (bàn đứng ở đâu). Tách
+# vì tắt được riêng, và vì `seat` khai rõ là nó không giữ hình học.
 MODULE_PACKAGES: dict[str, str] = {
     "seat": "app.modules.resource_allocation.seat",
+    "layout": "app.modules.resource_allocation.layout",
     "locker": "app.modules.resource_allocation.locker",
     "mail": "app.modules.document_flow.mail",
     "document": "app.modules.document_flow.document",

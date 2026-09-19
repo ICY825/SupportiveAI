@@ -1,4 +1,4 @@
-"""Danh mục chỗ ngồi có thật, đọc từ dataset mặt bằng.
+"""Danh mục thực thể có thật trên một tầng, đọc từ dataset mặt bằng.
 
 Issue #2 mục 3: **backend không bao giờ tự tạo chỗ ngồi.** Một mã không có
 trong dataset thì coi như không tồn tại, và gán vào đó là lỗi chứ không phải
@@ -14,7 +14,11 @@ bản vẽ nguồn.
 
 Đọc rồi nhớ trong tiến trình: dataset là file tĩnh, chỉ đổi khi ai đó chạy
 lại bộ trích xuất và commit. Đổi rồi thì khởi động lại — rẻ hơn nhiều so với
-đọc 3 MB JSON mỗi lần gán một chỗ ngồi.
+đọc 3 MB JSON mỗi lần ghi một bản ghi.
+
+Nằm ở `common/` vì cả phần chỗ ngồi lẫn phần bố trí đều hỏi đúng hai câu
+này — tầng này có những bàn nào, và dataset đang ở phiên bản nào — nên phải
+có **một** bên đọc, không phải hai bên đọc lệch nhau.
 """
 
 from __future__ import annotations
@@ -46,7 +50,7 @@ def floor_data_root() -> Path:
     """Thư mục dataset. Mặc định là `data/floors` ở gốc repo."""
     if settings.floor_data_dir:
         return Path(settings.floor_data_dir)
-    # backend/app/modules/resource_allocation/seat/catalog.py -> gốc repo
+    # backend/app/modules/resource_allocation/common/floor_catalog.py -> gốc repo
     return Path(__file__).resolve().parents[5] / "data" / "floors"
 
 

@@ -147,6 +147,13 @@ export const SPATIAL_NO_EDIT_AREAS = 'Tầng này chưa có khu vực chỉnh s�
 
 export const ALLOCATION_FALLBACK =
   'Không đọc được dữ liệu chỗ ngồi thật — đang hiện dữ liệu minh họa.'
+
+export const LAYOUT_SESSION_ONLY =
+  'Chưa đăng nhập — vị trí bàn vừa sửa chỉ nằm trong trang này và sẽ mất khi tải lại.'
+export const LAYOUT_STORAGE_FAILED =
+  'Không lưu được vị trí bàn lên máy chủ — thay đổi chỉ nằm trong trang này và sẽ mất khi tải lại.'
+export const layoutStaleNotice = (count: number) =>
+  `${count} vị trí đã lưu được đặt theo một bản vẽ khác bản vẽ hiện tại.`
 export const DEMO_DATA_LABEL = 'Dữ liệu minh họa'
 export const DEMO_DATA_HINT = 'Nhân sự, chỗ ngồi và thiết bị là dữ liệu giả lập để thiết kế giao diện; chưa kết nối HR/Admin.'
 

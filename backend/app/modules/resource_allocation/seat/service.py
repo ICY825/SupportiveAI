@@ -3,7 +3,7 @@
 Bốn quy tắc, tất cả đều thi hành ở đây chứ không ở router:
 
 1. **Chỗ ngồi phải có thật trong bản vẽ.** Issue #2 mục 3. Mã lạ là lỗi, không
-   phải lệnh tạo mới — xem `catalog.py`.
+   phải lệnh tạo mới — xem `common/floor_catalog.py`.
 2. **Một chỗ một người, một người một chỗ.** Muốn đổi thì thu hồi trước, để
    lịch sử còn đọc được.
 3. **Mọi thay đổi đều ghi audit** với `entity_type='seat_assignment'` và
@@ -24,7 +24,7 @@ from app.modules.resource_allocation.common.assignment import (
     ensure_employee_free,
     ensure_resource_free,
 )
-from app.modules.resource_allocation.seat.catalog import load_catalog
+from app.modules.resource_allocation.common.floor_catalog import load_catalog
 from app.modules.resource_allocation.seat.models import SeatAssignment, SeatDecision
 from app.modules.resource_allocation.seat.repository import SeatRepository
 from app.modules.resource_allocation.seat.schemas import (

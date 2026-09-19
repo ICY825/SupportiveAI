@@ -89,6 +89,9 @@ def test_tim_nhan_su_can_dang_nhap(client, duyen):
 
 
 def test_health_liet_ke_module_dang_bat(client):
-    """Bốn đề bài đều có tên hợp lệ dù chưa module nào viết xong."""
+    """Bốn đề bài đều có tên hợp lệ dù chưa module nào viết xong.
+
+    Năm tên, không phải bốn: Đề 1 tách làm `seat` và `layout`.
+    """
     enabled = client.get("/health").json()["enabled_modules"]
-    assert set(enabled) == {"seat", "locker", "mail", "document"}
+    assert set(enabled) == {"seat", "layout", "locker", "mail", "document"}

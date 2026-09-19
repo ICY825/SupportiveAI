@@ -15,7 +15,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.permissions import registry as permission_registry
 from app.main import create_app
-from app.modules.resource_allocation.seat import catalog
+from app.modules.resource_allocation.common import floor_catalog as catalog
 from app.modules.resource_allocation.seat.permissions import (
     ROLE_EMPLOYEE,
     ROLE_HC,

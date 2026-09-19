@@ -11,7 +11,7 @@ import json
 import pytest
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
-from app.modules.resource_allocation.seat import catalog
+from app.modules.resource_allocation.common import floor_catalog as catalog
 from app.modules.resource_allocation.seat.models import SeatDecision
 from app.modules.resource_allocation.seat.service import SeatService
 from app.platform.audit.models import AuditLog

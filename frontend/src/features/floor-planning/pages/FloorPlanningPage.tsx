@@ -40,12 +40,22 @@ import {
   saveZoneCustomizations,
   type FloorZoneCustomizations,
 } from '../domain/zoneCustomization'
-import { ALLOCATION_FALLBACK, DESK_STATUS, UNLABELED_ZONE, VIEW_MODES, objectName } from '../labels'
+import {
+  ALLOCATION_FALLBACK,
+  DESK_STATUS,
+  LAYOUT_SESSION_ONLY,
+  LAYOUT_STORAGE_FAILED,
+  UNLABELED_ZONE,
+  VIEW_MODES,
+  layoutStaleNotice,
+  objectName,
+} from '../labels'
 import { ARROW_DIRECTION, nearestInDirection } from '../map/deskNavigation'
 import { buildSearchIndex, type SearchItem } from '../search/searchIndex'
 import { contentBounds } from '../map/contentBounds'
 import { DEFAULT_SETTINGS, type MapSettings } from '../map/mapSettings'
 import { useViewport } from '../map/useViewport'
+import { useFloorLayout } from '../workspace/useFloorLayout'
 import { buildHash, parseHash, type ViewMode } from './urlState'
 import markUrl from '../../../assets/brand/vsf-mark.png'
 import '../floorPlanning.css'
@@ -295,6 +305,12 @@ export function FloorPlanningPage({
     [floorId, allocation.reload],
   )
 
+  // Vị trí bàn: server khi có phiên, bộ nhớ của trang khi không. Khác phần
+  // chỗ ngồi ở một điểm — trình sửa đọc store **đồng bộ** lúc khởi tạo, nên
+  // phải đợi `ready` rồi mới dựng nó, nếu không nó khởi tạo bằng vị trí gốc
+  // của bản vẽ và không đọc lại nữa.
+  const layout = useFloorLayout(floorId)
+
   /**
    * Staff directory lookup for the seat picker. Live data only ever names the
    * people who already hold a seat, so without this an empty desk could not be
@@ -355,7 +371,23 @@ export function FloorPlanningPage({
           <span className="fp-mono">{allocation.error}</span>
         </div>
       )}
-      {effectiveDataset && view === 'workspace' && (
+      {view === 'workspace' && layout.status === 'failed' && (
+        <div className="fp-state is-error" role="alert">
+          <strong>{LAYOUT_STORAGE_FAILED}</strong>
+          <span className="fp-mono">{layout.error}</span>
+        </div>
+      )}
+      {view === 'workspace' && layout.status === 'session' && (
+        <div className="fp-state" role="status">
+          {LAYOUT_SESSION_ONLY}
+        </div>
+      )}
+      {view === 'workspace' && layout.status === 'server' && layout.stale > 0 && (
+        <div className="fp-state" role="status">
+          {layoutStaleNotice(layout.stale)}
+        </div>
+      )}
+      {effectiveDataset && view === 'workspace' && layout.ready && (
         <SpatialWorkspace
           key={floorId}
           dataset={effectiveDataset}
@@ -364,6 +396,7 @@ export function FloorPlanningPage({
           onVerify={() => navigate({ view: 'verification' })}
           searchSlot={searchSlot}
           onDirtyChange={setLayoutDirty}
+          layoutStore={layout.store}
           authoredEntities={authoredEntities}
           onAuthoredEntityChange={handleAuthoredEntityChange}
           allocationSource={allocation.status === 'live' ? allocation.data : undefined}

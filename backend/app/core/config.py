@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     # `NoDecode` để pydantic-settings đừng cố đọc giá trị env bằng JSON;
     # nhờ vậy khai báo dạng `seat,locker,mail,document` mới dùng được.
     enabled_modules: Annotated[list[str], NoDecode] = Field(
-        default_factory=lambda: ["seat", "locker", "mail", "document"]
+        default_factory=lambda: ["seat", "layout", "locker", "mail", "document"]
     )
 
     # --- Lịch làm việc, dùng để tính SLA theo giờ làm việc ---
