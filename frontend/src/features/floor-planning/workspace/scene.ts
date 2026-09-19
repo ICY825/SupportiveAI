@@ -56,6 +56,7 @@ export function clipSourcePathToBBox(d: string, bbox: BBox): string {
  * layer alone carries 185 non-axis-aligned segments, 68 of them at 45°.
  */
 const ALIGNABLE_LAYERS = new Set<BaseLayerId>(['walls', 'partitions', 'facade'])
+const COLLISION_LAYERS = new Set<BaseLayerId>(['walls', 'partitions'])
 
 /**
  * Straight segments of an absolute `M`/`L` source path, in floor coordinates.
@@ -85,6 +86,11 @@ export function sourcePathSegments(d: string, minLength = 1): Segment[] {
 /** Alignable straight edges of a scene's architecture, already scope-clipped. */
 export function sceneWallSegments(layers: readonly BaseLayer[]): Segment[] {
   return layers.filter((layer) => ALIGNABLE_LAYERS.has(layer.id)).flatMap((layer) => sourcePathSegments(layer.d))
+}
+
+/** Physical wall runs used for collision validation; facade stays an alignment hint. */
+export function sceneCollisionWallSegments(layers: readonly BaseLayer[]): Segment[] {
+  return layers.filter((layer) => COLLISION_LAYERS.has(layer.id)).flatMap((layer) => sourcePathSegments(layer.d))
 }
 
 export interface WorkspaceSceneModel {

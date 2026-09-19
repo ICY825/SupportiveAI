@@ -31,6 +31,7 @@ from app.modules.resource_allocation.layout.schemas import (
     PlacementRead,
     PlacementWrite,
     StalePlacement,
+    OverriddenPlacement,
 )
 
 #: Lý do một bản ghi lệch với dataset. Dùng chung chuỗi với phần chỗ ngồi để
@@ -54,7 +55,7 @@ class LayoutService:
             floor_id=floor_id,
             current_layout_version=catalog.layout_version,
             placements=[PlacementRead.model_validate(row) for row in rows],
-            stale=sum(1 for row in rows if self._stale_reason(row, catalog) is not None),
+            stale=sum(1 for row in rows if not row.override_reason and self._stale_reason(row, catalog) is not None),
         )
 
     def reconcile(self, floor_id: str) -> LayoutReconcileReport:
@@ -62,7 +63,19 @@ class LayoutService:
         catalog = load_catalog(floor_id)
         rows = self.repo.list_for_floor(floor_id)
         stale: list[StalePlacement] = []
+        overridden: list[OverriddenPlacement] = []
         for row in rows:
+            if row.override_reason:
+                overridden.append(
+                    OverriddenPlacement(
+                        entity_id=row.entity_id,
+                        reason=row.override_reason,
+                        actor_id=row.updated_by,
+                        recorded_at=row.updated_at,
+                        conflicts=row.override_conflicts or [],
+                    )
+                )
+                continue
             reason = self._stale_reason(row, catalog)
             if reason is None:
                 continue
@@ -79,6 +92,7 @@ class LayoutService:
             current_layout_version=catalog.layout_version,
             checked=len(rows),
             stale=stale,
+            overridden=overridden,
         )
 
     # --- Ghi ---
@@ -109,6 +123,12 @@ class LayoutService:
             row.rotation = placement.rotation
             row.chair = placement.chair
             row.seated_side = placement.seated_side
+            if placement.override_reason is not None and not placement.override_reason.strip():
+                raise ValueError('override_reason must not be blank')
+            if placement.override_reason is None and placement.override_conflicts:
+                raise ValueError('override_conflicts require override_reason')
+            row.override_reason = placement.override_reason.strip() if placement.override_reason else None
+            row.override_conflicts = placement.override_conflicts
             row.layout_version = catalog.layout_version
             row.updated_by = actor_id
             if is_new:

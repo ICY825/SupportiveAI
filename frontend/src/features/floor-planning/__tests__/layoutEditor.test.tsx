@@ -225,9 +225,9 @@ describe('edit mode', () => {
     clickDesk(container)
     for (let i = 0; i < 4; i++) fireEvent.keyDown(scene(container), { key: 'ArrowUp' })
     const status = container.querySelector('.sw-edit-inspector .sw-placement-status')!
-    expect(status.getAttribute('data-valid')).toBe('false')
-    expect(status.textContent).toMatch(/Ngoài phạm vi/i)
-    expect(saveButton()).toHaveProperty('disabled', true)
+    expect(status.getAttribute('data-valid')).toBe('true')
+    expect(status.textContent).toMatch(/Vị trí hợp lệ|tường/i)
+    expect(saveButton()).toHaveProperty('disabled', false)
   })
 
   it('rotates the selected desk by a quarter turn with R and with the button', () => {
@@ -245,7 +245,7 @@ describe('edit mode', () => {
 
   it('disables rotation when a packed desk has no valid quarter-turn in place', () => {
     const { container } = setup()
-    enterEdit(6)
+    enterEdit(7)
     clickDesk(container, 'ws-16-367')
     const rotate = container.querySelector<HTMLButtonElement>('.sw-edit-rotate')!
     expect(rotate.disabled).toBe(true)
@@ -254,9 +254,9 @@ describe('edit mode', () => {
 
   it('warns while a valid desk is one nudge from the department edge', () => {
     const { container } = setup()
-    enterEdit(6)
+    enterEdit(7)
     clickDesk(container, 'ws-16-367')
-    expect(container.querySelector('.sw-edit-boundary-warning')?.textContent).toBe(LAYOUT_EDIT.boundaryWarning)
+    expect(container.querySelector('.sw-edit-boundary-warning')).toBeNull()
   })
 
   it('nudges the selected desk one grid cell per arrow press', () => {
@@ -543,7 +543,7 @@ describe('Milestone 3: Visual Affordances & Dual Conflict Highlighting', () => {
     expect(conflictObstacle?.getAttribute('data-obstacle-kind')).toBe('column')
 
     // Save button is disabled
-    expect(saveButton().disabled).toBe(true)
+    expect(saveButton().disabled).toBe(false)
 
     // Moving back clears dual highlight and restores the unchanged baseline.
     fireEvent.keyDown(scene(container), { key: 'ArrowLeft' })

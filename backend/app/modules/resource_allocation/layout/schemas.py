@@ -23,6 +23,8 @@ class PlacementWrite(BaseModel):
     rotation: float = 0.0
     chair: dict | None = None
     seated_side: str | None = Field(default=None, max_length=8)
+    override_reason: str | None = Field(default=None, max_length=1000)
+    override_conflicts: list[dict] | None = None
 
 
 class LayoutWrite(BaseModel):
@@ -50,6 +52,8 @@ class PlacementRead(BaseModel):
     layout_version: str
     updated_at: datetime
     updated_by: str | None
+    override_reason: str | None
+    override_conflicts: list[dict] | None
 
 
 class FloorLayoutRead(BaseModel):
@@ -74,6 +78,14 @@ class StalePlacement(BaseModel):
     current_layout_version: str
 
 
+class OverriddenPlacement(BaseModel):
+    entity_id: str
+    reason: str
+    actor_id: str | None
+    recorded_at: datetime
+    conflicts: list[dict]
+
+
 class LayoutReconcileReport(BaseModel):
     """Kết quả đối chiếu vị trí đã lưu với dataset — chạy sau mỗi lần trích xuất lại."""
 
@@ -81,3 +93,4 @@ class LayoutReconcileReport(BaseModel):
     current_layout_version: str
     checked: int
     stale: list[StalePlacement]
+    overridden: list[OverriddenPlacement]

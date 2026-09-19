@@ -47,7 +47,7 @@ import { ARROW_DIRECTION, DIRECTION_VECTOR, nearestInDirection } from '../map/de
 import { normalizeWheelZoom } from '../map/viewport'
 import { buildSearchIndex } from '../search/searchIndex'
 import { EditAffordances, EditGround } from './EditLayer'
-import { EditInspector, EditToolbar, EnterEditButton, UnsavedChangesDialog } from './EditPanel'
+import { EditInspector, EditToolbar, EnterEditButton, OverrideDialog, UnsavedChangesDialog } from './EditPanel'
 import {
   applyPlacements,
   basePlacements as deriveBasePlacements,
@@ -894,10 +894,12 @@ function SpatialWorkspaceContent({ dataset, selected, onSelect, onVerify, search
       : Object.values(editor.placements)
     return validatePlacement(placement, {
       others,
-      boundary: area.boundary,
+      boundary: null,
+      floorBoundary: area.floorBoundary,
       roomBoundary: area.roomBoundary,
       departmentZone: area.departmentZone,
       obstacles: area.obstacles,
+      wallSegments: area.collisionWallSegments,
       tolerance: area.tolerance,
       boundaryTolerance: area.boundaryTolerance,
       chairTileSize: area.chairTileSize,
@@ -1379,6 +1381,14 @@ function SpatialWorkspaceContent({ dataset, selected, onSelect, onVerify, search
     }
     return result
   }, [editor.placements, scene.workstations])
+  const overriddenIds = useMemo(
+    () => new Set(Object.values(editor.placements).filter((placement) => placement.override).map((placement) => placement.entityId)),
+    [editor.placements],
+  )
+  const overrideReasons = useMemo(
+    () => new Map(Object.values(editor.placements).flatMap((placement) => placement.override?.reason ? [[placement.entityId, placement.override.reason] as const] : [])),
+    [editor.placements],
+  )
 
   const statusCounts = useMemo(() => {
     const map = Object.fromEntries(DESK_STATUSES.map((s) => [s, 0])) as Record<DeskStatus, number>
@@ -1535,7 +1545,7 @@ function SpatialWorkspaceContent({ dataset, selected, onSelect, onVerify, search
                 placements={visiblePlacements}
                 selectedId={visibleDesk?.workstation.id}
                 validation={editor.validation}
-                preview={pendingDesk?.placement ? { placement: pendingDesk.placement, valid: pendingValidation?.valid === true } : undefined}
+                preview={pendingDesk?.placement ? { placement: pendingDesk.placement, valid: pendingValidation?.valid === true && !pendingValidation.requiresOverride } : undefined}
                 deskHeight={scene.deskHeight}
                 mmPerPt={dataset.layout.floor.mmPerPt}
                 chairTileSize={area.chairTileSize}
@@ -1544,6 +1554,8 @@ function SpatialWorkspaceContent({ dataset, selected, onSelect, onVerify, search
                 obstacles={area.displayObstacles ?? area.obstacles}
               />
             ) : undefined}
+            overriddenIds={overriddenIds}
+            overrideReasons={overrideReasons}
             onKeyDown={onKeyDown}
             onPointerDown={pointerDown}
             onPointerMove={pointerMove}
@@ -1644,6 +1656,14 @@ function SpatialWorkspaceContent({ dataset, selected, onSelect, onVerify, search
       <UnsavedChangesDialog
         onStay={() => setExitPrompt(false)}
         onDiscard={() => { setExitPrompt(false); editor.cancel() }}
+      />
+    )}
+    {editor.overrideRequest && (
+      <OverrideDialog
+        conflicts={editor.overrideRequest.conflicts}
+        codeOf={codeOf}
+        onConfirm={(reason) => { void editor.confirmOverride(reason) }}
+        onCancel={editor.dismissOverride}
       />
     )}
     <p className="fp-sr-only" aria-live="polite">{areaPrompt ? (displayAreas.length ? LAYOUT_EDIT.chooseArea : SPATIAL_NO_EDIT_AREAS) : desk ? `Đã chọn bàn ${desk.seat.code} · ${DESK_STATUS[desk.status].label}` : 'Chưa chọn bàn'}</p>

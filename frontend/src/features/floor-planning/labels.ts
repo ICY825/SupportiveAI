@@ -286,6 +286,7 @@ export const PLACEMENT_ISSUE = {
   overlap: (code: string, target?: 'desk' | 'chair') =>
     target === 'chair' ? `Không gian ghế chồng lấn bàn ${code}` : `Chồng lấn bàn ${code}`,
   outsideBoundary: 'Ngoài phạm vi bố trí',
+  invalidDimensions: 'Kích thước bàn không hợp lệ',
   outsideRoomBoundary: (_roomName?: string, target?: 'desk' | 'chair') => target === 'chair' ? 'Ghế nằm ngoài ranh giới phòng' : 'Bàn nằm ngoài ranh giới phòng',
   outsideDepartmentZone: (_zoneName?: string, target?: 'desk' | 'chair') => target === 'chair' ? 'Ghế nằm ngoài phạm vi khu vực' : 'Bàn nằm ngoài phạm vi khu vực',
   obstacleCollision: (_obstacleName?: string, obstacleKind?: 'column' | 'wall', target?: 'desk' | 'chair') => {
@@ -302,6 +303,8 @@ export function placementIssueText(issue: PlacementIssue, codeOf: (entityId: str
       return PLACEMENT_ISSUE.overlap(codeOf(issue.entityId), issue.target)
     case 'outside-boundary':
       return issue.target === 'chair' ? 'Không gian ghế ngoài phạm vi bố trí' : PLACEMENT_ISSUE.outsideBoundary
+    case 'invalid-dimensions':
+      return PLACEMENT_ISSUE.invalidDimensions
     case 'outside-room-boundary':
       return PLACEMENT_ISSUE.outsideRoomBoundary(issue.roomName, issue.target)
     case 'outside-department-zone':
@@ -323,5 +326,6 @@ export function placementIssueTitle(issue: PlacementIssue, codeOf: (entityId: st
     case 'obstacle-collision': return `${visible} · Chướng ngại: ${issue.obstacleName ?? issue.obstacleId} · Mã: ${issue.obstacleId}`
     case 'clearance-conflict': return `${visible} · Khoảng mở cửa: ${issue.obstacleName ?? issue.obstacleId} · Mã: ${issue.obstacleId}`
     case 'outside-boundary': return `${visible} · Ranh giới bố trí của khu vực`
+    case 'invalid-dimensions': return visible
   }
 }

@@ -23,7 +23,7 @@ import {
   project,
   sceneBounds,
 } from '../workspace/scene'
-import { buildWorkspaceDisplayAreas, buildWorkspaceDisplayAreasForScope, DISPLAY_CONTEXT_PADDING_PT, validateDisplayAreaDefinitions } from '../workspace/displayAreas'
+import { buildWorkspaceDisplayAreas, buildWorkspaceDisplayAreasForScope, DISPLAY_CONTEXT_PADDING_PT } from '../workspace/displayAreas'
 import { defaultWorkspaceScope, resolveWorkspaceScope, type WorkspaceScope } from '../workspace/scope'
 
 let dataset: FloorDataset
@@ -78,9 +78,11 @@ describe('workspace scope selection', () => {
 
   it('supports another department through the same zone-backed display-area builder', () => {
     const areas = buildWorkspaceDisplayAreasForScope(dataset, { kind: 'department', departmentId: 'dept-smart-city' })
-    expect(areas).toHaveLength(1)
-    expect(areas[0].workstationIds.length).toBeGreaterThan(0)
-    expect(areas[0].scope).toEqual({ kind: 'zone', zoneId: 'zone-16-bds-smart-city' })
+    expect(areas.length).toBeGreaterThan(1)
+    expect(areas.every((area) => area.workstationIds.length > 0)).toBe(true)
+    expect(new Set(areas.flatMap((area) => area.workstationIds)).size).toBe(
+      dataset.workstations.filter((workstation) => workstation.zoneId === 'zone-16-bds-smart-city').length,
+    )
   })
 
   /**
@@ -92,54 +94,15 @@ describe('workspace scope selection', () => {
   it('partitions the whole department into seven disjoint display areas', () => {
     const areas = buildWorkspaceDisplayAreas(dataset)
     expect(areas).toHaveLength(7)
-    expect(areas.map((area) => area.workstationIds.length)).toEqual([28, 21, 15, 14, 22, 16, 38])
+    expect(areas.map((area) => area.workstationIds.length)).toEqual([25, 25, 28, 22, 22, 16, 16])
     expect(areas.flatMap((area) => area.clusterIds)).toHaveLength(26)
     const workstationIds = areas.flatMap((area) => area.workstationIds)
     expect(new Set(workstationIds).size).toBe(154)
     expect(workstationIds).toEqual(expect.arrayContaining(dataset.workstations.filter((workstation) => workstation.zoneId === 'zone-16-ai-platform').map((workstation) => workstation.id)))
   })
 
-  it('loads Floor 16 display areas as dedicated metadata with stable curated membership', () => {
-    expect(dataset.displayAreas?.map((area) => area.id)).toEqual([
-      'ai-area-a', 'ai-area-b', 'ai-area-c', 'ai-area-d', 'ai-area-e', 'ai-area-f',
-    ])
-    const original = buildWorkspaceDisplayAreas(dataset).map((area) => [...area.workstationIds])
-    const reordered = {
-      ...dataset,
-      clusters: [...dataset.clusters].reverse(),
-      workstations: dataset.workstations.map((workstation, index) => ({
-        ...workstation,
-        clusterId: `re-extracted-${index}`,
-      })),
-    }
-    expect(buildWorkspaceDisplayAreas(reordered).map((area) => [...area.workstationIds])).toEqual(original)
-  })
-
-  it('reports stale and overlapping display metadata instead of silently dropping it', () => {
-    expect(validateDisplayAreaDefinitions(dataset)).toEqual([])
-    const stale = {
-      ...dataset,
-      displayAreas: [
-        ...(dataset.displayAreas ?? []),
-        { id: 'ai-area-stale', label: 'Khu vực stale', short: 'S', departmentCode: 'AI', bbox: [10, 10, 20, 20] as [number, number, number, number] },
-      ],
-    }
-    expect(validateDisplayAreaDefinitions(stale)).toContainEqual(expect.objectContaining({
-      level: 'warning',
-      entityId: 'ai-area-stale',
-    }))
-
-    const overlapping = {
-      ...dataset,
-      displayAreas: [
-        ...(dataset.displayAreas ?? []),
-        { id: 'ai-area-overlap', label: 'Khu vực overlap', short: 'O', departmentCode: 'AI', bbox: [946, 245, 992, 343] as [number, number, number, number] },
-      ],
-    }
-    expect(validateDisplayAreaDefinitions(overlapping)).toContainEqual(expect.objectContaining({
-      level: 'error',
-      entityId: 'ai-area-a',
-    }))
+  it('does not load authored display-area metadata', () => {
+    expect(dataset.displayAreas).toBeUndefined()
   })
 
   it('keeps expanded context separate from active desk membership', () => {
@@ -149,7 +112,7 @@ describe('workspace scope selection', () => {
       contextBounds: area.contextBBox,
       includeContextWorkstations: true,
     })
-    expect(scene.workstations).toHaveLength(28)
+    expect(scene.workstations).toHaveLength(area.workstationIds.length)
     expect(scene.contextWorkstations.length).toBeGreaterThan(0)
     expect(scene.contextBounds[0]).toBeLessThan(area.targetBBox[0])
     expect(scene.contextBounds[2]).toBeGreaterThan(area.targetBBox[2])
@@ -166,7 +129,7 @@ describe('workspace scope selection', () => {
   })
 
   it('validates immutable context placements without making them editable', () => {
-    const area = buildWorkspaceDisplayAreas(dataset).find((candidate) => candidate.id === 'ai-area-d')!
+    const area = buildWorkspaceDisplayAreas(dataset).find((candidate) => candidate.workstationIds.includes('ws-16-201'))!
     const scene = buildWorkspaceScene(dataset, area.scope, {
       workstationIds: area.workstationIds,
       // The verified extracted unlabeled region is outside the deliberately

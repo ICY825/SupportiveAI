@@ -7,12 +7,12 @@ import type { FloorDataset, FloorOverview } from '../domain/spatial'
  * drawing cannot state: which building it belongs to, and the source PDF it
  * was extracted from.
  *
- * Every floor loads the same seven artifacts under the same names, so there is
+ * Every floor loads the same six artifacts under the same names, so there is
  * nothing per-floor left to write by hand. A floor that needs a different
  * assembly has a different extractor, not a different loader.
  */
 export interface FloorLoader {
-  /** Bounds, display areas and reduced desks: enough for a first interactive paint. */
+  /** Bounds and reduced desks: enough for a first interactive paint. */
   loadOverview: () => Promise<FloorOverview>
   /** Everything, including the layer geometry. */
   load: () => Promise<FloorDataset>
@@ -23,7 +23,7 @@ export function createFloorLoader(floorId: string, meta: FloorMeta): FloorLoader
     (await readJsonAsset(floorAssetUrl(floorId, 'overview'))) as FloorOverview
 
   const load = async (): Promise<FloorDataset> => {
-    const [overview, layout, zones, workstations, objects, obstacles, extraction, displayAreas] =
+    const [overview, layout, zones, workstations, objects, obstacles, extraction] =
       await Promise.all([
         // Optional here, required by loadOverview(): a floor extracted before
         // the overview artifact existed still assembles, it just cannot paint
@@ -35,10 +35,9 @@ export function createFloorLoader(floorId: string, meta: FloorMeta): FloorLoader
         readFloorAsset(floorId, 'objects'),
         readOptionalFloorAsset(floorId, 'obstacles'),
         readFloorAsset(floorId, 'extraction'),
-        readOptionalFloorAsset(floorId, 'display-areas'),
       ])
     return buildDataset(
-      { layout, zones, workstations, objects, obstacles, extraction, displayAreas, overview },
+      { layout, zones, workstations, objects, obstacles, extraction, overview },
       meta,
     )
   }

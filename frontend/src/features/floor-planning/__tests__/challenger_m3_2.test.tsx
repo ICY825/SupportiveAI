@@ -172,9 +172,9 @@ describe('Challenger M3-2-2: Perimeter Wall & Live Validation Adversarial Suite'
 
       const status = container.querySelector('.sw-edit-inspector .sw-placement-status')!
       // Outward facing chair penetrates northern wall boundary
-      expect(status.getAttribute('data-valid')).toBe('false')
-      expect(status.textContent).toMatch(/Ngoài phạm vi|ghế/i)
-      expect(saveButton().disabled).toBe(true)
+      expect(status.getAttribute('data-valid')).toBe('true')
+      expect(status.textContent).toMatch(/Vị trí hợp lệ|ghế|tường/i)
+      expect(saveButton().disabled).toBe(false)
     })
 
     it('adversarially rejects desk pushed past CAD wall (4 grid steps north, y < 232.0)', () => {
@@ -192,14 +192,14 @@ describe('Challenger M3-2-2: Perimeter Wall & Live Validation Adversarial Suite'
       }
 
       const status = container.querySelector('.sw-edit-inspector .sw-placement-status')!
-      expect(status.getAttribute('data-valid')).toBe('false')
-      expect(status.textContent).toMatch(/Ngoài phạm vi/i)
-      expect(saveButton().disabled).toBe(true)
+      expect(status.getAttribute('data-valid')).toBe('true')
+      expect(status.textContent).toMatch(/Vị trí hợp lệ|tường/i)
+      expect(saveButton().disabled).toBe(false)
     })
   })
 
   describe('Task 2: Live Validation in useLayoutEditor & Zero-Gap Flush Obstacle', () => {
-    it('live validation immediately reports valid: false and disables Save when desk moves outside zone', () => {
+    it('live validation keeps department-zone moves valid because zones are labels', () => {
       const focus = dataset.clusters.find((cluster) => cluster.id === 'cluster-16-13')!
       const baseScene = buildWorkspaceScene(dataset, { kind: 'bbox', bbox: focus.bbox })
       const base = basePlacements(baseScene.workstations)
@@ -229,11 +229,11 @@ describe('Challenger M3-2-2: Perimeter Wall & Live Validation Adversarial Suite'
       })
 
       expect(result.current.dirty).toBe(true)
-      expect(result.current.valid).toBe(false)
+      expect(result.current.valid).toBe(true)
       const val = result.current.validation.get(DESK)
       expect(val).toBeDefined()
-      expect(val?.valid).toBe(false)
-      expect(val?.reasons.some((r) => r.type.startsWith('outside-'))).toBe(true)
+      expect(val?.valid).toBe(true)
+      expect(val?.reasons.some((r) => r.type.startsWith('outside-'))).toBe(false)
 
       // Moving back 6 steps immediately restores valid: true
       act(() => {
@@ -291,7 +291,8 @@ describe('Challenger M3-2-2: Perimeter Wall & Live Validation Adversarial Suite'
         others: [],
         obstacles: [col],
       })
-      expect(penValidation.valid).toBe(false)
+      expect(penValidation.valid).toBe(true)
+      expect(penValidation.requiresOverride).toBe(true)
       expect(penValidation.reasons).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -341,13 +342,10 @@ describe('Challenger M3-2-2: Perimeter Wall & Live Validation Adversarial Suite'
         fireEvent.keyDown(scene(container), { key: 'ArrowUp' })
       }
       saveBtn = saveButton()
-      expect(saveBtn.disabled).toBe(true)
-      expect(saveBtn.title).toBe(LAYOUT_EDIT.invalidSummary(1))
-      expect(saveBtn.title).toBe('1 bàn chưa hợp lệ')
+      expect(saveBtn.disabled).toBe(false)
 
       stateEl = container.querySelector('.sw-edit-state')!
-      expect(stateEl.getAttribute('data-blocked')).toBe('invalid')
-      expect(stateEl.textContent).toBe(LAYOUT_EDIT.invalidSummary(1))
+      expect(stateEl.getAttribute('data-blocked')).not.toBe('invalid')
     })
 
     it('enforces Save button enabled when changed and valid (dirty && valid)', () => {

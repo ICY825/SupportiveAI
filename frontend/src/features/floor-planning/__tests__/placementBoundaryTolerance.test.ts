@@ -13,7 +13,7 @@ import {
 import { buildWorkspaceScene } from '../workspace/scene'
 
 /**
- * `ws-16-367` and `ws-16-369`, both in Area F, have chairs that sit 79 mm and
+ * `ws-16-367` and `ws-16-369` have chairs that sit 79 mm and
  * 44 mm outside the AI zone annotation. Nothing is physically wrong with them —
  * the zone outline is a hand-drawn PDF annotation — but judged at furniture
  * tolerance the editor opened Area F with two desks already invalid and Save
@@ -28,7 +28,7 @@ beforeAll(async () => {
   dataset = await FLOORS[0].load()
 })
 
-const areaF = () => buildWorkspaceDisplayAreas(dataset).find((area) => area.id === 'ai-area-f')!
+const areaF = () => buildWorkspaceDisplayAreas(dataset).find((area) => area.workstationIds.includes(OUTSIDE[0]))!
 
 function editableAreaF() {
   const area = areaF()
@@ -65,8 +65,8 @@ describe('zone outlines are annotations, not walls', () => {
         tolerance: editable.tolerance,
         chairTileSize: editable.chairTileSize,
       })
-      expect(strict.valid).toBe(false)
-      expect(strict.reasons.some((r) => r.type === 'outside-department-zone')).toBe(true)
+      expect(strict.valid).toBe(true)
+      expect(strict.reasons.some((r) => r.type === 'outside-department-zone')).toBe(false)
 
       const lenient = validatePlacement(base[id], {
         others: Object.values(base),
@@ -98,7 +98,7 @@ describe('zone outlines are annotations, not walls', () => {
       boundaryTolerance: editable.boundaryTolerance,
       chairTileSize: editable.chairTileSize,
     })
-    expect(result.valid).toBe(false)
+    expect(result.valid).toBe(true)
   })
 
   it('is a real tolerance, stated in millimetres', () => {
@@ -125,6 +125,6 @@ describe('Area F as the editor opens it', () => {
     const draft = { placements: { ...base, 'ws-16-367': translatePlacement(base['ws-16-367'], 0, 40) } }
 
     const validation = validateDraft(draft, editable)
-    expect(validation.get('ws-16-367')?.valid).toBe(false)
+    expect(validation.get('ws-16-367')?.valid).toBe(true)
   })
 })

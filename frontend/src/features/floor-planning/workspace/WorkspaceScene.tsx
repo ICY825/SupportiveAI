@@ -155,7 +155,7 @@ const Marker = memo(function Marker({ ws, desk, pos, isSelected, showInitials, o
   )
 })
 
-export function WorkspaceScene({ scene, desks, contextDesks, selectedId, onSelect, svgRef, viewBox, origin, zoom, pan, detailTier, ground, overlay, ariaLabel, onKeyDown, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }: {
+export function WorkspaceScene({ scene, desks, contextDesks, selectedId, onSelect, svgRef, viewBox, origin, zoom, pan, detailTier, ground, overlay, ariaLabel, overriddenIds, overrideReasons, onKeyDown, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }: {
   scene: WorkspaceSceneModel
   desks: ReadonlyMap<string, DeskRecord>
   contextDesks?: ReadonlyMap<string, DeskRecord>
@@ -169,6 +169,8 @@ export function WorkspaceScene({ scene, desks, contextDesks, selectedId, onSelec
   detailTier: WorkspaceDetailTier
   ground?: ReactNode
   overlay?: ReactNode
+  overriddenIds?: ReadonlySet<string>
+  overrideReasons?: ReadonlyMap<string, string>
   ariaLabel?: string
   onKeyDown: (event: KeyboardEvent<SVGSVGElement>) => void
   onPointerDown: React.PointerEventHandler<SVGSVGElement>
@@ -216,6 +218,7 @@ export function WorkspaceScene({ scene, desks, contextDesks, selectedId, onSelec
         {geometry.items.map((item) => {
           const desk = item.context ? contextDesks?.get(item.ws.id) : desks.get(item.ws.id)
           if (!desk) return null
+          const overrideReason = !item.context ? overrideReasons?.get(item.ws.id) : undefined
           return (
             <g
               key={`${item.ws.id}-${item.kind}`}
@@ -223,9 +226,10 @@ export function WorkspaceScene({ scene, desks, contextDesks, selectedId, onSelec
               className={`sw-furniture${item.context ? ' sw-context-furniture' : ''}`}
               data-status={desk.status}
               data-context={item.context ? 'true' : undefined}
+              data-override={!item.context && overriddenIds?.has(item.ws.id) ? 'true' : undefined}
               pointerEvents={item.context ? 'none' : undefined}
             >
-              <title>{desk.seat.code} · {DESK_STATUS[desk.status].label}{desk.occupants[0] ? ` · ${desk.occupants[0].employee.name}` : ''}</title>
+              <title>{desk.seat.code} · {DESK_STATUS[desk.status].label}{desk.occupants[0] ? ` · ${desk.occupants[0].employee.name}` : ''}{overrideReason ? ` · Ghi đè bản vẽ: ${overrideReason}` : ''}</title>
               {item.kind === 'desk' && item.deskGeom
                 ? <Desktop desk={desk} geometry={item.deskGeom} showCode={showDeskDetail && !item.context} />
                 : item.chairGeom ? <Chair geometry={item.chairGeom} /> : null}

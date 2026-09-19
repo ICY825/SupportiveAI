@@ -172,7 +172,8 @@ describe('Challenger M2-1 Adversarial Verification Suite', () => {
       // Penetration exceeding tolerance by delta (penetration = 1.981 pt > tau)
       const overTol = desk({ x: 94 + tau + 0.01, y: 110, width: 12, depth: 6 }) // penetration = 1.99 pt > tau
       const resOverTol = validatePlacement(overTol, { others: [], obstacles: [col], tolerance: tau })
-      expect(resOverTol.valid).toBe(false)
+      expect(resOverTol.valid).toBe(true)
+      expect(resOverTol.requiresOverride).toBe(true)
       expect(resOverTol.reasons).toContainEqual({
         type: 'obstacle-collision',
         obstacleId: 'test-col-solid',
@@ -183,7 +184,8 @@ describe('Challenger M2-1 Adversarial Verification Suite', () => {
       // Significant penetration (penetration = 3.0 pt > tau)
       const deepPenetration = desk({ x: 97, y: 110, width: 12, depth: 6 })
       const resDeep = validatePlacement(deepPenetration, { others: [], obstacles: [col], tolerance: tau })
-      expect(resDeep.valid).toBe(false)
+      expect(resDeep.valid).toBe(true)
+      expect(resDeep.requiresOverride).toBe(true)
       expect(resDeep.reasons).toContainEqual(
         expect.objectContaining({
           type: 'obstacle-collision',
@@ -270,7 +272,8 @@ describe('Challenger M2-1 Adversarial Verification Suite', () => {
       const penetratingArc = desk({ x: 512, y: 112, width: 6, depth: 6 })
       const result = validatePlacement(penetratingArc, { others: [], obstacles: [doorSector] })
 
-      expect(result.valid).toBe(false)
+      expect(result.valid).toBe(true)
+      expect(result.requiresOverride).toBe(true)
       expect(result.reasons).toContainEqual({
         type: 'clearance-conflict',
         obstacleId: 'door-clr-sector-1',
@@ -283,7 +286,8 @@ describe('Challenger M2-1 Adversarial Verification Suite', () => {
       // Pushing 1 pt past the West straight edge: right edge at 501 > 500
       const penetratingWest = desk({ x: 495, y: 110, width: 12, depth: 6 }) // bounds [489, 107, 501, 113]
       const result = validatePlacement(penetratingWest, { others: [], obstacles: [doorSector] })
-      expect(result.valid).toBe(false)
+      expect(result.valid).toBe(true)
+      expect(result.requiresOverride).toBe(true)
       expect(result.reasons).toContainEqual(
         expect.objectContaining({
           type: 'clearance-conflict',
@@ -309,7 +313,8 @@ describe('Challenger M2-1 Adversarial Verification Suite', () => {
       const [cx, cy] = realDoor!.center ?? [697.71, 360.53]
       const penetrating = desk({ x: cx, y: cy, width: 2, depth: 2 })
       const resPen = validatePlacement(penetrating, { others: [], obstacles: [realDoor!] })
-      expect(resPen.valid).toBe(false)
+      expect(resPen.valid).toBe(true)
+      expect(resPen.requiresOverride).toBe(true)
       expect(resPen.reasons).toContainEqual(
         expect.objectContaining({
           type: 'clearance-conflict',
@@ -390,7 +395,8 @@ describe('Challenger M2-1 Adversarial Verification Suite', () => {
       // Shift by +2.02 pt -> right edge 982.52 > 982.51 (penetration = 0.01 pt > float epsilon)
       const penetrating067_small = translatePlacement(p067, 2.02, 0)
       const resSmall = validatePlacement(penetrating067_small, { others: [], obstacles: [pillar] })
-      expect(resSmall.valid).toBe(false)
+      expect(resSmall.valid).toBe(true)
+      expect(resSmall.requiresOverride).toBe(true)
       expect(resSmall.reasons).toContainEqual({
         type: 'obstacle-collision',
         obstacleId: 'col-16-13',
@@ -401,7 +407,8 @@ describe('Challenger M2-1 Adversarial Verification Suite', () => {
       // Shift by +3.00 pt -> deep penetration
       const penetrating067_deep = translatePlacement(p067, 3.0, 0)
       const resDeep = validatePlacement(penetrating067_deep, { others: [], obstacles: [pillar] })
-      expect(resDeep.valid).toBe(false)
+      expect(resDeep.valid).toBe(true)
+      expect(resDeep.requiresOverride).toBe(true)
       expect(resDeep.reasons).toContainEqual({
         type: 'obstacle-collision',
         obstacleId: 'col-16-13',
@@ -413,7 +420,8 @@ describe('Challenger M2-1 Adversarial Verification Suite', () => {
       const p070 = placementFromWorkstation(ws070)
       const penetrating070 = translatePlacement(p070, 3.0, 0)
       const res070 = validatePlacement(penetrating070, { others: [], obstacles: [pillar] })
-      expect(res070.valid).toBe(false)
+      expect(res070.valid).toBe(true)
+      expect(res070.requiresOverride).toBe(true)
       expect(res070.reasons).toContainEqual({
         type: 'obstacle-collision',
         obstacleId: 'col-16-13',
@@ -511,7 +519,8 @@ describe('Challenger M2-1 Adversarial Verification Suite', () => {
         seatedSide: 'right', // chair projects east from x=100 to x=106 (into the column!)
       })
       const resInto = validatePlacement(chairIntoCol, { others: [], obstacles: [col], chairTileSize: 6 })
-      expect(resInto.valid).toBe(false)
+      expect(resInto.valid).toBe(true)
+      expect(resInto.requiresOverride).toBe(true)
       expect(resInto.reasons).toContainEqual({
         type: 'obstacle-collision',
         obstacleId: 'adv-col',
@@ -611,7 +620,8 @@ describe('Challenger M2-1 Adversarial Verification Suite', () => {
         // Penetrating desk inside the sector
         const inside = desk({ x: cx, y: cy, width: 2, depth: 2 })
         const resIn = validatePlacement(inside, { others: [], obstacles: [sec] })
-        expect(resIn.valid).toBe(false)
+        expect(resIn.valid).toBe(true)
+        expect(resIn.requiresOverride).toBe(true)
         expect(resIn.reasons).toContainEqual(
           expect.objectContaining({
             type: 'clearance-conflict',

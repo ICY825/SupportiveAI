@@ -46,11 +46,10 @@ It emits one artifact per concern:
 | `<f>.layout.json` | Floor bounds, grid, and ten base layers, each a single SVG path string | 2,907,237 B |
 | `<f>.workstations.json` | Every desk: polygon, bbox, centre, `rotationDeg`, chair | 258,649 B |
 | `<f>.obstacles.json` | Columns, core walls, door clearance sectors | 63,929 B |
-| `<f>.overview.json` | Bounds, display areas, department polygons, reduced desks | 71,476 B |
+| `<f>.overview.json` | Bounds, department polygons, reduced desks | 71,476 B |
 | `<f>.objects.json` | Facilities and unknown labelled objects | 6,868 B |
 | `<f>.zones.json` | Department zones and rooms | 5,598 B |
 | `<f>.extraction.json` | Provenance and verification counts | 3,325 B |
-| `<f>.display-areas.json` | Which parts of the floor the UI offers as editing areas | 1,061 B |
 
 The overview artifact is **derived data**. It exists so the workspace can paint
 before the geometry arrives. It never becomes a second source of truth, and it
@@ -92,10 +91,12 @@ Semantic invariants are checked separately by `data/validateFloorDataset.ts`.
   (`SOURCE_VERIFIED`, `EXTRACTED`, `UNVERIFIED`, `UNKNOWN`). Nothing the
   extractor could not confirm is silently upgraded; `UNKNOWN` is a real value
   the UI shows, not a gap to fill in.
-- **`Zone`** is a department area read off the drawing. **`FloorDisplayAreaDefinition`**
-  is a UI framing decision about which slice of the floor to edit at a time.
-  They are deliberately different types: a display area is not a business or
-  physical boundary and must not be presented as one.
+- **`Zone`** is a department area read off the drawing. Workspace sections are
+  derived at runtime by grouping whole extracted desk clusters to about twenty
+  desks. A section is a UI framing decision, not a business or physical
+  boundary, and has no authored geometry artifact. Zones label ownership; they
+  do not constrain placement. Physical placement uses the floor plate, rooms,
+  extracted obstacles, and straight `walls`/`partitions` runs.
 - **`BaseLayer`** is one of ten render groups — `facade`, `structure`, `core`,
   `walls`, `partitions`, `doors`, `fixtures`, `furniture`, `grid`, `dimensions`
   — each a single SVG path.

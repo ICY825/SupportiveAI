@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { PlacementValidation, SpatialPlacement } from '../domain/placement'
 import { placementBounds } from '../domain/placement'
 import { LAYOUT_EDIT, placementIssueText, placementIssueTitle, SEAT_ASSIGNMENT } from '../labels'
@@ -15,9 +16,10 @@ export function PlacementStatus({
   codeOf: (entityId: string) => string
   className?: string
 }) {
-  const ok = validation?.valid !== false
+  const requiresOverride = validation?.requiresOverride === true
+  const ok = validation?.valid !== false && !requiresOverride
   return (
-    <p className={`sw-placement-status${className ? ` ${className}` : ''}`} data-valid={ok ? 'true' : 'false'}>
+    <p className={`sw-placement-status${className ? ` ${className}` : ''}`} data-valid={ok ? 'true' : 'false'} data-overridable={requiresOverride ? 'true' : 'false'}>
       <span aria-hidden="true">{ok ? '✓' : '⚠'}</span>
       {ok
         ? LAYOUT_EDIT.valid
@@ -26,6 +28,7 @@ export function PlacementStatus({
             {index > 0 ? ' · ' : null}{placementIssueText(issue, codeOf)}
           </span>
         ))}
+      {requiresOverride && <span> · Có thể lưu sau khi xác nhận lý do</span>}
     </p>
   )
 }
@@ -209,6 +212,11 @@ export function EditInspector({
       </dl>
       <p className="fp-eyebrow sw-edit-status-label">{LAYOUT_EDIT.placementStatus}</p>
       <PlacementStatus validation={validation} codeOf={codeOf} />
+      {placement.override && (
+        <p className="sw-placement-override" role="status">
+          Đã ghi đè bản vẽ: {placement.override.reason}
+        </p>
+      )}
       {boundaryWarning && <p className="sw-edit-boundary-warning" role="status">{boundaryWarning}</p>}
       {rotateDisabled && rotateHint && <p className="sw-edit-rotate-hint" role="status">{rotateHint}</p>}
       <button type="button" className="fp-btn is-wide sw-edit-rotate" onClick={onRotate} disabled={rotateDisabled} title={rotateDisabled ? rotateHint : undefined}>
@@ -258,6 +266,43 @@ export function UnsavedChangesDialog({ onStay, onDiscard }: { onStay: () => void
           <button type="button" className="fp-btn is-primary" onClick={onStay} autoFocus>
             {LAYOUT_EDIT.dirtyStay}
           </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function OverrideDialog({
+  conflicts,
+  codeOf,
+  onConfirm,
+  onCancel,
+}: {
+  conflicts: import('../domain/placement').PlacementIssue[]
+  codeOf: (entityId: string) => string
+  onConfirm: (reason: string) => void
+  onCancel: () => void
+}) {
+  const [reason, setReason] = useState('')
+  return (
+    <div className="sw-dirty-backdrop" role="presentation">
+      <div className="fp-card sw-dirty-dialog" role="alertdialog" aria-modal="true" aria-labelledby="sw-override-title">
+        <h2 id="sw-override-title">Xác nhận ghi đè bản vẽ</h2>
+        <p>Bố trí này xung đột với hình học cần con người xác nhận. Ghi rõ lý do để lưu quyết định.</p>
+        <ul>
+          {conflicts.map((issue, index) => <li key={`${issue.type}-${index}`}>{placementIssueText(issue, codeOf)}</li>)}
+        </ul>
+        <label htmlFor="sw-override-reason">Lý do</label>
+        <textarea
+          id="sw-override-reason"
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          placeholder="Ví dụ: bàn hiện có ngoài thực địa, bản vẽ chưa cập nhật"
+          rows={3}
+        />
+        <div className="sw-dirty-actions">
+          <button type="button" className="fp-btn" onClick={onCancel}>Hủy</button>
+          <button type="button" className="fp-btn is-primary" onClick={() => onConfirm(reason)} disabled={!reason.trim()}>Xác nhận và lưu</button>
         </div>
       </div>
     </div>

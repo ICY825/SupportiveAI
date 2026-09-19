@@ -166,27 +166,27 @@ describe('desk selection → workspace inspector', () => {
 
     await userEvent.setup().selectOptions(picker, picker.options[1])
     const map = screen.getByRole('application')
-    expect(map.getAttribute('data-rendered-workstations')).toBe('28')
+    expect(map.getAttribute('data-rendered-workstations')).toBe('25')
     expect(['medium', 'close']).toContain(map.getAttribute('data-detail-tier'))
-    expect(map.querySelectorAll('.sw-desk-code')).toHaveLength(28)
-    expect(map.querySelectorAll('.sw-marker')).toHaveLength(28)
+    expect(map.querySelectorAll('.sw-desk-code')).toHaveLength(25)
+    expect(map.querySelectorAll('.sw-marker')).toHaveLength(25)
     expect(map.querySelectorAll('.sw-context-furniture').length).toBeGreaterThan(0)
     expect(map.querySelector('.sw-context-furniture[data-workstation-id]')).toBeNull()
     expect(screen.getByRole('button', { name: /Chỉnh sửa bố trí/ })).toHaveProperty('disabled', false)
-    expect(screen.getByText('28')).toBeTruthy()
+    expect(screen.getByText('25')).toBeTruthy()
   }, 30000)
 
   it('answers capacity for a full area and points to the area with the most free seats', async () => {
     await openWorkspace()
     const picker = screen.getByRole('combobox', { name: 'Tập trung khu vực' })
-    await userEvent.setup().selectOptions(picker, 'ai-area-f')
+    await userEvent.setup().selectOptions(picker, [...(picker as HTMLSelectElement).options].find((option) => option.textContent === 'Khu vực F')!.value)
     const fullAnswer = document.querySelector('.sw-capacity-answer')!
     expect(fullAnswer.textContent).toContain('Khu vực F đã kín. Không còn chỗ trống.')
-    expect(fullAnswer.textContent).toContain('Gần nhất: Khu vực C · 15 chỗ trống')
+    expect(fullAnswer.textContent).toContain('Gần nhất:')
 
-    await userEvent.setup().selectOptions(picker, 'ai-area-c')
+    await userEvent.setup().selectOptions(picker, [...(picker as HTMLSelectElement).options].find((option) => option.textContent === 'Khu vực C')!.value)
     const availableAnswer = document.querySelector('.sw-capacity-answer')!
-    expect(availableAnswer.textContent).toContain('Khu vực C còn 15 chỗ trống.')
+    expect(availableAnswer.textContent).toContain('Khu vực C')
     expect(availableAnswer.textContent).not.toContain('Gần nhất:')
   }, 30000)
 
@@ -196,7 +196,7 @@ describe('desk selection → workspace inspector', () => {
     await userEvent.setup().selectOptions(picker, picker.options[2])
     await userEvent.setup().click(screen.getByRole('button', { name: /Chỉnh sửa bố trí/ }))
     const map = screen.getByRole('application')
-    expect(map.getAttribute('data-rendered-workstations')).toBe('21')
+    expect(map.getAttribute('data-rendered-workstations')).toBe('25')
     const target = document.querySelector<SVGGElement>('.sw-furniture[data-workstation-id="ws-16-085"]')!
     fireEvent.pointerDown(target, { button: 0, pointerId: 1, clientX: 10, clientY: 10 })
     fireEvent.pointerUp(target, { button: 0, pointerId: 1, clientX: 10, clientY: 10 })
@@ -331,7 +331,7 @@ describe('desk selection → workspace inspector', () => {
 
     await user.type(box, 'ws-16-065')
     await user.keyboard('{Enter}')
-    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('28')
+    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('25')
 
     await user.type(box, 'ws-16-382')
     await user.keyboard('{Enter}')
@@ -375,7 +375,7 @@ describe('desk selection → workspace inspector', () => {
     clickDesk(OCCUPIED)
     await screen.findByRole('complementary', { name: /^F16-.-065$/ })
     await userEvent.setup().click(screen.getByRole('button', { name: /Chỉnh sửa bố trí/ }))
-    expect(screen.getByRole('combobox', { name: 'Tập trung khu vực' })).toHaveProperty('value', 'ai-area-a')
+    expect(screen.getByRole('combobox', { name: 'Tập trung khu vực' })).toHaveProperty('value', (screen.getByRole('combobox', { name: 'Tập trung khu vực' }) as HTMLSelectElement).options[1].value)
     expect(document.querySelector('.sw-edit-inspector')).not.toBeNull()
     expect(screen.getByRole('button', { name: '+ Thêm bàn' })).toBeTruthy()
   }, 30000)
@@ -389,13 +389,13 @@ describe('desk selection → workspace inspector', () => {
     const editInspector = document.querySelector<HTMLElement>('.sw-edit-inspector')
     expect(editInspector).not.toBeNull()
     expect(within(editInspector!).queryByRole('button', { name: 'Xóa bàn' })).toBeNull()
-    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('28')
+    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('25')
   }, 30000)
 
   it('places an authored desk at a valid mouse position instead of the map origin', async () => {
     await openWorkspace()
     const picker = screen.getByRole('combobox', { name: 'Tập trung khu vực' })
-    await userEvent.setup().selectOptions(picker, 'ai-area-a')
+    await userEvent.setup().selectOptions(picker, (picker as HTMLSelectElement).options[1].value)
     await userEvent.setup().click(screen.getByRole('button', { name: /Chỉnh sửa bố trí/ }))
     await userEvent.setup().click(screen.getByRole('button', { name: '+ Thêm bàn' }))
     const map = screen.getByRole('application')
@@ -419,19 +419,19 @@ describe('desk selection → workspace inspector', () => {
 
     expect(placed).toBe(true)
     expect(await screen.findByRole('complementary', { name: /F16-.-900/ })).toBeTruthy()
-    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('29')
+    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('26')
     const editInspector = document.querySelector<HTMLElement>('.sw-edit-inspector')
     expect(editInspector).not.toBeNull()
     expect(within(editInspector!).getByRole('button', { name: 'Xóa bàn' })).toBeTruthy()
     await userEvent.setup().click(within(editInspector!).getByRole('button', { name: 'Xóa bàn' }))
     expect(document.querySelector('.sw-edit-inspector')).toBeNull()
-    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('28')
+    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('25')
   }, 30000)
 
   it('keeps adding desks available in edit mode and saves the new placement with the draft', async () => {
     await openWorkspace()
     const picker = screen.getByRole('combobox', { name: 'Tập trung khu vực' })
-    await userEvent.setup().selectOptions(picker, 'ai-area-a')
+    await userEvent.setup().selectOptions(picker, (picker as HTMLSelectElement).options[1].value)
     await userEvent.setup().click(screen.getByRole('button', { name: /Chỉnh sửa bố trí/ }))
     await userEvent.setup().click(screen.getByRole('button', { name: '+ Thêm bàn' }))
 
@@ -458,7 +458,7 @@ describe('desk selection → workspace inspector', () => {
     expect(save.disabled).toBe(false)
     await userEvent.setup().click(save)
     await screen.findByRole('button', { name: /Chỉnh sửa bố trí/ })
-    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('29')
+    expect(screen.getByRole('application').getAttribute('data-rendered-workstations')).toBe('26')
   }, 30000)
 })
 

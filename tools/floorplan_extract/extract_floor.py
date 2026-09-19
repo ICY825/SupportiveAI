@@ -16,7 +16,6 @@ Outputs (floor data only, no UI code):
     <out>/<floor>.zones.json         zones + rooms taken from markup annotations
     <out>/<floor>.workstations.json  desk clusters + workstations (rule-based)
     <out>/<floor>.objects.json       facilities and UNKNOWN objects
-    <out>/<floor>.display-areas.json floor-specific UI focus metadata
     <out>/<floor>.extraction.json    extraction report (counts, rules, hidden items)
     <public>/floor-sources/<floor>.webp   source raster for the overlay
 """
@@ -1016,7 +1015,6 @@ def extract(cfg, pdf_path: Path, out_dir: Path, public_dir: Path):
         "labels": label_out,
     })
     write(f"{stem}.zones.json", {**generated, "zones": zones, "rooms": rooms})
-    write(f"{stem}.display-areas.json", {**generated, "displayAreas": getattr(cfg, "DISPLAY_AREAS", [])})
     # The overview is deliberately derived data: it carries enough stable
     # geometry for a floor picker/overview to paint before the heavy SVG layer
     # paths, obstacle detail and extraction report are requested.
@@ -1035,7 +1033,6 @@ def extract(cfg, pdf_path: Path, out_dir: Path, public_dir: Path):
         "floor": {**floor, "coordinateSpace": "pdf-points-top-left", "width": r2(W), "height": r2(H),
                   "mmPerPt": round(mm_per_pt, 4)},
         "floorBounds": [0, 0, r2(W), r2(H)],
-        "displayAreas": getattr(cfg, "DISPLAY_AREAS", []),
         "zones": overview_zones,
         "workstations": [
             {

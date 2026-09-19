@@ -30,8 +30,9 @@ import {
   rectangle,
   rotatePoint,
   rotateQuarter,
+  segmentsCross,
 } from './geometry'
-import type { BBox, FloorObstacle, Point, Room, Segment, Zone } from './spatial'
+import type { BBox, FloorObstacle, Point, Room, Segment, VerificationState, Zone } from './spatial'
 
 export type QuarterRotation = 0 | 90 | 180 | 270
 
@@ -59,6 +60,15 @@ export interface SpatialPlacement {
   } | null
   /** Optional seated side override ('north' | 'south' | 'east' | 'west' | 'top' | 'bottom' | 'left' | 'right') */
   seatedSide?: 'north' | 'south' | 'east' | 'west' | 'top' | 'bottom' | 'left' | 'right'
+  /** A persisted human decision that this placement may disagree with the drawing. */
+  override?: PlacementOverride | null
+}
+
+export interface PlacementOverride {
+  reason: string
+  conflicts: PlacementIssue[]
+  actorId?: string | null
+  recordedAt?: string | null
 }
 
 /** A logical grid, not a drawn one. The renderer reads it; it does not own it. */
@@ -69,22 +79,29 @@ export interface SpatialGrid {
 }
 
 export type PlacementBoundaryKind =
+  | 'floor-plate'
   | 'room-boundary'
   | 'department-zone'
   | 'zone-annotation'
   | 'scene-scope'
 
+export type PlacementIssueSeverity = 'hard' | 'overridable'
 export type PlacementIssue =
-  | { type: 'overlap'; entityId: string; target?: 'desk' | 'chair' }
-  | { type: 'outside-boundary'; target?: 'desk' | 'chair' }
-  | { type: 'outside-room-boundary'; roomId?: string; roomName?: string; target?: 'desk' | 'chair' }
-  | { type: 'outside-department-zone'; zoneId?: string; zoneName?: string; target?: 'desk' | 'chair' }
-  | { type: 'obstacle-collision'; obstacleId: string; obstacleKind: 'column' | 'wall'; obstacleName?: string; target?: 'desk' | 'chair' }
-  | { type: 'clearance-conflict'; obstacleId: string; obstacleKind: 'door-clearance'; obstacleName?: string; target?: 'desk' | 'chair' }
+  | { type: 'overlap'; entityId: string; target?: 'desk' | 'chair'; severity?: PlacementIssueSeverity }
+  | { type: 'outside-boundary'; target?: 'desk' | 'chair'; severity?: PlacementIssueSeverity }
+  | { type: 'invalid-dimensions'; severity?: PlacementIssueSeverity }
+  | { type: 'outside-room-boundary'; roomId?: string; roomName?: string; target?: 'desk' | 'chair'; severity?: PlacementIssueSeverity }
+  | { type: 'outside-department-zone'; zoneId?: string; zoneName?: string; target?: 'desk' | 'chair'; severity?: PlacementIssueSeverity }
+  | { type: 'obstacle-collision'; obstacleId: string; obstacleKind: 'column' | 'wall'; obstacleName?: string; target?: 'desk' | 'chair'; severity?: PlacementIssueSeverity }
+  | { type: 'clearance-conflict'; obstacleId: string; obstacleKind: 'door-clearance'; obstacleName?: string; target?: 'desk' | 'chair'; severity?: PlacementIssueSeverity }
 
 export interface PlacementValidation {
   valid: boolean
   reasons: PlacementIssue[]
+  /** True when the only conflicts can be saved after explicit confirmation. */
+  requiresOverride?: boolean
+  hardReasons?: PlacementIssue[]
+  overridableReasons?: PlacementIssue[]
 }
 
 /**
@@ -102,6 +119,7 @@ export interface PlacementBoundary {
    * `scene-scope`      the current camera crop only. Not a floor boundary.
    */
   kind: PlacementBoundaryKind
+  verification?: VerificationState
   /** id of the entity the polygon came from, when there is one */
   sourceId: string | null
   /** human-readable name of the boundary */
@@ -116,12 +134,15 @@ export interface PlacementContext {
   /** every other placement that can be collided with */
   others: readonly SpatialPlacement[]
   boundary?: PlacementBoundary | null
+  floorBoundary?: PlacementBoundary | null
   roomBoundary?: PlacementBoundary | Room | null
   departmentZone?: PlacementBoundary | Zone | null
   room?: PlacementBoundary | Room | null
   zone?: PlacementBoundary | Zone | null
   boundaries?: readonly PlacementBoundary[]
   obstacles?: readonly FloorObstacle[]
+  /** Straight extracted wall/partition runs used for physical collision checks. */
+  wallSegments?: readonly Segment[]
   /**
    * How far two objects may interpenetrate, in floor units, before it counts.
    * Defaults to float tolerance; callers with a real scale pass a real one.
@@ -147,6 +168,33 @@ export interface PlacementContext {
 }
 
 export const PLACEMENT_VALID: PlacementValidation = { valid: true, reasons: [] }
+
+const issue = <T extends PlacementIssue>(value: T, severity: PlacementIssueSeverity): T => {
+  // Keep the old structural shape for callers that construct and compare
+  // issues, while exposing the policy to new callers through normal property
+  // access and serializing it explicitly at the persistence boundary.
+  Object.defineProperty(value, 'severity', { value: severity, enumerable: false, configurable: true })
+  return value
+}
+
+const policy = (reasons: PlacementIssue[]): PlacementValidation => {
+  const hardReasons = reasons.filter((reason) => reason.severity !== 'overridable')
+  const overridableReasons = reasons.filter((reason) => reason.severity === 'overridable')
+  if (reasons.length === 0) return PLACEMENT_VALID
+  const result: PlacementValidation = { valid: hardReasons.length === 0, reasons }
+  Object.defineProperties(result, {
+    requiresOverride: { value: hardReasons.length === 0 && overridableReasons.length > 0, enumerable: false },
+    hardReasons: { value: hardReasons, enumerable: false },
+    overridableReasons: { value: overridableReasons, enumerable: false },
+  })
+  return result
+}
+
+export const hardPlacementReasons = (validation: PlacementValidation): PlacementIssue[] =>
+  validation.hardReasons ?? validation.reasons.filter((reason) => reason.severity !== 'overridable')
+
+export const overridablePlacementReasons = (validation: PlacementValidation): PlacementIssue[] =>
+  validation.overridableReasons ?? validation.reasons.filter((reason) => reason.severity === 'overridable')
 
 export function normalizeRotation(deg: number): QuarterRotation {
   const turns = Math.round(deg / 90)
@@ -553,12 +601,60 @@ export function obstacleIntersectsPolygon(
   return polygonsOverlap(candidatePolygon, obstacle.polygon, tolerance)
 }
 
+/** True when a zero-width wall run enters a polygon's interior; flush contact is clear. */
+export function wallSegmentIntersectsPolygon(
+  segment: Segment,
+  polygon: readonly Point[],
+  tolerance = GEOMETRY_EPSILON,
+): boolean {
+  if (polygon.length < 3) return false
+  const [a, b] = segment
+  const strictlyInside = (point: Point) => {
+    if (!pointInPolygon(point, polygon)) return false
+    for (let index = 0; index < polygon.length; index += 1) {
+      const start = polygon[index]
+      const end = polygon[(index + 1) % polygon.length]
+      const length = Math.hypot(end[0] - start[0], end[1] - start[1])
+      const cross = (point[0] - start[0]) * (end[1] - start[1]) - (point[1] - start[1]) * (end[0] - start[0])
+      const along = (point[0] - start[0]) * (end[0] - start[0]) + (point[1] - start[1]) * (end[1] - start[1])
+      if (Math.abs(cross) <= GEOMETRY_EPSILON * Math.max(length, 1) && along >= -GEOMETRY_EPSILON && along <= length * length + GEOMETRY_EPSILON) return false
+    }
+    return true
+  }
+  let intersectsInterior = strictlyInside(a) || strictlyInside(b)
+  const midpoint: Point = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
+  intersectsInterior ||= strictlyInside(midpoint)
+  for (let index = 0; index < polygon.length && !intersectsInterior; index += 1) {
+    const edgeStart = polygon[index]
+    const edgeEnd = polygon[(index + 1) % polygon.length]
+    intersectsInterior = segmentsCross(a, b, edgeStart, edgeEnd)
+  }
+  if (!intersectsInterior) return false
+
+  const length = Math.hypot(b[0] - a[0], b[1] - a[1])
+  if (length <= GEOMETRY_EPSILON) return false
+  let positive = 0
+  let negative = 0
+  for (const point of polygon) {
+    const distance = ((point[0] - a[0]) * (b[1] - a[1]) - (point[1] - a[1]) * (b[0] - a[0])) / length
+    positive = Math.max(positive, distance)
+    negative = Math.max(negative, -distance)
+  }
+  return Math.min(positive, negative) > tolerance
+}
+
 /**
  * Geometry only. Issues are returned as data so wording lives in the UI layer
  * and the same rules can be reported in a log, an API response or a tooltip.
  */
 export function validatePlacement(candidate: SpatialPlacement, context: PlacementContext): PlacementValidation {
   const reasons: PlacementIssue[] = []
+  const geometrySeverity = (verification?: VerificationState): PlacementIssueSeverity =>
+    verification === 'EXTRACTED' || verification === 'UNVERIFIED' ? 'overridable' : 'hard'
+  const push = <T extends PlacementIssue>(value: T, severity: PlacementIssueSeverity = 'hard') => reasons.push(issue(value, severity))
+  if (!Number.isFinite(candidate.width) || !Number.isFinite(candidate.depth) || candidate.width <= 0 || candidate.depth <= 0) {
+    push({ type: 'invalid-dimensions' })
+  }
   const deskBounds = placementBounds(candidate)
   const deskPolygon = placementPolygon(candidate)
   const tolerance = context.tolerance ?? GEOMETRY_EPSILON
@@ -585,70 +681,55 @@ export function validatePlacement(candidate: SpatialPlacement, context: Placemen
   if (room) {
     const roomId = ('sourceId' in room ? room.sourceId : room.id) ?? undefined
     const roomName = room.name ?? undefined
+    const severity = geometrySeverity('verification' in room ? room.verification : undefined)
     checkContainment(
       room.polygon,
-      () => reasons.push({ type: 'outside-room-boundary', roomId, roomName }),
-      () => reasons.push({ type: 'outside-room-boundary', roomId, roomName, target: 'chair' }),
+      () => push({ type: 'outside-room-boundary', roomId, roomName }, severity),
+      () => push({ type: 'outside-room-boundary', roomId, roomName, target: 'chair' }, severity),
     )
   }
 
-  // 2. Department zone containment
-  const deptZone = context.departmentZone ?? context.zone
-  if (deptZone) {
-    const zoneId = ('sourceId' in deptZone ? deptZone.sourceId : deptZone.id) ?? undefined
-    const zoneName = deptZone.name ?? undefined
-    checkContainment(
-      deptZone.polygon,
-      () => reasons.push({ type: 'outside-department-zone', zoneId, zoneName }),
-      () => reasons.push({ type: 'outside-department-zone', zoneId, zoneName, target: 'chair' }),
-    )
-  }
-
+  // 2. Department zones are labels, not physical containment constraints.
   // 3. Multi-boundaries array
   if (context.boundaries) {
     for (const b of context.boundaries) {
       if (b.kind === 'room-boundary') {
+        const severity = geometrySeverity(b.verification)
         checkContainment(
           b.polygon,
-          () => reasons.push({ type: 'outside-room-boundary', roomId: b.sourceId ?? undefined, roomName: b.name ?? undefined }),
-          () => reasons.push({ type: 'outside-room-boundary', roomId: b.sourceId ?? undefined, roomName: b.name ?? undefined, target: 'chair' }),
+          () => push({ type: 'outside-room-boundary', roomId: b.sourceId ?? undefined, roomName: b.name ?? undefined }, severity),
+          () => push({ type: 'outside-room-boundary', roomId: b.sourceId ?? undefined, roomName: b.name ?? undefined, target: 'chair' }, severity),
         )
-      } else if (b.kind === 'department-zone') {
-        checkContainment(
-          b.polygon,
-          () => reasons.push({ type: 'outside-department-zone', zoneId: b.sourceId ?? undefined, zoneName: b.name ?? undefined }),
-          () => reasons.push({ type: 'outside-department-zone', zoneId: b.sourceId ?? undefined, zoneName: b.name ?? undefined, target: 'chair' }),
-        )
-      } else {
+      } else if (b.kind !== 'department-zone' && b.kind !== 'zone-annotation' && b.kind !== 'scene-scope') {
         if (!contains(b.polygon, deskPolygon, deskBounds, tolerance)) {
-          reasons.push({ type: 'outside-boundary' })
+          push({ type: 'outside-boundary' })
         }
       }
     }
   }
 
   // 4. Legacy single boundary
-  if (context.boundary && !room && !deptZone && !context.boundaries) {
+  if (context.boundary && !room && !context.boundaries) {
     if (context.boundary.kind === 'room-boundary') {
+      const severity = geometrySeverity(context.boundary.verification)
       checkContainment(
         context.boundary.polygon,
-        () => reasons.push({ type: 'outside-room-boundary', roomId: context.boundary!.sourceId ?? undefined, roomName: context.boundary!.name ?? undefined }),
-        () => reasons.push({ type: 'outside-room-boundary', roomId: context.boundary!.sourceId ?? undefined, roomName: context.boundary!.name ?? undefined, target: 'chair' }),
+        () => push({ type: 'outside-room-boundary', roomId: context.boundary!.sourceId ?? undefined, roomName: context.boundary!.name ?? undefined }, severity),
+        () => push({ type: 'outside-room-boundary', roomId: context.boundary!.sourceId ?? undefined, roomName: context.boundary!.name ?? undefined, target: 'chair' }, severity),
       )
-    } else if (context.boundary.kind === 'department-zone') {
-      checkContainment(
-        context.boundary.polygon,
-        () => reasons.push({ type: 'outside-department-zone', zoneId: context.boundary!.sourceId ?? undefined, zoneName: context.boundary!.name ?? undefined }),
-        () => reasons.push({ type: 'outside-department-zone', zoneId: context.boundary!.sourceId ?? undefined, zoneName: context.boundary!.name ?? undefined, target: 'chair' }),
-      )
-    } else {
+    } else if (context.boundary.kind !== 'department-zone' && context.boundary.kind !== 'zone-annotation' && context.boundary.kind !== 'scene-scope') {
       if (!contains(context.boundary.polygon, deskPolygon, deskBounds, tolerance)) {
-        reasons.push({ type: 'outside-boundary' })
+        push({ type: 'outside-boundary' })
       }
     }
   }
 
-  // 5. Workstation-to-Workstation and Chair Overlaps
+  // The floor plate is always a hard boundary, independent of zone confidence.
+  if (context.floorBoundary && !contains(context.floorBoundary.polygon, deskPolygon, deskBounds, boundaryTolerance)) {
+    push({ type: 'outside-boundary' })
+  }
+
+  // 4. Workstation-to-Workstation and Chair Overlaps
   for (const other of context.others) {
     if (other.entityId === candidate.entityId) continue
     const otherDeskBounds = placementBounds(other)
@@ -658,7 +739,7 @@ export function validatePlacement(candidate: SpatialPlacement, context: Placemen
 
     // Desk-to-Desk
     if (bboxesTouch(deskBounds, otherDeskBounds, tolerance) && orientedPolygonsOverlap(deskPolygon, otherDeskPolygon, tolerance)) {
-      reasons.push({ type: 'overlap', entityId: other.entityId })
+      push({ type: 'overlap', entityId: other.entityId })
       continue
     }
 
@@ -668,7 +749,7 @@ export function validatePlacement(candidate: SpatialPlacement, context: Placemen
       bboxesTouch(chairBounds, otherDeskBounds, tolerance) &&
       orientedPolygonsOverlap(chairPolygon, otherDeskPolygon, tolerance)
     ) {
-      reasons.push({ type: 'overlap', entityId: other.entityId, target: 'chair' })
+      push({ type: 'overlap', entityId: other.entityId, target: 'chair' })
       continue
     }
 
@@ -678,7 +759,7 @@ export function validatePlacement(candidate: SpatialPlacement, context: Placemen
       bboxesTouch(deskBounds, otherChairBounds, tolerance) &&
       orientedPolygonsOverlap(deskPolygon, otherChairPolygon, tolerance)
     ) {
-      reasons.push({ type: 'overlap', entityId: other.entityId, target: 'chair' })
+      push({ type: 'overlap', entityId: other.entityId, target: 'chair' })
       continue
     }
 
@@ -688,55 +769,71 @@ export function validatePlacement(candidate: SpatialPlacement, context: Placemen
       bboxesTouch(chairBounds, otherChairBounds, tolerance) &&
       orientedPolygonsOverlap(chairPolygon, otherChairPolygon, tolerance)
     ) {
-      reasons.push({ type: 'overlap', entityId: other.entityId, target: 'chair' })
+      push({ type: 'overlap', entityId: other.entityId, target: 'chair' })
+    }
+  }
+
+  // 5. Extracted wall runs. Flush contact is valid; interior penetration is
+  // overridable because source paths may omit openings or carry drafting error.
+  for (const [index, segment] of (context.wallSegments ?? []).entries()) {
+    const deskCollided = wallSegmentIntersectsPolygon(segment, deskPolygon, tolerance)
+    const chairCollided = !deskCollided && chairPolygon ? wallSegmentIntersectsPolygon(segment, chairPolygon, tolerance) : false
+    if (deskCollided || chairCollided) {
+      push({
+        type: 'obstacle-collision',
+        obstacleId: `wall-segment-${index}`,
+        obstacleKind: 'wall',
+        target: chairCollided ? 'chair' : undefined,
+      }, 'overridable')
     }
   }
 
   // 6. Obstacles: Solid (columns, walls) and Clearance (door clearances)
   if (context.obstacles) {
     for (const obs of context.obstacles) {
+      const severity = geometrySeverity(obs.verification)
       const deskCollided = obstacleIntersectsPolygon(deskPolygon, obs, tolerance)
       const chairCollided = !deskCollided && chairPolygon ? obstacleIntersectsPolygon(chairPolygon, obs, tolerance) : false
 
       if (deskCollided) {
         if (obs.kind === 'door-clearance') {
-          reasons.push({
+          push({
             type: 'clearance-conflict',
             obstacleId: obs.id,
             obstacleKind: 'door-clearance',
             obstacleName: obs.name ?? undefined,
-          })
+          }, severity)
         } else {
-          reasons.push({
+          push({
             type: 'obstacle-collision',
             obstacleId: obs.id,
             obstacleKind: obs.kind,
             obstacleName: obs.name ?? undefined,
-          })
+          }, severity)
         }
       } else if (chairCollided) {
         if (obs.kind === 'door-clearance') {
-          reasons.push({
+          push({
             type: 'clearance-conflict',
             obstacleId: obs.id,
             obstacleKind: 'door-clearance',
             obstacleName: obs.name ?? undefined,
             target: 'chair',
-          })
+          }, severity)
         } else {
-          reasons.push({
+          push({
             type: 'obstacle-collision',
             obstacleId: obs.id,
             obstacleKind: obs.kind,
             obstacleName: obs.name ?? undefined,
             target: 'chair',
-          })
+          }, severity)
         }
       }
     }
   }
 
-  return reasons.length === 0 ? PLACEMENT_VALID : { valid: false, reasons }
+  return policy(reasons)
 }
 
 /**

@@ -9,6 +9,7 @@
  */
 
 import { api } from '@/api/client';
+import type { PlacementIssue } from '@/features/floor-planning/domain/placement'
 
 /** Một vị trí đã lưu, theo đúng tên trường của backend. */
 export interface PlacementPayload {
@@ -20,6 +21,8 @@ export interface PlacementPayload {
   rotation: number;
   chair: Record<string, unknown> | null;
   seated_side: string | null;
+  override_reason?: string | null;
+  override_conflicts?: PlacementIssue[] | null;
 }
 
 export interface PlacementRead extends PlacementPayload {
@@ -50,6 +53,13 @@ export interface LayoutReconcileReport {
   current_layout_version: string;
   checked: number;
   stale: StalePlacement[];
+  overridden: Array<{
+    entity_id: string;
+    reason: string;
+    actor_id: string | null;
+    recorded_at: string;
+    conflicts: PlacementIssue[];
+  }>;
 }
 
 export function readFloorLayout(floorId: string) {

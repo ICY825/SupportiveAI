@@ -68,7 +68,10 @@ export function EditAffordances({
   const hatchId = useId()
   const selected = selectedId ? placements[selectedId] : undefined
   const invalid = useMemo(
-    () => Object.values(placements).filter((p) => validation.get(p.entityId)?.valid === false),
+    () => Object.values(placements).filter((p) => {
+      const current = validation.get(p.entityId)
+      return current?.valid === false || current?.requiresOverride === true
+    }),
     [placements, validation],
   )
 
@@ -82,7 +85,6 @@ export function EditAffordances({
     const collidingMap = new Map<string, { obstacle: FloorObstacle; clips: BBox[] }>()
     const margin = 1000 / mmPerPt
     for (const [entityId, val] of validation) {
-      if (val.valid) continue
       for (const reason of val.reasons) {
         if (
           (reason.type === 'obstacle-collision' || reason.type === 'clearance-conflict') &&

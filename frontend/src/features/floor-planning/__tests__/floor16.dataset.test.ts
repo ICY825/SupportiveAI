@@ -103,9 +103,7 @@ describe('floor-16 dataset', () => {
 
   it('loads a lightweight overview that agrees with every canonical workstation', () => {
     expect(ds.overview).toBeDefined()
-    expect(ds.overview!.displayAreas.map((area) => area.id)).toEqual([
-      'ai-area-a', 'ai-area-b', 'ai-area-c', 'ai-area-d', 'ai-area-e', 'ai-area-f',
-    ])
+    expect(ds.overview).not.toHaveProperty('displayAreas')
     expect(ds.overview!.workstations).toHaveLength(ds.workstations.length)
     const full = new Map(ds.workstations.map((workstation) => [workstation.id, workstation]))
     for (const workstation of ds.overview!.workstations) {

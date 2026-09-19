@@ -119,6 +119,24 @@ def test_ghe_di_theo_ban(db):
     assert LayoutService(db).read_floor(FLOOR).placements[0].chair == chair
 
 
+def test_override_roundtrip_va_khong_bi_bao_la_drift(db):
+    conflict = {"type": "outside-department-zone", "severity": "overridable", "zoneId": "zone-a"}
+    LayoutService(db).save(
+        FLOOR,
+        [dat("ws-t-001", 5.0, 5.0, override_reason="Bàn hiện có ngoài thực địa", override_conflicts=[conflict])],
+        actor_id="nv-1",
+    )
+    db.flush()
+
+    placement = LayoutService(db).read_floor(FLOOR).placements[0]
+    assert placement.override_reason == "Bàn hiện có ngoài thực địa"
+    assert placement.override_conflicts == [conflict]
+    report = LayoutService(db).reconcile(FLOOR)
+    assert report.stale == []
+    assert report.overridden[0].entity_id == "ws-t-001"
+    assert report.overridden[0].actor_id == "nv-1"
+
+
 def test_ban_nguoi_dung_tu_them_van_luu_duoc(db):
     """Khác phần chỗ ngồi: id chưa có trong bản vẽ **không** phải lỗi ở đây."""
     LayoutService(db).save(FLOOR, [dat("ws-t-tu-them", 3.0, 3.0)])

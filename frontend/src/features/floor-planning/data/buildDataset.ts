@@ -6,7 +6,6 @@ import type {
   FloorLayout,
   FloorObject,
   FloorObstacle,
-  FloorDisplayAreaDefinition,
   FloorOverview,
   Room,
   Workstation,
@@ -22,7 +21,6 @@ export interface FloorFiles {
   objects: unknown
   obstacles?: unknown
   extraction: unknown
-  displayAreas?: unknown
   overview?: unknown
 }
 
@@ -55,7 +53,6 @@ export function buildDataset(files: FloorFiles, meta: FloorMeta): FloorDataset {
   const ws = obj(files.workstations, 'workstations')
   const objects = obj(files.objects, 'objects')
   const obstacles = files.obstacles ? obj(files.obstacles, 'obstacles') : null
-  const displayAreas = files.displayAreas ? obj(files.displayAreas, 'displayAreas') : null
   const overview = files.overview ? obj(files.overview, 'overview') : null
 
   return {
@@ -72,7 +69,6 @@ export function buildDataset(files: FloorFiles, meta: FloorMeta): FloorDataset {
     workstations: arr<Workstation>(ws.workstations, 'workstations.workstations'),
     objects: arr<FloorObject>(objects.objects, 'objects.objects'),
     extraction: obj(files.extraction, 'extraction') as unknown as ExtractionReport,
-    displayAreas: displayAreas ? arr<FloorDisplayAreaDefinition>(displayAreas.displayAreas, 'displayAreas.displayAreas') : undefined,
     overview: overview as unknown as FloorOverview | undefined,
   }
 }

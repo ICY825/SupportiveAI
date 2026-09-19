@@ -18,9 +18,13 @@ import {
   snapPlacementToGrid,
   translatePlacement,
   validatePlacement,
+  overridablePlacementReasons,
+  type PlacementIssue,
+  type PlacementOverride,
   type PlacementValidation,
   type SpatialGrid,
   type SpatialPlacement,
+  placementsEqual,
 } from '../domain/placement'
 import type { Point } from '../domain/spatial'
 import {
@@ -55,6 +59,11 @@ export interface DragState {
   moved: boolean
 }
 
+export interface OverrideRequest {
+  entityIds: string[]
+  conflicts: PlacementIssue[]
+}
+
 export interface LayoutEditor {
   mode: WorkspaceMode
   /** placements the renderer should draw: the draft while editing, else committed */
@@ -64,6 +73,7 @@ export interface LayoutEditor {
   dirty: boolean
   valid: boolean
   saving: boolean
+  overrideRequest: OverrideRequest | null
   changedCount: number
   canUndo: boolean
   canRedo: boolean
@@ -92,6 +102,8 @@ export interface LayoutEditor {
   /** the lattice this entity snaps to; the renderer draws the selected one */
   gridFor: (entityId: string | undefined) => SpatialGrid
   save: () => Promise<void>
+  confirmOverride: (reason: string) => Promise<void>
+  dismissOverride: () => void
   cancel: () => void
 }
 
@@ -115,11 +127,20 @@ export function useLayoutEditor({
   const [future, setFuture] = useState<LayoutDraft[]>([])
   const [drag, setDrag] = useState<DragState | null>(null)
   const [saving, setSaving] = useState(false)
+  const [overrideRequest, setOverrideRequest] = useState<OverrideRequest | null>(null)
   const dragRef = useRef<DragState | null>(null)
-  const editableSet = useMemo(
-    () => (area.editableIds ? new Set(area.editableIds) : null),
-    [area.editableIds],
-  )
+  // A placement authored during this session is not part of the area's
+  // canonical membership list yet. Keep it editable and validate/persist it
+  // with the same rules as an extracted desk; otherwise Save silently drops
+  // the new entity before it can become canonical.
+  const editableSet = useMemo(() => {
+    if (!area.editableIds) return null
+    const ids = new Set(area.editableIds)
+    for (const id of Object.keys(draft?.placements ?? {})) {
+      if (!basePlacements[id]) ids.add(id)
+    }
+    return ids
+  }, [area.editableIds, basePlacements, draft])
   const isEditable = useCallback((entityId: string) => !editableSet || editableSet.has(entityId), [editableSet])
 
   /**
@@ -172,10 +193,14 @@ export function useLayoutEditor({
     return changed ? next : committed
   }, [basePlacements, committed])
   const placements = mode === 'edit' && draft ? draft.placements : viewPlacements
+  const validationArea = useMemo(() => {
+    if (!area.editableIds || !draft) return area
+    return { ...area, editableIds: [...editableSet!] }
+  }, [area, draft, editableSet])
 
   const validation = useMemo(
-    () => validateDraft({ placements }, area),
-    [placements, area],
+    () => validateDraft({ placements }, validationArea),
+    [placements, validationArea],
   )
   const dirty = useMemo(
     () => mode === 'edit' && draft
@@ -216,10 +241,12 @@ export function useLayoutEditor({
         )
         validations.push(validatePlacement(candidate, {
           others,
-          boundary: area.boundary,
+          boundary: null,
+          floorBoundary: area.floorBoundary,
           roomBoundary: area.roomBoundary,
           departmentZone: area.departmentZone,
           obstacles: area.obstacles,
+          wallSegments: area.collisionWallSegments,
           tolerance: area.tolerance,
           boundaryTolerance: area.boundaryTolerance,
           chairTileSize: area.chairTileSize,
@@ -235,27 +262,7 @@ export function useLayoutEditor({
     [rotationAlternatives],
   )
 
-  const nearBoundary = useCallback((entityId: string) => {
-    const placement = placements[entityId]
-    if (!placement || validation.get(entityId)?.valid === false) return false
-    const others = area.contextPlacements?.length ? [...Object.values(placements), ...area.contextPlacements] : Object.values(placements)
-    return ([[1, 0], [-1, 0], [0, 1], [0, -1]] as const).some(([x, y]) => {
-      const candidate = snapPlacementToGrid(
-        translatePlacement(placement, x * gridFor(entityId).cellSize, y * gridFor(entityId).cellSize),
-        gridFor(entityId),
-      )
-      return validatePlacement(candidate, {
-        others,
-        boundary: area.boundary,
-        roomBoundary: area.roomBoundary,
-        departmentZone: area.departmentZone,
-        obstacles: area.obstacles,
-        tolerance: area.tolerance,
-        boundaryTolerance: area.boundaryTolerance,
-        chairTileSize: area.chairTileSize,
-      }).reasons.some((reason) => reason.type === 'outside-department-zone')
-    })
-  }, [area, gridFor, placements, validation])
+  const nearBoundary = useCallback((_entityId: string) => false, [])
 
   /** Live preview during a drag; the whole drag is one history step, not each frame. */
   const update = useCallback(
@@ -445,15 +452,32 @@ export function useLayoutEditor({
    * The committed map is then extended, never rebuilt from `basePlacements` —
    * rebuilding discards every area saved before this one.
    */
-  const save = useCallback(async () => {
+  const persist = useCallback(async (overrideReason?: string) => {
     if (!draft || !valid || saving) return
     const next = editableSet
       ? Object.fromEntries(Object.entries(draft.placements).filter(([id]) => editableSet.has(id)))
       : { ...draft.placements }
+    const withOverrides: Record<string, SpatialPlacement> = {}
+    for (const [id, placement] of Object.entries(next)) {
+      const validationForPlacement = validation.get(id)
+      const conflicts = overridablePlacementReasons(validationForPlacement ?? { valid: true, reasons: [] })
+      const existing = placement.override
+      const changed = !committed[id] || !placementsEqual(committed[id], placement)
+      const override: PlacementOverride | null = conflicts.length > 0
+        ? {
+            reason: overrideReason?.trim() || existing?.reason || '',
+            conflicts: conflicts.map((conflict) => ({ ...conflict, severity: conflict.severity ?? 'overridable' })),
+            actorId: existing?.actorId ?? null,
+            recordedAt: existing?.recordedAt ?? new Date().toISOString(),
+          }
+        : changed ? null : existing ?? null
+      withOverrides[id] = { ...placement, override }
+    }
     setSaving(true)
     try {
-      await store.write(floorId, next)
-      setCommitted((current) => mergeStoredPlacements(current, next))
+      await store.write(floorId, withOverrides)
+      setCommitted((current) => mergeStoredPlacements(current, withOverrides))
+      setOverrideRequest(null)
       setDraft(null)
       resetHistory()
       clearDrag()
@@ -461,7 +485,26 @@ export function useLayoutEditor({
     } finally {
       setSaving(false)
     }
-  }, [draft, editableSet, valid, saving, store, floorId, clearDrag, setDraft, resetHistory])
+  }, [committed, draft, editableSet, valid, saving, store, floorId, clearDrag, setDraft, resetHistory, validation])
+
+  const save = useCallback(async () => {
+    if (!draft || !valid || saving) return
+    const changed = changedIds(draft, committed).filter((id) => !editableSet || editableSet.has(id))
+    const conflicts = changed.flatMap((id) => overridablePlacementReasons(validation.get(id) ?? { valid: true, reasons: [] }))
+    const needsConfirmation = conflicts.length > 0 && changed.some((id) => !draft.placements[id]?.override?.reason)
+    if (needsConfirmation) {
+      setOverrideRequest({ entityIds: changed, conflicts })
+      return
+    }
+    await persist()
+  }, [committed, draft, editableSet, persist, saving, valid, validation])
+
+  const confirmOverride = useCallback(async (reason: string) => {
+    if (!reason.trim() || !overrideRequest || saving) return
+    await persist(reason)
+  }, [overrideRequest, persist, saving])
+
+  const dismissOverride = useCallback(() => setOverrideRequest(null), [])
 
   const cancel = useCallback(() => {
     clearDrag()
@@ -478,6 +521,7 @@ export function useLayoutEditor({
     dirty,
     valid,
     saving,
+    overrideRequest,
     changedCount,
     canUndo: mode === 'edit' && past.length > 0,
     canRedo: mode === 'edit' && future.length > 0,
@@ -500,6 +544,8 @@ export function useLayoutEditor({
     resetPlacement,
     gridFor,
     save,
+    confirmOverride,
+    dismissOverride,
     cancel,
   }
 }

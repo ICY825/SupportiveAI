@@ -72,6 +72,14 @@ function toPlacement(row: PlacementRead): SpatialPlacement {
     rotation: row.rotation,
     chair: (row.chair as SpatialPlacement['chair']) ?? null,
     ...(row.seated_side ? { seatedSide: row.seated_side as SpatialPlacement['seatedSide'] } : {}),
+    ...(row.override_reason ? {
+      override: {
+        reason: row.override_reason,
+        conflicts: row.override_conflicts ?? [],
+        actorId: row.updated_by,
+        recordedAt: row.updated_at,
+      },
+    } : {}),
   }
 }
 
@@ -85,5 +93,9 @@ function toPayload(placement: SpatialPlacement): PlacementPayload {
     rotation: placement.rotation,
     chair: (placement.chair as Record<string, unknown> | null | undefined) ?? null,
     seated_side: placement.seatedSide ?? null,
+    ...(placement.override ? {
+      override_reason: placement.override.reason,
+      override_conflicts: placement.override.conflicts,
+    } : {}),
   }
 }

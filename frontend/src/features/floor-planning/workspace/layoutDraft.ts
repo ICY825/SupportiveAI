@@ -30,7 +30,7 @@ import {
   type SpatialPlacement,
 } from '../domain/placement'
 import type { BBox, FloorDataset, FloorObstacle, Point, Segment, Workstation } from '../domain/spatial'
-import { sceneWallSegments, type WorkspaceSceneModel } from './scene'
+import { sceneCollisionWallSegments, sceneWallSegments, type WorkspaceSceneModel } from './scene'
 
 /** Planning module for the edit grid. One desk depth; a desk is two cells wide. */
 export const GRID_CELL_MM = 600
@@ -205,7 +205,7 @@ export function validateDraft(
   tolerance?: number,
 ): Map<string, PlacementValidation> {
   const isArea = boundaryOrArea && 'grid' in boundaryOrArea
-  const boundary = isArea ? boundaryOrArea.boundary : boundaryOrArea
+  const floorBoundary = isArea ? boundaryOrArea.floorBoundary : null
   const roomBoundary = isArea ? boundaryOrArea.roomBoundary : null
   const departmentZone = isArea ? boundaryOrArea.departmentZone : null
   const obstacles = isArea ? boundaryOrArea.obstacles : (boundaryOrArea as any)?.obstacles ?? []
@@ -225,10 +225,13 @@ export function validateDraft(
       p.entityId,
       validatePlacement(p, {
         others,
-        boundary,
+        // Department/scene outlines are labels and camera framing, not walls.
+        boundary: null,
+        floorBoundary,
         roomBoundary,
         departmentZone,
         obstacles,
+        wallSegments: isArea ? boundaryOrArea.collisionWallSegments : undefined,
         tolerance: effectiveTol,
         boundaryTolerance,
         chairTileSize,
@@ -245,6 +248,8 @@ export const draftIsValid = (validation: ReadonlyMap<string, PlacementValidation
 
 export interface EditableArea {
   boundary: PlacementBoundary
+  /** The physical floor plate; unlike department annotations, always hard. */
+  floorBoundary?: PlacementBoundary | null
   /** Target membership for the active UI area; absent means all placements. */
   editableIds?: readonly string[]
   /** Camera/edit affordance boundary, separate from physical validation geometry. */
@@ -256,8 +261,10 @@ export interface EditableArea {
   obstacles: FloorObstacle[]
   /** Obstacles clipped to the visible context window for the edit overlay. */
   displayObstacles?: readonly FloorObstacle[]
-  /** Alignable wall runs from the scene's architecture, for align-to-wall. */
+  /** Extracted walls and partitions in the active scene, for collision checks and alignment. */
   wallSegments?: readonly Segment[]
+  /** Collision subset: walls and partitions only; facade remains an alignment hint. */
+  collisionWallSegments?: readonly Segment[]
   /** see WALL_ALIGN_MAX_DISTANCE_MM */
   wallAlignMaxDistance?: number
   grid: SpatialGrid
@@ -312,6 +319,7 @@ export function deriveEditableArea(dataset: FloorDataset, scene: WorkspaceSceneM
           kind: 'department-zone',
           sourceId: zone?.id ?? null,
           name: zone?.name ?? null,
+          verification: zone?.verification,
         }
       : null
 
@@ -323,6 +331,7 @@ export function deriveEditableArea(dataset: FloorDataset, scene: WorkspaceSceneM
           kind: 'room-boundary',
           sourceId: room?.id ?? null,
           name: room?.name ?? null,
+          verification: room?.verification,
         }
       : null
 
@@ -344,8 +353,18 @@ export function deriveEditableArea(dataset: FloorDataset, scene: WorkspaceSceneM
     chairTileSize,
   }
 
+  const floorBoundary: PlacementBoundary = {
+    polygon: rectPoints([0, 0, dataset.layout.floor.width, dataset.layout.floor.height]),
+    bbox: [0, 0, dataset.layout.floor.width, dataset.layout.floor.height],
+    kind: 'floor-plate',
+    sourceId: dataset.layout.floor.id,
+    name: dataset.layout.floor.name,
+    verification: 'SOURCE_VERIFIED',
+  }
+
   return {
     boundary,
+    floorBoundary,
     editableIds: scene.workstations.map((workstation) => workstation.id),
     displayBoundary: scene.scope.kind === 'bbox' && scene.scopePolygons[0]
       ? {
@@ -364,6 +383,7 @@ export function deriveEditableArea(dataset: FloorDataset, scene: WorkspaceSceneM
     // Derived from the scene's already-clipped layers, so this is the
     // architecture around the area being edited, not the whole floor plate.
     wallSegments: sceneWallSegments(scene.layers),
+    collisionWallSegments: sceneCollisionWallSegments(scene.layers),
     wallAlignMaxDistance: WALL_ALIGN_MAX_DISTANCE_MM / dataset.layout.floor.mmPerPt,
     tolerance,
     boundaryTolerance: ANNOTATION_TOLERANCE_MM / dataset.layout.floor.mmPerPt,

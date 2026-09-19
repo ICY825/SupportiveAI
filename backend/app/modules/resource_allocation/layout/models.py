@@ -68,6 +68,11 @@ class LayoutPlacement(Base, TimestampMixin):
     #: Cạnh người ngồi, khi người dùng ghi đè suy luận từ ghế.
     seated_side: Mapped[str | None] = mapped_column(String(8), nullable=True)
 
+    # A human decision that the saved placement may disagree with the drawing.
+    # updated_at and updated_by are the recorded date and actor.
+    override_reason: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    override_conflicts: Mapped[list[dict] | None] = mapped_column(JSONType, nullable=True)
+
     # --- Vết ---
     #: Người bấm lưu. Để trống khi do nhập liệu hàng loạt tạo ra.
     updated_by: Mapped[str | None] = mapped_column(String(36), nullable=True)

@@ -1,11 +1,8 @@
-import { bboxOfPoints, pointInPolygon, polygonsOverlap, rectangle } from '../domain/geometry'
-import type { BBox, FloorDataset, FloorDisplayAreaDefinition, Point, Workstation } from '../domain/spatial'
+import { bboxOfPoints } from '../domain/geometry'
+import type { BBox, DeskCluster, FloorDataset, Point, Workstation } from '../domain/spatial'
 import { defaultWorkspaceScope, resolveWorkspaceScope, workstationInScope, type WorkspaceScope } from './scope'
 
-/**
- * UI-only grouping of extracted clusters. These are display/editing areas, not
- * business zones or new physical entities.
- */
+/** UI-only grouping of extracted clusters; never a Zone or physical entity. */
 export interface WorkspaceDisplayArea {
   id: string
   label: string
@@ -29,168 +26,122 @@ const expandAndClamp = (bbox: BBox, padding: number, bounds: BBox): BBox => [
   Math.min(bounds[3], bbox[3] + padding),
 ]
 
-const definitionPolygon = (definition: FloorDisplayAreaDefinition): Point[] => {
-  if (definition.polygon && definition.polygon.length >= 3) return definition.polygon
-  return definition.bbox ? rectangle(definition.bbox) : []
-}
-
 const workstationBounds = (workstations: readonly Workstation[]): BBox =>
   bboxOfPoints(workstations.flatMap((workstation) => workstation.polygon))
 
-const containsDefinition = (definition: FloorDisplayAreaDefinition, point: Point): boolean => {
-  const polygon = definitionPolygon(definition)
-  return polygon.length >= 3 && pointInPolygon(point, polygon)
+export interface DerivedWorkspaceSection {
+  id: string
+  clusterIds: readonly string[]
+  workstationIds: readonly string[]
+  bbox: BBox
+  center: Point
 }
 
-const uniqueClusterIds = (workstations: readonly Workstation[]): string[] => [...new Set(workstations.map((workstation) => workstation.clusterId))]
+const clusterGap = (a: DeskCluster, b: DeskCluster): number => {
+  const dx = Math.max(a.bbox[0] - b.bbox[2], b.bbox[0] - a.bbox[2], 0)
+  const dy = Math.max(a.bbox[1] - b.bbox[3], b.bbox[1] - a.bbox[3], 0)
+  return Math.hypot(dx, dy)
+}
+
+const sectionBBox = (clusters: readonly DeskCluster[]): BBox => [
+  Math.min(...clusters.map((cluster) => cluster.bbox[0])),
+  Math.min(...clusters.map((cluster) => cluster.bbox[1])),
+  Math.max(...clusters.map((cluster) => cluster.bbox[2])),
+  Math.max(...clusters.map((cluster) => cluster.bbox[3])),
+]
+
+const sectionSort = (a: DerivedWorkspaceSection, b: DerivedWorkspaceSection): number =>
+  a.center[1] - b.center[1] || a.center[0] - b.center[0] || a.id.localeCompare(b.id)
+
+/** Pure, deterministic grouping of whole clusters into human-sized sections. */
+export function deriveSectionsFromClusters(
+  input: readonly DeskCluster[],
+  targetDeskCount = 20,
+): DerivedWorkspaceSection[] {
+  if (input.length === 0) return []
+  if (!(targetDeskCount > 0)) throw new Error('targetDeskCount must be positive')
+
+  const ordered = [...input].sort((a, b) => a.center[1] - b.center[1] || a.center[0] - b.center[0] || a.id.localeCompare(b.id))
+  const groups = ordered.map((cluster) => ({ clusters: [cluster] as DeskCluster[] }))
+  const maxDeskCount = Math.max(targetDeskCount + 1, Math.ceil(targetDeskCount * 1.5))
+
+  while (groups.length > 1) {
+    let best: { left: number; right: number; score: number } | null = null
+    for (let left = 0; left < groups.length; left += 1) {
+      for (let right = left + 1; right < groups.length; right += 1) {
+        const combined = groups[left].clusters.reduce((sum, cluster) => sum + cluster.workstationIds.length, 0)
+          + groups[right].clusters.reduce((sum, cluster) => sum + cluster.workstationIds.length, 0)
+        if (combined > maxDeskCount) continue
+        const distance = Math.min(
+          ...groups[left].clusters.flatMap((a) => groups[right].clusters.map((b) => clusterGap(a, b))),
+        )
+        // Spatial distance dominates; the remaining terms make ties stable.
+        const score = distance * 1000 + Math.abs(targetDeskCount - combined) + left / 1000 + right / 1_000_000
+        if (!best || score < best.score) best = { left, right, score }
+      }
+    }
+    if (!best) break
+    const merged = {
+      clusters: [...groups[best.left].clusters, ...groups[best.right].clusters]
+        .sort((a, b) => a.id.localeCompare(b.id)),
+    }
+    groups.splice(best.right, 1)
+    groups.splice(best.left, 1, merged)
+  }
+
+  return groups.map(({ clusters }) => {
+    const clusterIds = clusters.map((cluster) => cluster.id).sort()
+    const bbox = sectionBBox(clusters)
+    return {
+      id: `section:${clusterIds.join(',')}`,
+      clusterIds,
+      workstationIds: clusters.flatMap((cluster) => cluster.workstationIds).sort(),
+      bbox,
+      center: [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2] as Point,
+    }
+  }).sort(sectionSort)
+}
 
 /** Builds the default display scopes from canonical cluster/workstation membership. */
 export function buildWorkspaceDisplayAreas(dataset: FloorDataset): WorkspaceDisplayArea[] {
   return buildWorkspaceDisplayAreasForScope(dataset, defaultWorkspaceScope(dataset))
 }
 
-export interface DisplayAreaDefinitionIssue {
-  level: 'error' | 'warning'
-  entityId: string
-  message: string
-}
-
-/**
- * Validates the curated metadata without turning it into a source Zone. The
- * page already exposes dataset warnings in its debug panel, so a stale or
- * overlapping UI definition is visible and testable instead of disappearing
- * from the picker.
- */
-export function validateDisplayAreaDefinitions(dataset: FloorDataset): DisplayAreaDefinitionIssue[] {
-  const issues: DisplayAreaDefinitionIssue[] = []
-  const definitions = dataset.displayAreas ?? []
-  const floor = [0, 0, dataset.layout.floor.width, dataset.layout.floor.height] as BBox
-  const departmentCodes = new Set(dataset.zones.map((zone) => zone.departmentCode).filter((code): code is string => Boolean(code)))
-
-  for (const definition of definitions) {
-    const polygon = definitionPolygon(definition)
-    if (polygon.length < 3) {
-      issues.push({ level: 'error', entityId: definition.id, message: 'display area has no valid polygon or bbox' })
-      continue
-    }
-    if (!departmentCodes.has(definition.departmentCode)) {
-      issues.push({ level: 'warning', entityId: definition.id, message: `display area references unknown department ${definition.departmentCode}` })
-    }
-    const [x0, y0, x1, y1] = bboxOfPoints(polygon)
-    if (x0 < floor[0] || y0 < floor[1] || x1 > floor[2] || y1 > floor[3]) {
-      issues.push({ level: 'warning', entityId: definition.id, message: 'display area geometry extends beyond the floor and will be clamped' })
-    }
-    const hasCanonicalDesk = dataset.workstations.some((workstation) =>
-      workstation.source?.kind !== 'user-authored' &&
-      workstation.zoneId !== null &&
-      dataset.zones.find((zone) => zone.id === workstation.zoneId)?.departmentCode === definition.departmentCode &&
-      containsDefinition(definition, workstation.center),
-    )
-    if (!hasCanonicalDesk) {
-      issues.push({ level: 'warning', entityId: definition.id, message: 'display area contains no canonical workstation; definition may be stale' })
-    }
-  }
-
-  for (let i = 0; i < definitions.length; i += 1) {
-    const a = definitions[i]
-    const aPolygon = definitionPolygon(a)
-    if (aPolygon.length < 3) continue
-    for (let j = i + 1; j < definitions.length; j += 1) {
-      const b = definitions[j]
-      if (a.departmentCode !== b.departmentCode) continue
-      const bPolygon = definitionPolygon(b)
-      if (bPolygon.length >= 3 && polygonsOverlap(aPolygon, bPolygon)) {
-        issues.push({ level: 'error', entityId: a.id, message: `display area overlaps ${b.id} within department ${a.departmentCode}` })
-      }
-    }
-  }
-  return issues
-}
-
-/**
- * Builds UI view scopes for any canonical workspace scope. Floor-authored
- * display metadata supplies curated geometry; a zone-backed fallback covers
- * anything stale or unclaimed without inventing workstation membership.
- */
+/** Builds department scopes from derived sections, never authored bboxes. */
 export function buildWorkspaceDisplayAreasForScope(dataset: FloorDataset, departmentScope: WorkspaceScope): WorkspaceDisplayArea[] {
   if (departmentScope.kind !== 'department') return []
   const resolved = resolveWorkspaceScope(dataset, departmentScope)
   const accepted = dataset.workstations.filter((workstation) => workstationInScope(workstation, resolved))
+  const acceptedIds = new Set(accepted.map((workstation) => workstation.id))
   const bounds = floorBounds(dataset)
+  const clustersByZone = new Map<string, DeskCluster[]>()
 
-  const acceptedDepartmentCodes = new Set(
-    resolved.zoneIds
-      .map((zoneId) => dataset.zones.find((zone) => zone.id === zoneId)?.departmentCode)
-      .filter((code): code is string => Boolean(code)),
-  )
-  const curatedDefinitions = (dataset.displayAreas ?? []).filter((definition) => acceptedDepartmentCodes.has(definition.departmentCode))
-
-  /**
-   * Any accepted cluster no definition claims still needs somewhere to be.
-   *
-   * The six AI areas were drawn around the block east of the lift cores. When
-   * the team named the western block as the same department, its five clusters
-   * — 38 desks — belonged to a department whose area picker could not reach
-   * them: visible on the overview, impossible to focus, impossible to edit.
-   *
-   * Collecting the remainder by zone keeps that from recurring. Re-extraction
-   * that finds a new cluster, or another zone joining a department, lands in an
-   * area instead of vanishing from the picker.
-   */
-  const claimed = new Set<string>()
-  const curated = curatedDefinitions.map((definition) => {
-    const extracted = accepted.filter((workstation) => workstation.source?.kind !== 'user-authored')
-    const geometryWorkstations = extracted.filter((workstation) => containsDefinition(definition, workstation.center))
-    const geometryClusterIds = new Set(geometryWorkstations.map((workstation) => workstation.clusterId))
-    const workstations = accepted.filter((workstation) =>
-      !claimed.has(workstation.id) && (
-        containsDefinition(definition, workstation.center) ||
-        (workstation.source?.kind === 'user-authored' && geometryClusterIds.has(workstation.clusterId))
-      ),
-    )
-    for (const workstation of workstations) claimed.add(workstation.id)
-    return {
-      definition,
-      // Canonical desks are always claimed by geometry. Authored desks keep
-      // the area of their source template, so a valid placement just outside
-      // the compact curated bbox does not disappear from the active editor.
-      workstations,
-    }
-  })
-  const leftoverByZone = new Map<string, Workstation[]>()
-  for (const workstation of accepted) {
-    if (claimed.has(workstation.id) || !workstation.zoneId) continue
-    leftoverByZone.set(workstation.zoneId, [...(leftoverByZone.get(workstation.zoneId) ?? []), workstation])
+  for (const cluster of dataset.clusters) {
+    const workstationIds = cluster.workstationIds.filter((id) => acceptedIds.has(id))
+    if (workstationIds.length === 0) continue
+    const zoneId = cluster.zoneId ?? cluster.zoneIds.find((id) => resolved.zoneIds.includes(id)) ?? ''
+    if (!resolved.zoneIds.includes(zoneId)) continue
+    clustersByZone.set(zoneId, [...(clustersByZone.get(zoneId) ?? []), { ...cluster, workstationIds }])
   }
-  const definitions: Array<{ definition: FloorDisplayAreaDefinition; workstations: Workstation[] }> = [
-    ...curated,
-    ...[...leftoverByZone.entries()].map(([zoneId, workstations], index) => ({
-      definition: {
-        id: `zone-area-${zoneId}`,
-        label: `Khu vực ${String.fromCharCode(65 + curated.length + index)}`,
-        short: String.fromCharCode(65 + curated.length + index),
-        departmentCode: dataset.zones.find((zone) => zone.id === zoneId)?.departmentCode ?? '',
-      },
-      workstations,
-    })),
-  ]
 
-  return definitions.flatMap(({ definition, workstations }) => {
+  const sections = [...clustersByZone.entries()].flatMap(([, clusters]) =>
+    deriveSectionsFromClusters(clusters).map((section) => ({ section })),
+  ).sort((a, b) => sectionSort(a.section, b.section))
+
+  return sections.flatMap(({ section }, index) => {
+    const clusterSet = new Set(section.clusterIds)
+    const workstations = accepted.filter((workstation) => clusterSet.has(workstation.clusterId))
     if (workstations.length === 0) return []
     const targetBBox = workstationBounds(workstations)
-    const zoneId = definition.id.startsWith('zone-area-') ? definition.id.slice('zone-area-'.length) : null
-    const padding = definition.contextPaddingMm !== undefined
-      ? Math.max(0, definition.contextPaddingMm / dataset.layout.floor.mmPerPt)
-      : DISPLAY_CONTEXT_PADDING_PT
     return [{
-      id: definition.id,
-      label: definition.label,
-      short: definition.short,
-      clusterIds: uniqueClusterIds(workstations),
+      id: section.id,
+      label: `Khu vực ${String.fromCharCode(65 + index)}`,
+      short: String.fromCharCode(65 + index),
+      clusterIds: section.clusterIds,
       workstationIds: workstations.map((workstation) => workstation.id),
       targetBBox,
-      contextBBox: expandAndClamp(targetBBox, padding, bounds),
-      scope: zoneId ? { kind: 'zone', zoneId } : { kind: 'bbox', bbox: targetBBox },
+      contextBBox: expandAndClamp(targetBBox, DISPLAY_CONTEXT_PADDING_PT, bounds),
+      scope: { kind: 'bbox', bbox: targetBBox },
     }]
   })
 }

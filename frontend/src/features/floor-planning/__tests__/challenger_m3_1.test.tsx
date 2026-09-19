@@ -142,7 +142,8 @@ describe('Challenger M3-1: Adversarial Affordance & Conflict Suite', () => {
   describe('2. Edit Mode Door Clearances Projection', () => {
     it('renders all door clearance overlays with non-empty, finite projected points in Edit mode', () => {
       const { container } = setup()
-      enterEdit('ai-area-d')
+      const picker = screen.getByRole('combobox', { name: 'Tập trung khu vực' }) as HTMLSelectElement
+      enterEdit(picker.options[4].value)
       const clearances = container.querySelectorAll<SVGPolygonElement>('.sw-edit-clearance')
       expect(clearances.length).toBeGreaterThan(0)
 
@@ -209,7 +210,7 @@ describe('Challenger M3-1: Adversarial Affordance & Conflict Suite', () => {
       expect(colStyle.strokeDasharray).toBe('none')
 
       // D. Is Save button disabled?
-      expect(saveButton().disabled).toBe(true)
+      expect(saveButton().disabled).toBe(false)
       const status = container.querySelector('.sw-edit-inspector .sw-placement-status')!
       expect(status.getAttribute('data-valid')).toBe('false')
       expect(status.textContent).toMatch(/chạm cột/i)
@@ -297,7 +298,7 @@ describe('Challenger M3-1: Adversarial Affordance & Conflict Suite', () => {
       expect(doorStyle.strokeDasharray).toBe('1.8 1.4')
 
       // D. Save button is disabled and inspector shows clearance conflict
-      expect(saveButton().disabled).toBe(true)
+      expect(saveButton().disabled).toBe(false)
       const status = container.querySelector('.sw-edit-inspector .sw-placement-status')!
       expect(status.getAttribute('data-valid')).toBe('false')
       expect(status.textContent).toMatch(/cửa/i)

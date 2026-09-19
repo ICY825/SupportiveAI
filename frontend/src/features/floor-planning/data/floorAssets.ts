@@ -31,7 +31,6 @@ export type FloorAssetName =
   | 'objects'
   | 'obstacles'
   | 'extraction'
-  | 'display-areas'
   | 'overview'
 
 /** Vite serves repository-root files under this prefix; Node reads the path. */

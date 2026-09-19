@@ -163,9 +163,11 @@ describe('Challenger M2-2: Chair Seating Space & Boundary Stress Verification', 
       const result = validatePlacement(candidate, {
         others: [],
         obstacles: [columnObstacle],
+        chairTileSize: 6,
       })
 
-      expect(result.valid).toBe(false)
+      expect(result.valid).toBe(true)
+      expect(result.requiresOverride).toBe(true)
       expect(result.reasons).toContainEqual({
         type: 'obstacle-collision',
         obstacleId: 'col-fixture-c1',
@@ -198,9 +200,11 @@ describe('Challenger M2-2: Chair Seating Space & Boundary Stress Verification', 
       const result = validatePlacement(candidate, {
         others: [],
         obstacles: [wallObstacle],
+        chairTileSize: 6,
       })
 
-      expect(result.valid).toBe(false)
+      expect(result.valid).toBe(true)
+      expect(result.requiresOverride).toBe(true)
       expect(result.reasons).toContainEqual({
         type: 'obstacle-collision',
         obstacleId: 'wall-fixture-c1',
@@ -233,9 +237,11 @@ describe('Challenger M2-2: Chair Seating Space & Boundary Stress Verification', 
       const result = validatePlacement(candidate, {
         others: [],
         obstacles: [doorClearanceObstacle],
+        chairTileSize: 6,
       })
 
-      expect(result.valid).toBe(false)
+      expect(result.valid).toBe(true)
+      expect(result.requiresOverride).toBe(true)
       expect(result.reasons).toContainEqual({
         type: 'clearance-conflict',
         obstacleId: 'door-clearance-c1',
@@ -305,9 +311,11 @@ describe('Challenger M2-2: Chair Seating Space & Boundary Stress Verification', 
       const result = validatePlacement(candidate, {
         others: [],
         room: roomFixture,
+        chairTileSize: 6,
       })
 
-      expect(result.valid).toBe(false)
+      expect(result.valid).toBe(true)
+      expect(result.requiresOverride).toBe(true)
       expect(result.reasons).toContainEqual({
         type: 'outside-room-boundary',
         roomId: 'room-acoustic-c1',
@@ -340,13 +348,7 @@ describe('Challenger M2-2: Chair Seating Space & Boundary Stress Verification', 
         zone: zoneFixture,
       })
 
-      expect(result.valid).toBe(false)
-      expect(result.reasons).toContainEqual({
-        type: 'outside-department-zone',
-        zoneId: 'zone-dept-c1',
-        zoneName: 'Phòng ban kiểm thử',
-        target: 'chair',
-      })
+      expect(result).toEqual({ valid: true, reasons: [] })
     })
   })
 
@@ -455,8 +457,8 @@ describe('Challenger M2-2: Chair Seating Space & Boundary Stress Verification', 
       const valBoundary = validateDraft(draft, area.boundary, area.tolerance)
       const resBoundary = valBoundary.get(firstWs.id)!
 
-      expect(resArea.valid).toBe(false)
-      expect(resArea.reasons.some((r) => r.type === 'outside-department-zone' && (r as any).target === 'chair')).toBe(true)
+      expect(resArea.valid).toBe(true)
+      expect(resArea.reasons.some((r) => r.type === 'outside-department-zone')).toBe(false)
 
       // Check resBoundary: does it catch it?
       // Notice: when validateDraft is called with area.boundary instead of area,
@@ -512,8 +514,10 @@ describe('Challenger M2-2: Chair Seating Space & Boundary Stress Verification', 
       const result = validatePlacement(candidate, {
         others: [],
         obstacles: [col],
+        chairTileSize: 6,
       })
-      expect(result.valid).toBe(false)
+      expect(result.valid).toBe(true)
+      expect(result.requiresOverride).toBe(true)
       expect(result.reasons).toContainEqual({
         type: 'obstacle-collision',
         obstacleId: 'col-16-13',
@@ -543,8 +547,10 @@ describe('Challenger M2-2: Chair Seating Space & Boundary Stress Verification', 
       const result = validatePlacement(candidate, {
         others: [],
         obstacles: [wall],
+        chairTileSize: 6,
       })
-      expect(result.valid).toBe(false)
+      expect(result.valid).toBe(true)
+      expect(result.requiresOverride).toBe(true)
       expect(result.reasons).toContainEqual({
         type: 'obstacle-collision',
         obstacleId: 'wall-16-02',

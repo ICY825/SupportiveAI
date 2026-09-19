@@ -78,6 +78,9 @@ are present, and that any unlabelled highlighted area is explicitly `UNKNOWN`.
 Assertions on exact desk counts are useful but brittle across drawing
 revisions — state the revision they were taken from.
 
+Sections need no floor-specific drawing or count. The workspace derives them
+from extracted clusters, keeping each cluster whole and every desk reachable.
+
 ## 6. Verify
 
 ```bash
