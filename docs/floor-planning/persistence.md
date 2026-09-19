@@ -1,8 +1,7 @@
 # What survives a reload
 
 Floor planning writes to four different places with three different lifetimes.
-Nothing in the UI currently says which is which, so this document is the answer
-to "I moved a desk, where did it go?".
+This document is the answer to "I moved a desk, where did it go?".
 
 Kept true against the code. See [`README.md`](README.md).
 
@@ -10,28 +9,24 @@ Kept true against the code. See [`README.md`](README.md).
 
 | The user does this | Store | Lives in | Survives reload | Visible to other people |
 | --- | --- | --- | --- | --- |
-| Moves or rotates a desk | `sessionLayoutStore` (`workspace/layoutDraft.ts`) | A module-level `Map` | **No** | No |
+| Moves or rotates a desk, signed in | `createApiLayoutStore` → `/api/layouts/*` | The backend database | Yes | **Yes** |
+| Moves or rotates a desk, no session | `sessionLayoutStore` (`workspace/layoutDraft.ts`) | A module-level `Map` | **No** | No |
 | Adds or removes a desk or room | `authoredEntityStore` (`domain/authoredEntities.ts`) | `localStorage`, key `vsf.authored-entities.<floorId>` | Yes | **No** — one browser profile only |
 | Renames or recolours a zone | `zoneCustomization.ts` | `localStorage`, key `vsf.zones.<floorId>` | Yes | **No** — one browser profile only |
 | Assigns or releases a seat, live | `createApiAllocationStore` → `/api/seats/*` | The backend database | Yes | **Yes** |
 | Assigns or releases a seat, demo | `sessionAllocationStore` (`allocation/allocationStore.ts`) | A module-level `Map` | **No** | No |
 
-Live and demo are not a setting. `useFloorAllocation` reports a status of
-`demo`, `loading`, `live` or `failed`, and `FloorPlanningPage` only hands the
-workspace the API-backed store, the directory search and the reconcile report
-when the status is `live`. Without a session, the view runs on demo fixtures
-and says so.
+Neither pair is a setting. `useFloorAllocation` reports `demo`, `loading`,
+`live` or `failed`; `useFloorLayout` reports `session`, `loading`, `server` or
+`failed`. In both cases the page hands the workspace the API-backed store only
+on the live branch, and says on screen which branch it is on — the seating view
+labels itself demo data, and the workspace states that edits will not survive a
+reload. Silence would read as "saved".
 
-## Why placements are not durable
+## Where a moved desk goes
 
-There is no layout endpoint. `layoutDraft.ts` states it at the store:
-
-> NOT DURABLE. There is no layout endpoint yet, so a saved layout lives in this
-> module for the lifetime of the page and is gone on reload. It exists so the
-> editor has one real commit boundary to hand to an API later: replacing this
-> object with an HTTP-backed `LayoutStore` is the whole integration.
-
-The seam is already the right shape. `LayoutStore` is two methods:
+`LayoutStore` is two methods, and the HTTP implementation is
+`workspace/apiLayoutStore.ts`:
 
 ```ts
 read(floorId: string): Record<string, SpatialPlacement> | null
@@ -40,7 +35,9 @@ write(floorId: string, placements: Record<string, SpatialPlacement>): Promise<vo
 
 `write` **merges**. A save covers one editing area, not a whole floor, so a
 store that replaced its contents would drop every other area's committed
-positions. An HTTP-backed store has to behave the same way: PATCH, never PUT.
+positions. The HTTP store behaves the same way: PATCH, never PUT. It also takes
+the floor the server returns rather than the payload it just sent, for the same
+reason — the server is the one that merged.
 
 `AuthoredEntityStore.write` follows the same rule, for the same reason: absent
 ids keep what they had.
@@ -49,17 +46,50 @@ ids keep what they had.
 entities the current dataset still has, so a layout that predates a
 re-extraction cannot resurrect deleted ids or carry stale footprints.
 
+### The layout API
+
+| Route | Does |
+| --- | --- |
+| `GET /api/layouts/floors/{floor_id}` | Every saved placement, plus the drawing version in force and how many rows follow an older one. |
+| `PATCH /api/layouts/floors/{floor_id}` | Merges a batch, then returns the whole floor. |
+| `DELETE /api/layouts/floors/{floor_id}/entities/{entity_id}` | Forgets one placement, returning that desk to where the drawing puts it. 204 even when there was nothing to forget. Server-side only so far; no UI calls it. |
+| `GET /api/layouts/floors/{floor_id}/reconcile` | Read-only: which saved placements no longer match the drawing. |
+
+Viewing needs `layout.view`, writing needs `layout.manage`. Moving a desk
+changes the plan for the whole floor, so an ordinary employee can look and not
+touch.
+
+The table holds the difference from the drawing, never the drawing. The dataset
+still decides which desks exist; `layout_version` is the source PDF's sha256 at
+the time of saving, so re-running the extractor needs no data migration and
+reconcile can name the rows that were placed against the old drawing.
+
+### Why the workspace waits for it
+
+`LayoutStore.read` is synchronous — `useLayoutEditor` calls it inside a
+`useState` initialiser. A snapshot that arrives one tick later is never read, so
+`useFloorLayout` resolves which store to use *before* the page mounts the
+workspace, and `createApiLayoutStore` is handed the already-loaded floor. The
+request is small; the dataset it waits alongside is 2.9 MB.
+
+It also waits for `Session.ready`. `employee` starts null and is filled from the
+cached copy an effect later, so treating the first tick as "signed out" would
+build the editor against the page store and then tear it down.
+
 ## The gap worth knowing about
 
-Seat assignments are durable and shared. Authored desks are not — they exist in
-one browser's `localStorage`. So the database can hold an assignment pointing
-at a workstation id that only one person's browser can resolve.
+Placements and seat assignments are both durable and shared. Authored desks —
+desks and rooms a user *added* — are not: they live in one browser's
+`localStorage`. So the database can hold a placement, or an assignment, naming
+an entity id that only one person's browser can resolve.
 
-This was anticipated on the assignment side: `/api/seats/floors/<id>/reconcile`
-returns a report whose entries carry `reason: 'missing-seat' | 'old-layout'`,
-and the workspace surfaces it when the allocation status is `live`. Authored
-entities widen the gap rather than create it. Until layouts are server-side,
-treat authored desks as a local drafting tool, not as shared facts.
+Both sides report it rather than hiding it: `/api/seats/floors/<id>/reconcile`
+carries `reason: 'missing-seat' | 'old-layout'`, and
+`/api/layouts/floors/<id>/reconcile` carries
+`reason: 'missing-entity' | 'old-layout'`. An unknown id is deliberately not an
+error on the layout write path — a user-added desk is not in the drawing by
+definition, and refusing it would break the feature. Until authored entities are
+server-side, treat an added desk as a local drafting tool, not a shared fact.
 
 ## Test and development seams
 

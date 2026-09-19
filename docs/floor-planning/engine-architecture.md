@@ -164,8 +164,10 @@ section 2.3 for the proposed slice and the reasons it has not been done.
 - **Seat assignments.** Who sits where is the backend's
   (`backend/app/modules/resource_allocation/seat/`), reached through
   `frontend/src/api/seats.ts`. The map's geometry never waits on it.
-- **Durability of edits.** See [`persistence.md`](persistence.md). Desk
-  placements are currently session-only.
+- **Where a moved desk stays put.** Saved placements are the backend's
+  (`backend/app/modules/resource_allocation/layout/`), reached through
+  `frontend/src/api/layout.ts`. That module holds the difference from the
+  drawing, not the drawing. See [`persistence.md`](persistence.md).
 
 ## 9. Known outside consumer
 
