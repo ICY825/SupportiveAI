@@ -1,5 +1,9 @@
 # Floor 16 — extraction findings (V1 POC)
 
+> **Historical record.** Written on the date below and not maintained since.
+> For how the module works now, read [`engine-architecture.md`](engine-architecture.md)
+> and [`persistence.md`](persistence.md); [`README.md`](README.md) explains the split.
+
 Source: `docs/references/260710_VSF_Layout tang 16.pdf` — "MẶT BẰNG CẢI TẠO TẦNG 16", scale 1/150.
 Generated data: `data/floors/floor-16/` (see `floor16.extraction.json`).
 

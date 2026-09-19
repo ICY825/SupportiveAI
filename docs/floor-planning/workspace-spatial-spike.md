@@ -1,5 +1,9 @@
 # Bố trí chỗ ngồi — spatial visual spike
 
+> **Historical record.** Written on the date below and not maintained since.
+> For how the module works now, read [`engine-architecture.md`](engine-architecture.md)
+> and [`persistence.md`](persistence.md); [`README.md`](README.md) explains the split.
+
 Implemented on `lystiger`, 16 September 2026. This is a read-only visual decision prototype, limited to 19 workstations. It is not a full-floor conversion.
 
 ## Open the prototype

@@ -1,5 +1,9 @@
 # Floor 16: non-orthogonal desks, and where the lag actually is
 
+> **Historical record.** Written on the date below and not maintained since.
+> For how the module works now, read [`engine-architecture.md`](engine-architecture.md)
+> and [`persistence.md`](persistence.md); [`README.md`](README.md) explains the split.
+
 Written 18 September 2026 against `lystiger/dev`, after Floor 16 reached complete extraction. Two defects were reported together — desks that cannot face a wall at an angle, and a workspace that feels slow. They are unrelated, and this document keeps them apart so neither fix absorbs the other.
 
 This is an inspection record and a design recommendation. One defect found during the inspection was small enough to close immediately and is marked as fixed in 1.4; everything else here is recommendation, not change.

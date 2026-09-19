@@ -1,5 +1,9 @@
 # Luna follow-up: six-area defects and the area locator map
 
+> **Historical record.** Written on the date below and not maintained since.
+> For how the module works now, read [`engine-architecture.md`](engine-architecture.md)
+> and [`persistence.md`](persistence.md); [`README.md`](README.md) explains the split.
+
 Prepared 17 September 2026 against the current `lystiger` working tree, after reviewing the six-area implementation report. Continue from the current uncommitted state.
 
 This document has three parts:

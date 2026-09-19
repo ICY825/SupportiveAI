@@ -1,5 +1,9 @@
 # Floor 16 loading evidence
 
+> **Historical record.** Written on the date below and not maintained since.
+> For how the module works now, read [`engine-architecture.md`](engine-architecture.md)
+> and [`persistence.md`](persistence.md); [`README.md`](README.md) explains the split.
+
 Measured 18 September 2026 from the production build with Chromium at 1440×900. The browser used a 150 ms latency and 200 KiB/s download profile. API calls were stubbed so the measurement covers the static floor-planning payload and renderer, not backend availability.
 
 Evidence is recorded in [`floor16-performance.json`](../../output/playwright/floor16-performance.json). The representative browser flow also inspected Khu vực D around desks 205–206; [`handoff-area-d.png`](../../output/playwright/handoff-area-d.png) is the captured state.

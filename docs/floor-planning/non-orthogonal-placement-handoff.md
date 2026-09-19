@@ -1,5 +1,9 @@
 # Handoff: oriented placement and the Floor 16 render budget
 
+> **Historical record.** Written on the date below and not maintained since.
+> For how the module works now, read [`engine-architecture.md`](engine-architecture.md)
+> and [`persistence.md`](persistence.md); [`README.md`](README.md) explains the split.
+
 Prepared 18 September 2026 for the `lystiger/dev` branch, after Luna's placement, display-area and performance-measurement work landed.
 
 Read [`non-orthogonal-desks-and-render-budget.md`](non-orthogonal-desks-and-render-budget.md) first. It carries the evidence; this document carries the instructions. Read [`handoffs.md`](handoffs.md) for the placement work that precedes this slice — its non-goals still apply, in particular the ban on unconstrained nearest-valid search.

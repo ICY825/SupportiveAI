@@ -1,5 +1,9 @@
 # Handoff: make the seating view tell the truth when it is talking to the server
 
+> **Historical record.** Written on the date below and not maintained since.
+> For how the module works now, read [`engine-architecture.md`](engine-architecture.md)
+> and [`persistence.md`](persistence.md); [`README.md`](README.md) explains the split.
+
 Prepared 18 September 2026 for the `lystiger/dev` branch, from a read of what
 `d5de693`, `6337739` and `064e991` actually shipped.
 

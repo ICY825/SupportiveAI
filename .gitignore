@@ -120,6 +120,9 @@ docs/kpi/ground-truth/*
 # Dataset mặt bằng sinh từ trích xuất PDF: công khai, phải theo repo.
 # Ngoại lệ của /data/ ở trên, vốn dành cho dữ liệu thật.
 !/data/floors/
+
+# Chính tài liệu giải thích quy ước trên: không có dữ liệu thật, phải theo repo.
+!/data/README.md
 !/data/floors/**
 
 # PDF và bảng tính tham khảo

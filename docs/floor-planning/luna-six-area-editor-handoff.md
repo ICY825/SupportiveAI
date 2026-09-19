@@ -1,5 +1,9 @@
 # Luna handoff: six-area workspace editor with spatial context
 
+> **Historical record.** Written on the date below and not maintained since.
+> For how the module works now, read [`engine-architecture.md`](engine-architecture.md)
+> and [`persistence.md`](persistence.md); [`README.md`](README.md) explains the split.
+
 Prepared 17 September 2026 for the current `lystiger` branch and working tree. Continue from the current uncommitted state; do not discard or reconstruct the dynamic workspace changes already present.
 
 ## 1. Outcome

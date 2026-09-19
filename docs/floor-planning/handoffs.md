@@ -1,5 +1,9 @@
 # Luna handoff: authored-desk placement, display-area data, and floor-density readiness
 
+> **Historical record.** Written on the date below and not maintained since.
+> For how the module works now, read [`engine-architecture.md`](engine-architecture.md)
+> and [`persistence.md`](persistence.md); [`README.md`](README.md) explains the split.
+
 Prepared 18 September 2026 for the `lystiger/dev` branch.
 
 Read this before changing code. The previous diagnosis found one real design weakness but attributed the reported failure to the wrong mechanism. This handoff separates observed facts, required behavior, and follow-up performance work so the placement fix does not turn into a speculative floor-planning rewrite.

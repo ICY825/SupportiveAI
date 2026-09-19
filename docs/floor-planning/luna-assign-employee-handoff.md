@@ -1,5 +1,9 @@
 # Luna handoff: assigning an employee to a seat
 
+> **Historical record.** Written on the date below and not maintained since.
+> For how the module works now, read [`engine-architecture.md`](engine-architecture.md)
+> and [`persistence.md`](persistence.md); [`README.md`](README.md) explains the split.
+
 Prepared 17 September 2026 for the `lystiger` branch. Three other agents are editing this working tree; section 9 says which files are yours and which are not. Read it before you start.
 
 ## 1. Outcome

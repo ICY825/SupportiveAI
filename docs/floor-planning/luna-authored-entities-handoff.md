@@ -1,5 +1,9 @@
 # Handoff: adding and removing desks and rooms
 
+> **Historical record.** Written on the date below and not maintained since.
+> For how the module works now, read [`engine-architecture.md`](engine-architecture.md)
+> and [`persistence.md`](persistence.md); [`README.md`](README.md) explains the split.
+
 Prepared 17 September 2026 for the `lystiger` branch, after the zone-presentation, assign-employee and area-framing work landed.
 
 Two features share one foundation: the floor plan gains entities that were never on the drawing, and it must stay honest about which ones those are. Read section 2 before designing anything; it is the rule the rest hangs off.

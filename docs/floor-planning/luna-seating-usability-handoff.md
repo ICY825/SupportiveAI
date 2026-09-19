@@ -1,5 +1,9 @@
 # Handoff: make the seating view answer the question people arrive with
 
+> **Historical record.** Written on the date below and not maintained since.
+> For how the module works now, read [`engine-architecture.md`](engine-architecture.md)
+> and [`persistence.md`](persistence.md); [`README.md`](README.md) explains the split.
+
 Prepared 17 September 2026 for the `lystiger` branch, from a walkthrough of the live app performed as an administration employee with no technical background.
 
 **The task attempted:** rotate desks in Khu vực F to make space for two new starters.

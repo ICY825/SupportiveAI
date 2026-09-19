@@ -39,8 +39,12 @@ that change, physical desks do not.
 1. Copy `floors/floor16.py` to `floors/floor17.py`; set the PDF path, grid spans, layer map,
    and the annotation IDs of its zones (list them with PyMuPDF `page.annots()`).
 2. Run `extract_floor.py floor17` and review `floor17.extraction.json` plus the map in debug mode.
-3. Add `frontend/src/features/floor-planning/data/floors/floor-17/index.ts` — the loader stays in the frontend, only the JSON lives in `data/` — (copy floor-16) and
-   register it in `data/registry.ts`.
+3. Fill in the floor's `extraction` field in
+   `frontend/src/features/floor-planning/data/registry.ts`. There is no loader
+   module to write: artifacts are found by glob and assembled generically.
+
+The full checklist, including what to verify, is
+`docs/floor-planning/adding-a-floor.md`.
 
 Other drawings may use different layer names, desk sizes or no markup; the config is where
 that is expressed. Check the rule output visually before trusting counts.
